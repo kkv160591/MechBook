@@ -1,38 +1,62 @@
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native"
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView
+} from "react-native"
 
-const tabs = ["all","active","progress","completed"]
+const tabs = [
+  "all",
+  "pending",
+  "in-progress",
+  "completed"
+]
 
-export default function StatusTabs({selected,onChange}:any){
+export default function StatusTabs({
+  selected,
+  onChange
+}: any) {
 
   return (
 
-    <View style={styles.container}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.container}
+    >
 
-      {tabs.map(tab => (
+      {tabs.map(tab => {
 
-        <TouchableOpacity
-          key={tab}
-          style={[
-            styles.tab,
-            selected === tab && styles.active
-          ]}
-          onPress={() => onChange(tab)}
-        >
+        const active = selected === tab
 
-          <Text
+        return (
+
+          <TouchableOpacity
+            key={tab}
             style={[
-              styles.text,
-              selected === tab && styles.activeText
+              styles.tab,
+              active && styles.activeTab
             ]}
+            onPress={() => onChange(tab)}
           >
-            {tab.toUpperCase()}
-          </Text>
 
-        </TouchableOpacity>
+            <Text
+              style={[
+                styles.tabText,
+                active && styles.activeText
+              ]}
+            >
+              {tab}
+            </Text>
 
-      ))}
+          </TouchableOpacity>
 
-    </View>
+        )
+
+      })}
+
+    </ScrollView>
 
   )
 
@@ -40,29 +64,34 @@ export default function StatusTabs({selected,onChange}:any){
 
 const styles = StyleSheet.create({
 
-  container:{
-    flexDirection:"row",
-    marginBottom:15
+  container: {
+    paddingBottom: 14,
+    paddingRight: 10
   },
 
-  tab:{
-    paddingVertical:8,
-    paddingHorizontal:14,
-    borderRadius:8,
-    marginRight:10,
-    backgroundColor:"#eee"
+  tab: {
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB"
   },
 
-  active:{
-    backgroundColor:"#2563EB"
+  activeTab: {
+    backgroundColor: "#2563EB",
+    borderColor: "#2563EB"
   },
 
-  text:{
-    fontWeight:"600"
+  tabText: {
+    color: "#374151",
+    fontWeight: "600",
+    textTransform: "capitalize"
   },
 
-  activeText:{
-    color:"white"
+  activeText: {
+    color: "#FFFFFF"
   }
 
 })

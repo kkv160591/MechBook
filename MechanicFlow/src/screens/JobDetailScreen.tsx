@@ -1,19 +1,37 @@
+// JobDetailScreen.tsx
+
 import {
   View,
   Text,
-  FlatList,
   TouchableOpacity,
   StyleSheet,
   TextInput,
   Alert,
-  Modal
+  Modal,
+  ScrollView
 } from "react-native"
+
 import { useState } from "react"
-import { RouteProp, useNavigation, NavigationProp } from "@react-navigation/native"
-import { RootStackParamList } from "../types/navigation"
+
+import {
+  RouteProp,
+  useNavigation
+} from "@react-navigation/native"
+
 import { NativeStackNavigationProp } from "@react-navigation/native-stack"
 
-type JobDetailRouteProp = RouteProp<RootStackParamList, "JobDetail">
+import {
+  MaterialIcons,
+  Ionicons,
+  FontAwesome5
+} from "@expo/vector-icons"
+
+import { RootStackParamList } from "../types/navigation"
+
+type JobDetailRouteProp = RouteProp<
+  RootStackParamList,
+  "JobDetail"
+>
 
 type Props = {
   route: JobDetailRouteProp
@@ -26,180 +44,431 @@ type Service = {
   actualPrice?: number
 }
 
-export default function JobDetailScreen({ route }: Props) {
+export default function JobDetailScreen({
+  route
+}: Props) {
 
-  type NavigationType = NativeStackNavigationProp<
-    RootStackParamList,
-    "JobDetail"
-  >
+  type NavigationType =
+    NativeStackNavigationProp<
+      RootStackParamList,
+      "JobDetail"
+    >
 
-  const navigation = useNavigation<NavigationType>()
+  const navigation =
+    useNavigation<NavigationType>()
 
   const { job } = route.params
 
-  const [services, setServices] = useState<Service[]>(job.services)
-  const [status, setStatus] = useState(job.status)
+  const [services, setServices] =
+    useState<Service[]>(
+      job.services || []
+    )
 
-  const [showModal, setShowModal] = useState(false)
-  const [newService, setNewService] = useState("")
-  const [newPrice, setNewPrice] = useState("")
+  const [status, setStatus] =
+    useState(job.status || "pending")
+
+  const [showModal, setShowModal] =
+    useState(false)
+
+  const [newService, setNewService] =
+    useState("")
+
+  const [newPrice, setNewPrice] =
+    useState("")
 
   const addService = () => {
-    if (!newService || !newPrice) return
+
+    if (!newService || !newPrice) {
+
+      Alert.alert(
+        "Validation",
+        "Please enter service details"
+      )
+
+      return
+    }
 
     const service: Service = {
-      id: Date.now().toString(),
+      id: `${Date.now()}-${Math.random()}`,
       name: newService,
       estimatedPrice: Number(newPrice)
     }
 
-    setServices([...services, service])
+    setServices(prev => [...prev, service])
+
     setNewService("")
     setNewPrice("")
+
+    setShowModal(false)
   }
 
-  const removeService = (id: string) => {
-    if (status === "completed") return
-    setServices(prev => prev.filter(s => s.id !== id))
-  }
-
-  const updateActualPrice = (id: string, value: string) => {
-
-    const updated = services.map(s => {
-      if (s.id === id) {
-        return {
-          ...s,
-          actualPrice: Number(value)
-        }
-      }
-      return s
-    })
-
-    setServices(updated)
-  }
-
-  const total = services.reduce(
-    (sum, s) => sum + (s.actualPrice ?? s.estimatedPrice),
-    0
-  )
-
-  const markComplete = () => {
-    setStatus("completed")
+  const removeService = (
+    id: string
+  ) => {
 
     Alert.alert(
-      "Job Completed",
-      "View invoice now?",
+      "Delete Service",
+      "Are you sure?",
       [
-        { text: "Later", style: "cancel" },
         {
-          text: "View Invoice",
-          onPress: () =>
-            navigation.navigate("Invoice", {
-              job: { ...job, services, status }
-            })
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            setServices(prev =>
+              prev.filter(
+                s => s.id !== id
+              )
+            )
+          }
         }
       ]
     )
   }
 
-  const renderService = ({ item }: { item: Service }) => (
+  const updateActualPrice = (
+    id: string,
+    value: string
+  ) => {
 
-    <View style={styles.serviceCard}>
+    setServices(prev =>
+      prev.map(service => {
 
-      <View style={styles.serviceHeader}>
-        <Text style={styles.serviceName}>{item.name}</Text>
+        if (service.id === id) {
 
-        {status !== "completed" && (
-          <TouchableOpacity onPress={() => removeService(item.id)}>
-            <Text style={styles.delete}>Delete</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+          return {
+            ...service,
+            actualPrice: value === ""
+              ? undefined
+              : Number(value)
+          }
 
-      <Text style={styles.estimated}>
-        Estimated ₹{item.estimatedPrice}
-      </Text>
+        }
 
-      <TextInput
-        placeholder="Actual Price"
-        keyboardType="numeric"
-        style={styles.priceInput}
-        editable={status !== "completed"}
-        value={item.actualPrice ? String(item.actualPrice) : ""}
-        onChangeText={(v) => updateActualPrice(item.id, v)}
-      />
+        return service
 
-    </View>
+      })
+    )
+
+  }
+
+  const total = services.reduce(
+    (sum, s) =>
+      sum +
+      (
+        s.actualPrice ??
+        s.estimatedPrice
+      ),
+    0
   )
+
+  const markComplete = () => {
+
+    setStatus("completed")
+
+    Alert.alert(
+      "Job Completed",
+      "Invoice is ready",
+      [
+        {
+          text: "View Invoice",
+          onPress: () =>
+            navigation.navigate(
+              "Invoice",
+              {
+                job: {
+                  ...job,
+                  services,
+                  status
+                }
+              }
+            )
+        }
+      ]
+    )
+  }
 
   return (
 
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      showsVerticalScrollIndicator={false}
+    >
 
-      <Text style={styles.vehicle}>{job.vehicle}</Text>
-      <Text style={styles.customer}>{job.customer}</Text>
+      {/* HEADER CARD */}
 
-      <Text style={styles.section}>Services</Text>
+      <View style={styles.headerCard}>
 
-      <FlatList
-        data={services}
-        renderItem={renderService}
-        keyExtractor={(item) => item.id}
-      />
+        <View style={styles.vehicleIcon}>
 
-      {/* ADD SERVICE BUTTON */}
-      {status !== "completed" && (
-        <TouchableOpacity
-          style={styles.addServiceBtn}
-          onPress={() => setShowModal(true)}
+          <FontAwesome5
+            name={
+              job.vehicleType === "2 Wheeler"
+                ? "motorcycle"
+                : "car"
+            }
+            size={24}
+            color="#2563EB"
+          />
+
+        </View>
+
+        <View style={{ flex: 1 }}>
+
+          <Text style={styles.vehicleNumber}>
+            {job.vehicleNumber}
+          </Text>
+
+          <Text style={styles.vehicleModel}>
+            {job.vehicleModel}
+          </Text>
+
+        </View>
+
+        <View
+          style={[
+            styles.statusBadge,
+
+            status === "completed"
+              ? styles.completedBadge
+              : status === "progress"
+              ? styles.progressBadge
+              : styles.pendingBadge
+          ]}
         >
-          <Text style={styles.addServiceText}>+ Add Service</Text>
-        </TouchableOpacity>
-      )}
 
-      {/* TOTAL */}
-      <View style={styles.totalBox}>
-        <Text style={styles.totalText}>
-          Total ₹{total}
-        </Text>
+          <Text
+            style={[
+              styles.statusText,
+
+              status === "completed"
+                ? {
+                    color: "#16A34A"
+                  }
+                : status === "progress"
+                ? {
+                    color: "#2563EB"
+                  }
+                : {
+                    color: "#DC2626"
+                  }
+            ]}
+          >
+            {status.toUpperCase()}
+          </Text>
+
+        </View>
+
       </View>
 
-      {/* ACTION BUTTONS */}
+      {/* CUSTOMER CARD */}
 
-      {status !== "completed" && (
+      <View style={styles.card}>
+
+        <Text style={styles.cardTitle}>
+          Customer Details
+        </Text>
+
+        <View style={styles.infoRow}>
+
+          <Ionicons
+            name="person-outline"
+            size={18}
+            color="#6B7280"
+          />
+
+          <Text style={styles.infoText}>
+            {job.customerName}
+          </Text>
+
+        </View>
+
+        <View style={styles.infoRow}>
+
+          <Ionicons
+            name="call-outline"
+            size={18}
+            color="#6B7280"
+          />
+
+          <Text style={styles.infoText}>
+            {job.phone}
+          </Text>
+
+        </View>
+
+      </View>
+
+      {/* SERVICES */}
+
+      <View style={styles.sectionRow}>
+
+        <Text style={styles.sectionTitle}>
+          Services
+        </Text>
+
+        {status !== "completed" && (
+
+          <TouchableOpacity
+            onPress={() =>
+              setShowModal(true)
+            }
+          >
+
+            <Text style={styles.addService}>
+              + Add Service
+            </Text>
+
+          </TouchableOpacity>
+
+        )}
+
+      </View>
+
+      {services.map(item => (
+
+        <View
+          key={`${item.id}`}
+          style={styles.serviceCard}
+        >
+
+          <View style={styles.serviceTop}>
+
+            <View>
+
+              <Text style={styles.serviceName}>
+                {item.name}
+              </Text>
+
+              <Text style={styles.estimated}>
+                Estimated ₹
+                {item.estimatedPrice}
+              </Text>
+
+            </View>
+
+            {status !== "completed" && (
+
+              <TouchableOpacity
+                onPress={() =>
+                  removeService(item.id)
+                }
+              >
+
+                <MaterialIcons
+                  name="delete-outline"
+                  size={22}
+                  color="#DC2626"
+                />
+
+              </TouchableOpacity>
+
+            )}
+
+          </View>
+
+          <TextInput
+            placeholder="Actual Price"
+            placeholderTextColor="#9CA3AF"
+            keyboardType="numeric"
+            style={styles.priceInput}
+            editable={
+              status !== "completed"
+            }
+            value={
+              item.actualPrice
+                ? String(
+                    item.actualPrice
+                  )
+                : ""
+            }
+            onChangeText={(v) =>
+              updateActualPrice(
+                item.id,
+                v
+              )
+            }
+          />
+
+        </View>
+
+      ))}
+
+      {/* TOTAL */}
+
+      <View style={styles.totalCard}>
+
+        <Text style={styles.totalLabel}>
+          Total Amount
+        </Text>
+
+        <Text style={styles.totalAmount}>
+          ₹{total}
+        </Text>
+
+      </View>
+
+      {/* BUTTONS */}
+
+      {status !== "completed" ? (
+
         <TouchableOpacity
           style={styles.completeBtn}
           onPress={markComplete}
         >
+
           <Text style={styles.completeText}>
             Finalize Job
           </Text>
-        </TouchableOpacity>
-      )}
 
-      {status === "completed" && (
+        </TouchableOpacity>
+
+      ) : (
+
         <TouchableOpacity
           style={styles.invoiceBtn}
           onPress={() =>
-            navigation.navigate("Invoice", {
-              job: { ...job, services, status }
-            })
+            navigation.navigate(
+              "Invoice",
+              {
+                job: {
+                  ...job,
+                  services,
+                  status
+                }
+              }
+            )
           }
         >
+
           <Text style={styles.invoiceText}>
             View Invoice
           </Text>
+
         </TouchableOpacity>
+
       )}
+
+      <View style={{ height: 50 }} />
 
       {/* MODAL */}
 
-      <Modal visible={showModal} transparent animationType="slide">
+      <Modal
+        visible={showModal}
+        transparent
+        animationType="slide"
+      >
 
         <View style={styles.modalOverlay}>
+
           <View style={styles.modalContent}>
 
-            <Text style={styles.modalTitle}>Add Service</Text>
+            <Text style={styles.modalTitle}>
+              Add Service
+            </Text>
 
             <TextInput
               placeholder="Service Name"
@@ -217,173 +486,270 @@ export default function JobDetailScreen({ route }: Props) {
             />
 
             <TouchableOpacity
-              style={styles.addBtn}
-              onPress={() => {
-                addService()
-                setShowModal(false)
-              }}
+              style={styles.saveBtn}
+              onPress={addService}
             >
-              <Text style={styles.addText}>Save</Text>
+
+              <Text style={styles.saveText}>
+                Save Service
+              </Text>
+
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => setShowModal(false)}>
-              <Text style={{ textAlign: "center", marginTop: 10 }}>
+            <TouchableOpacity
+              onPress={() =>
+                setShowModal(false)
+              }
+            >
+
+              <Text style={styles.cancelText}>
                 Cancel
               </Text>
+
             </TouchableOpacity>
 
           </View>
+
         </View>
 
       </Modal>
 
-    </View>
+    </ScrollView>
+
   )
+
 }
 
 const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    padding: 20,
-    backgroundColor: "#F4F6F8"
+    backgroundColor: "#F3F4F6",
+    padding: 18
   },
 
-  vehicle: {
-    fontSize: 22,
-    fontWeight: "bold"
-  },
-
-  customer: {
-    marginBottom: 20
-  },
-
-  section: {
-    fontWeight: "bold",
-    fontSize: 16,
-    marginBottom: 10
-  },
-
-  serviceCard: {
+  headerCard: {
     backgroundColor: "white",
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 10
-  },
-
-  serviceHeader: {
+    borderRadius: 22,
+    padding: 18,
     flexDirection: "row",
-    justifyContent: "space-between"
-  },
-
-  serviceName: {
-    fontWeight: "600",
-    fontSize: 16
-  },
-
-  delete: {
-    color: "#DC2626"
-  },
-
-  estimated: {
-    marginTop: 4,
-    color: "#555"
-  },
-
-  priceInput: {
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 8
-  },
-
-  addServiceBtn: {
-    backgroundColor: "#E0E7FF",
-    padding: 14,
-    borderRadius: 10,
     alignItems: "center",
-    marginTop: 10
+    marginBottom: 18
   },
 
-  addServiceText: {
+  vehicleIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 14
+  },
+
+  vehicleNumber: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#111827"
+  },
+
+  vehicleModel: {
+    marginTop: 4,
+    color: "#6B7280"
+  },
+
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 30
+  },
+
+  pendingBadge: {
+    backgroundColor: "#FEF2F2"
+  },
+
+  progressBadge: {
+    backgroundColor: "#DBEAFE"
+  },
+
+  completedBadge: {
+    backgroundColor: "#DCFCE7"
+  },
+
+  statusText: {
+    fontWeight: "bold",
+    fontSize: 12
+  },
+
+  card: {
+    backgroundColor: "white",
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 18
+  },
+
+  cardTitle: {
+    fontSize: 17,
+    fontWeight: "bold",
+    marginBottom: 14,
+    color: "#111827"
+  },
+
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12
+  },
+
+  infoText: {
+    marginLeft: 10,
+    color: "#111827",
+    fontSize: 15
+  },
+
+  sectionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12
+  },
+
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#111827"
+  },
+
+  addService: {
     color: "#2563EB",
     fontWeight: "bold"
   },
 
-  totalBox: {
-    marginTop: 20
+  serviceCard: {
+    backgroundColor: "white",
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 12
   },
 
-  totalText: {
-    fontSize: 18,
-    fontWeight: "bold"
+  serviceTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+
+  serviceName: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#111827"
+  },
+
+  estimated: {
+    marginTop: 4,
+    color: "#6B7280"
+  },
+
+  priceInput: {
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: "#F9FAFB"
+  },
+
+  totalCard: {
+    backgroundColor: "#111827",
+    borderRadius: 22,
+    padding: 20,
+    marginTop: 10
+  },
+
+  totalLabel: {
+    color: "#D1D5DB"
+  },
+
+  totalAmount: {
+    color: "white",
+    fontSize: 30,
+    fontWeight: "bold",
+    marginTop: 8
   },
 
   completeBtn: {
     backgroundColor: "#16A34A",
-    padding: 16,
-    borderRadius: 10,
-    marginTop: 20,
-    alignItems: "center"
+    padding: 18,
+    borderRadius: 18,
+    alignItems: "center",
+    marginTop: 20
   },
 
   completeText: {
     color: "white",
-    fontWeight: "bold"
+    fontWeight: "bold",
+    fontSize: 17
   },
 
   invoiceBtn: {
-    backgroundColor: "#111827",
-    padding: 16,
-    borderRadius: 10,
-    marginTop: 20,
-    alignItems: "center"
+    backgroundColor: "#2563EB",
+    padding: 18,
+    borderRadius: 18,
+    alignItems: "center",
+    marginTop: 20
   },
 
   invoiceText: {
     color: "white",
-    fontWeight: "bold"
+    fontWeight: "bold",
+    fontSize: 17
   },
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    padding: 20
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end"
   },
 
   modalContent: {
     backgroundColor: "white",
-    padding: 20,
-    borderRadius: 12
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24
   },
 
   modalTitle: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: "bold",
-    marginBottom: 10
+    marginBottom: 18
   },
 
   input: {
-    backgroundColor: "white",
-    borderRadius: 8,
-    padding: 12,
+    backgroundColor: "#F9FAFB",
     borderWidth: 1,
-    borderColor: "#ddd",
-    marginBottom: 10
+    borderColor: "#E5E7EB",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14
   },
 
-  addBtn: {
+  saveBtn: {
     backgroundColor: "#2563EB",
-    padding: 14,
-    borderRadius: 8,
+    padding: 16,
+    borderRadius: 14,
     alignItems: "center"
   },
 
-  addText: {
+  saveText: {
     color: "white",
-    fontWeight: "bold"
+    fontWeight: "bold",
+    fontSize: 16
+  },
+
+  cancelText: {
+    textAlign: "center",
+    marginTop: 18,
+    color: "#6B7280",
+    fontWeight: "600"
   }
 
 })

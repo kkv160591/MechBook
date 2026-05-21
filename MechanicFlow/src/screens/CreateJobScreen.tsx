@@ -1,6 +1,5 @@
-import { MaterialIcons } from "@expo/vector-icons"
-import { useState } from "react"
-import { createJob } from "../services/jobApi"
+// CreateJobScreen.tsx
+
 import {
   View,
   Text,
@@ -8,8 +7,17 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  FlatList
+  ScrollView
 } from "react-native"
+
+import {
+  MaterialIcons,
+  Ionicons,
+  FontAwesome5
+} from "@expo/vector-icons"
+
+import { useState } from "react"
+import { createJob } from "../services/jobApi"
 
 type Service = {
   name: string
@@ -18,24 +26,42 @@ type Service = {
 
 export default function CreateJobScreen() {
 
+  // CUSTOMER
   const [customer, setCustomer] = useState("")
   const [phone, setPhone] = useState("")
-  const [vehicleNumber, setVehicleNumber] = useState("")
-  const [vehicleModel, setVehicleModel] = useState("")
+  const [alternatePhone, setAlternatePhone] = useState("")
 
+  // VEHICLE
+  const [vehicleType, setVehicleType] = useState<"2W" | "4W">("2W")
+  const [vehicleNumber, setVehicleNumber] = useState("")
+  const [vehicleBrand, setVehicleBrand] = useState("")
+  const [vehicleModel, setVehicleModel] = useState("")
+  const [vehicleColor, setVehicleColor] = useState("")
+  const [fuelType, setFuelType] = useState("")
+  const [kmsDriven, setKmsDriven] = useState("")
+
+  // JOB
+  const [problemDescription, setProblemDescription] = useState("")
+  const [expectedDelivery, setExpectedDelivery] = useState("")
+
+  // SERVICE
   const [serviceName, setServiceName] = useState("")
   const [servicePrice, setServicePrice] = useState("")
 
   const [services, setServices] = useState<Service[]>([])
 
-  const [inlineEditIndex, setInlineEditIndex] = useState<number | null>(null)
-  const [inlineName, setInlineName] = useState("")
-  const [inlinePrice, setInlinePrice] = useState("")
+  const [showServiceForm, setShowServiceForm] = useState(false)
 
+  // ADD SERVICE
   const addService = () => {
 
     if (!serviceName || !servicePrice) {
-      Alert.alert("Validation", "Service name and price required")
+
+      Alert.alert(
+        "Validation",
+        "Please enter service details"
+      )
+
       return
     }
 
@@ -48,189 +74,358 @@ export default function CreateJobScreen() {
 
     setServiceName("")
     setServicePrice("")
+
+    setShowServiceForm(false)
   }
 
-  const editService = (index: number) => {
-
-    const item = services[index]
-
-    setInlineName(item.name)
-    setInlinePrice(String(item.price))
-    setInlineEditIndex(index)
-  }
-
-  const cancelInlineEdit = () => {
-    setInlineEditIndex(null)
-    setInlineName("")
-    setInlinePrice("")
-  }
-
-  const updateServiceInline = () => {
-
-    if (inlineEditIndex === null) return
-
-    const updated = [...services]
-
-    updated[inlineEditIndex] = {
-      name: inlineName,
-      price: Number(inlinePrice)
-    }
-
-    setServices(updated)
-
-    cancelInlineEdit()
-  }
-
+  // DELETE SERVICE
   const deleteService = (index: number) => {
 
-    setServices(prev => prev.filter((_, i) => i !== index))
-
-    if (inlineEditIndex === index) {
-      cancelInlineEdit()
-    }
+    setServices(prev =>
+      prev.filter((_, i) => i !== index)
+    )
   }
 
-  const totalPrice = services.reduce((sum, item) => sum + item.price, 0)
+  // TOTAL
+  const totalPrice = services.reduce(
+    (sum, item) => sum + item.price,
+    0
+  )
 
+  // CREATE JOB
   const handleCreateJob = async () => {
+
+    if (
+      !customer ||
+      !phone ||
+      !vehicleNumber ||
+      !vehicleBrand ||
+      !vehicleModel
+    ) {
+
+      Alert.alert(
+        "Validation",
+        "Please fill all required fields"
+      )
+
+      return
+    }
+
+    if (services.length === 0) {
+
+      Alert.alert(
+        "Validation",
+        "Add at least one service"
+      )
+
+      return
+    }
 
     try {
 
       const job = {
+
         id: Date.now().toString(),
+
+        customer,
+        phone,
+        alternatePhone,
+
+        vehicleType,
         vehicle: vehicleNumber,
-        customer: customer,
-        services: services
+        vehicleNumber,
+        vehicleBrand,
+        vehicleModel,
+        vehicleColor,
+        fuelType,
+        kmsDriven,
+
+        problemDescription,
+        expectedDelivery,
+
+        services,
+
+        status: "pending"
       }
 
       await createJob(job)
 
-      Alert.alert("Success", "Job saved to server")
+      Alert.alert(
+        "Success",
+        "Job created successfully"
+      )
 
-      // reset form
+      // RESET
+
       setCustomer("")
       setPhone("")
+      setAlternatePhone("")
+
       setVehicleNumber("")
+      setVehicleBrand("")
       setVehicleModel("")
+      setVehicleColor("")
+      setFuelType("")
+      setKmsDriven("")
+
+      setProblemDescription("")
+      setExpectedDelivery("")
+
       setServices([])
 
     } catch (err) {
-      Alert.alert("Error", "Failed to save job")
-    }
-  }
 
-  const renderServiceItem = ({ item, index }: { item: Service, index: number }) => {
-
-    if (inlineEditIndex === index) {
-
-      return (
-        <View style={[styles.serviceRow, styles.editRow]}>
-
-          <TextInput
-            style={styles.fullInput}
-            value={inlineName}
-            onChangeText={setInlineName}
-            placeholder="Service Name"
-          />
-
-          <TextInput
-            style={styles.fullInput}
-            value={inlinePrice}
-            keyboardType="numeric"
-            onChangeText={setInlinePrice}
-            placeholder="Price"
-          />
-
-          <View style={styles.editActions}>
-
-            <TouchableOpacity onPress={updateServiceInline}>
-              <MaterialIcons name="check-circle" size={26} color="green" />
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={cancelInlineEdit}>
-              <MaterialIcons name="cancel" size={26} color="red" />
-            </TouchableOpacity>
-
-          </View>
-
-        </View>
+      Alert.alert(
+        "Error",
+        "Failed to create job"
       )
+
     }
-
-    return (
-      <View style={styles.serviceRow}>
-
-        <View style={styles.serviceInfo}>
-          <Text style={styles.serviceName}>{item.name}</Text>
-          <Text style={styles.servicePrice}>₹{item.price}</Text>
-        </View>
-
-        <View style={styles.serviceActions}>
-
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => editService(index)}
-          >
-            <MaterialIcons name="edit" size={22} color="#2563EB" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => deleteService(index)}
-          >
-            <MaterialIcons name="delete" size={22} color="#DC2626" />
-          </TouchableOpacity>
-
-        </View>
-
-      </View>
-    )
   }
 
   return (
 
-    <FlatList
+    <ScrollView
       style={styles.container}
-      data={services}
-      keyExtractor={(_, index) => index.toString()}
-      renderItem={renderServiceItem}
-      ListHeaderComponent={
+      showsVerticalScrollIndicator={false}
+    >
 
-        <>
-          <Text style={styles.title}>Create Job</Text>
+      {/* HEADER */}
 
-          <TextInput
-            placeholder="Customer Name"
-            style={styles.input}
-            value={customer}
-            onChangeText={setCustomer}
-          />
+      <View style={styles.headerRow}>
 
-          <TextInput
-            placeholder="Phone Number"
-            style={styles.input}
-            keyboardType="phone-pad"
-            value={phone}
-            onChangeText={setPhone}
-          />
+        <View>
 
-          <TextInput
-            placeholder="Vehicle Number"
-            style={styles.input}
-            value={vehicleNumber}
-            onChangeText={setVehicleNumber}
-          />
-
-          <TextInput
-            placeholder="Vehicle Model"
-            style={styles.input}
-            value={vehicleModel}
-            onChangeText={setVehicleModel}
-          />
-
-          <Text style={styles.section}>
-            Services ({services.length})
+          <Text style={styles.title}>
+            Create New Job
           </Text>
+
+          <Text style={styles.subtitle}>
+            Garage job card for vehicle servicing
+          </Text>
+
+        </View>
+
+        <View style={styles.headerIcon}>
+
+          <MaterialIcons
+            name="build-circle"
+            size={36}
+            color="#2563EB"
+          />
+
+        </View>
+
+      </View>
+
+      {/* CUSTOMER DETAILS */}
+
+      <View style={styles.sectionCard}>
+
+        <Text style={styles.sectionTitle}>
+          Customer Details
+        </Text>
+
+        <TextInput
+          placeholder="Customer Full Name *"
+          style={styles.input}
+          value={customer}
+          onChangeText={setCustomer}
+        />
+
+        <TextInput
+          placeholder="Primary Phone Number *"
+          style={styles.input}
+          keyboardType="phone-pad"
+          value={phone}
+          onChangeText={setPhone}
+        />
+
+        <TextInput
+          placeholder="Alternate Phone Number"
+          style={styles.input}
+          keyboardType="phone-pad"
+          value={alternatePhone}
+          onChangeText={setAlternatePhone}
+        />
+
+      </View>
+
+      {/* VEHICLE DETAILS */}
+
+      <View style={styles.sectionCard}>
+
+        <Text style={styles.sectionTitle}>
+          Vehicle Details
+        </Text>
+
+        {/* VEHICLE TYPE */}
+
+        <View style={styles.vehicleTypeRow}>
+
+          <TouchableOpacity
+            style={[
+              styles.vehicleTypeCard,
+              vehicleType === "2W" &&
+              styles.activeVehicleType
+            ]}
+            onPress={() => setVehicleType("2W")}
+          >
+
+            <FontAwesome5
+              name="motorcycle"
+              size={24}
+              color={
+                vehicleType === "2W"
+                  ? "white"
+                  : "#2563EB"
+              }
+            />
+
+            <Text
+              style={[
+                styles.vehicleTypeText,
+                vehicleType === "2W" &&
+                styles.activeVehicleTypeText
+              ]}
+            >
+              2 Wheeler
+            </Text>
+
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.vehicleTypeCard,
+              vehicleType === "4W" &&
+              styles.activeVehicleType
+            ]}
+            onPress={() => setVehicleType("4W")}
+          >
+
+            <FontAwesome5
+              name="car"
+              size={22}
+              color={
+                vehicleType === "4W"
+                  ? "white"
+                  : "#2563EB"
+              }
+            />
+
+            <Text
+              style={[
+                styles.vehicleTypeText,
+                vehicleType === "4W" &&
+                styles.activeVehicleTypeText
+              ]}
+            >
+              4 Wheeler
+            </Text>
+
+          </TouchableOpacity>
+
+        </View>
+
+        <TextInput
+          placeholder="Vehicle Number *"
+          style={styles.input}
+          value={vehicleNumber}
+          onChangeText={setVehicleNumber}
+        />
+
+        <TextInput
+          placeholder="Vehicle Brand *"
+          style={styles.input}
+          value={vehicleBrand}
+          onChangeText={setVehicleBrand}
+        />
+
+        <TextInput
+          placeholder="Vehicle Model *"
+          style={styles.input}
+          value={vehicleModel}
+          onChangeText={setVehicleModel}
+        />
+
+        <TextInput
+          placeholder="Vehicle Color"
+          style={styles.input}
+          value={vehicleColor}
+          onChangeText={setVehicleColor}
+        />
+
+        <TextInput
+          placeholder="Fuel Type (Petrol/Diesel/Electric)"
+          style={styles.input}
+          value={fuelType}
+          onChangeText={setFuelType}
+        />
+
+        <TextInput
+          placeholder="KMs Driven"
+          style={styles.input}
+          keyboardType="numeric"
+          value={kmsDriven}
+          onChangeText={setKmsDriven}
+        />
+
+      </View>
+
+      {/* JOB DETAILS */}
+
+      <View style={styles.sectionCard}>
+
+        <Text style={styles.sectionTitle}>
+          Job Details
+        </Text>
+
+        <TextInput
+          placeholder="Customer Complaint / Problem Description"
+          style={[
+            styles.input,
+            styles.textArea
+          ]}
+          multiline
+          numberOfLines={4}
+          value={problemDescription}
+          onChangeText={setProblemDescription}
+        />
+
+        <TextInput
+          placeholder="Expected Delivery Date"
+          style={styles.input}
+          value={expectedDelivery}
+          onChangeText={setExpectedDelivery}
+        />
+
+      </View>
+
+      {/* SERVICES */}
+
+      <View style={styles.sectionRow}>
+
+        <Text style={styles.sectionTitle}>
+          Services
+        </Text>
+
+        <TouchableOpacity
+          onPress={() =>
+            setShowServiceForm(!showServiceForm)
+          }
+        >
+          <Text style={styles.addServiceText}>
+            + Add Service
+          </Text>
+        </TouchableOpacity>
+
+      </View>
+
+      {/* SERVICE FORM */}
+
+      {showServiceForm && (
+
+        <View style={styles.sectionCard}>
 
           <TextInput
             placeholder="Service Name"
@@ -247,27 +442,126 @@ export default function CreateJobScreen() {
             onChangeText={setServicePrice}
           />
 
-          <TouchableOpacity style={styles.addButton} onPress={addService}>
-            <Text style={styles.buttonText}>Add Service</Text>
-          </TouchableOpacity>
-        </>
-      }
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={addService}
+          >
 
-      ListFooterComponent={
-        <>
-          {services.length > 0 && (
-            <Text style={styles.total}>
-              Estimated Total: ₹{totalPrice}
+            <Text style={styles.buttonText}>
+              Save Service
             </Text>
-          )}
 
-          <TouchableOpacity style={styles.button} onPress={handleCreateJob}>
-            <Text style={styles.buttonText}>Create Job</Text>
           </TouchableOpacity>
-        </>
-      }
 
-    />
+        </View>
+
+      )}
+
+      {/* EMPTY STATE */}
+
+      {services.length === 0 && (
+
+        <View style={styles.emptyCard}>
+
+          <Ionicons
+            name="construct-outline"
+            size={42}
+            color="#9CA3AF"
+          />
+
+          <Text style={styles.emptyTitle}>
+            No Services Added
+          </Text>
+
+          <Text style={styles.emptySub}>
+            Add services for this job
+          </Text>
+
+        </View>
+
+      )}
+
+      {/* SERVICES LIST */}
+
+      {services.map((item, index) => (
+
+        <View
+          key={index}
+          style={styles.serviceCard}
+        >
+
+          <View style={styles.serviceLeft}>
+
+            <View style={styles.serviceIcon}>
+
+              <MaterialIcons
+                name="build"
+                size={18}
+                color="#2563EB"
+              />
+
+            </View>
+
+            <View>
+
+              <Text style={styles.serviceName}>
+                {item.name}
+              </Text>
+
+              <Text style={styles.servicePrice}>
+                ₹{item.price}
+              </Text>
+
+            </View>
+
+          </View>
+
+          <TouchableOpacity
+            onPress={() => deleteService(index)}
+          >
+
+            <MaterialIcons
+              name="delete"
+              size={22}
+              color="#DC2626"
+            />
+
+          </TouchableOpacity>
+
+        </View>
+
+      ))}
+
+      {/* SUMMARY */}
+
+      <View style={styles.summaryCard}>
+
+        <Text style={styles.summaryLabel}>
+          Estimated Total
+        </Text>
+
+        <Text style={styles.summaryAmount}>
+          ₹{totalPrice}
+        </Text>
+
+      </View>
+
+      {/* CREATE BUTTON */}
+
+      <TouchableOpacity
+        style={styles.createButton}
+        onPress={handleCreateJob}
+      >
+
+        <Text style={styles.createText}>
+          Create Job
+        </Text>
+
+      </TouchableOpacity>
+
+      <View style={{ height: 40 }} />
+
+    </ScrollView>
 
   )
 }
@@ -276,111 +570,205 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    padding: 20,
-    backgroundColor: "#f4f6f8"
+    backgroundColor: "#F3F4F6",
+    padding: 20
+  },
+
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 24
+  },
+
+  headerIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    backgroundColor: "#DBEAFE",
+    alignItems: "center",
+    justifyContent: "center"
   },
 
   title: {
-    fontSize: 22,
+    fontSize: 28,
     fontWeight: "bold",
-    marginBottom: 20
+    color: "#111827"
   },
 
-  section: {
+  subtitle: {
+    color: "#6B7280",
+    marginTop: 5
+  },
+
+  sectionCard: {
+    backgroundColor: "white",
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 18
+  },
+
+  sectionTitle: {
     fontSize: 18,
     fontWeight: "bold",
-    marginTop: 20,
-    marginBottom: 10
-  },
-
-  input: {
-    backgroundColor: "white",
-    padding: 14,
-    borderRadius: 10,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: "#ddd"
-  },
-
-  addButton: {
-    backgroundColor: "#16A34A",
-    padding: 14,
-    borderRadius: 10,
-    alignItems: "center",
+    color: "#111827",
     marginBottom: 15
   },
 
-  serviceRow: {
-    backgroundColor: "white",
-    padding: 14,
-    borderRadius: 10,
-    marginBottom: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between"
-  },
-
-  serviceInfo: {
-    flex: 1
-  },
-
-  serviceName: {
-    fontSize: 16,
-    fontWeight: "600"
-  },
-
-  servicePrice: {
-    fontSize: 14,
-    color: "#555"
-  },
-
-  serviceActions: {
-    flexDirection: "row"
-  },
-
-  iconButton: {
-    marginLeft: 12
-  },
-
-  editRow: {
-    flexDirection: "column",
-    backgroundColor: "#EFF6FF"
-  },
-
-  fullInput: {
-    width: "100%",
-    backgroundColor: "white",
+  input: {
+    backgroundColor: "#F9FAFB",
     borderWidth: 1,
-    borderColor: "#ddd",
-    padding: 12,
-    borderRadius: 8,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 14
+  },
+
+  textArea: {
+    height: 100,
+    textAlignVertical: "top"
+  },
+
+  vehicleTypeRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 16
+  },
+
+  vehicleTypeCard: {
+    width: "48%",
+    borderWidth: 1.5,
+    borderColor: "#D1D5DB",
+    borderRadius: 16,
+    paddingVertical: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff"
+  },
+
+  activeVehicleType: {
+    backgroundColor: "#2563EB",
+    borderColor: "#2563EB"
+  },
+
+  vehicleTypeText: {
+    marginTop: 10,
+    fontWeight: "600",
+    color: "#111827"
+  },
+
+  activeVehicleTypeText: {
+    color: "white"
+  },
+
+  sectionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 10
   },
 
-  editActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 15
+  addServiceText: {
+    color: "#2563EB",
+    fontWeight: "bold"
   },
 
-  total: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginTop: 10,
-    marginBottom: 20
-  },
-
-  button: {
+  addButton: {
     backgroundColor: "#2563EB",
-    padding: 18,
-    borderRadius: 10,
-    alignItems: "center",
-    marginTop: 10
+    padding: 15,
+    borderRadius: 12,
+    alignItems: "center"
   },
 
   buttonText: {
     color: "white",
+    fontWeight: "bold",
+    fontSize: 16
+  },
+
+  emptyCard: {
+    backgroundColor: "white",
+    borderRadius: 18,
+    padding: 30,
+    alignItems: "center",
+    marginBottom: 15
+  },
+
+  emptyTitle: {
     fontSize: 16,
+    fontWeight: "bold",
+    marginTop: 10
+  },
+
+  emptySub: {
+    color: "#6B7280",
+    marginTop: 4
+  },
+
+  serviceCard: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+
+  serviceLeft: {
+    flexDirection: "row",
+    alignItems: "center"
+  },
+
+  serviceIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12
+  },
+
+  serviceName: {
+    fontWeight: "bold",
+    fontSize: 16
+  },
+
+  servicePrice: {
+    color: "#16A34A",
+    marginTop: 3
+  },
+
+  summaryCard: {
+    backgroundColor: "#111827",
+    borderRadius: 18,
+    padding: 20,
+    marginTop: 10
+  },
+
+  summaryLabel: {
+    color: "#D1D5DB",
+    marginBottom: 6
+  },
+
+  summaryAmount: {
+    color: "white",
+    fontSize: 30,
+    fontWeight: "bold"
+  },
+
+  createButton: {
+    backgroundColor: "#2563EB",
+    padding: 18,
+    borderRadius: 16,
+    alignItems: "center",
+    marginTop: 20
+  },
+
+  createText: {
+    color: "white",
+    fontSize: 18,
     fontWeight: "bold"
   }
 
