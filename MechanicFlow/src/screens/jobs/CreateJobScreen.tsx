@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  ScrollView
+  ScrollView,
+  Switch
 } from "react-native"
 
 import {
@@ -17,11 +18,14 @@ import {
 } from "@expo/vector-icons"
 
 import { useState } from "react"
-import { createJob } from "../services/jobApi"
+import { createJob } from "../../services/jobApi"
 
 type Service = {
+  id: string
   name: string
-  price: number
+  category: string
+  estimatedPrice: number
+  actualPrice?: number
 }
 
 export default function CreateJobScreen() {
@@ -30,6 +34,7 @@ export default function CreateJobScreen() {
   const [customer, setCustomer] = useState("")
   const [phone, setPhone] = useState("")
   const [alternatePhone, setAlternatePhone] = useState("")
+  const [address, setAddress] = useState("")
 
   // VEHICLE
   const [vehicleType, setVehicleType] = useState<"2W" | "4W">("2W")
@@ -39,17 +44,22 @@ export default function CreateJobScreen() {
   const [vehicleColor, setVehicleColor] = useState("")
   const [fuelType, setFuelType] = useState("")
   const [kmsDriven, setKmsDriven] = useState("")
+  const [engineNumber, setEngineNumber] = useState("")
+  const [chassisNumber, setChassisNumber] = useState("")
 
   // JOB
   const [problemDescription, setProblemDescription] = useState("")
   const [expectedDelivery, setExpectedDelivery] = useState("")
+  const [assignedWorker, setAssignedWorker] = useState("")
+  const [priority, setPriority] = useState("Normal")
+  const [pickupRequired, setPickupRequired] = useState(false)
 
   // SERVICE
   const [serviceName, setServiceName] = useState("")
+  const [serviceCategory, setServiceCategory] = useState("")
   const [servicePrice, setServicePrice] = useState("")
 
   const [services, setServices] = useState<Service[]>([])
-
   const [showServiceForm, setShowServiceForm] = useState(false)
 
   // ADD SERVICE
@@ -66,29 +76,33 @@ export default function CreateJobScreen() {
     }
 
     const newService: Service = {
+      id: Date.now().toString(),
       name: serviceName,
-      price: Number(servicePrice)
+      category: serviceCategory || "General",
+      estimatedPrice: Number(servicePrice)
     }
 
     setServices(prev => [...prev, newService])
 
     setServiceName("")
+    setServiceCategory("")
     setServicePrice("")
 
     setShowServiceForm(false)
   }
 
   // DELETE SERVICE
-  const deleteService = (index: number) => {
+  const deleteService = (id: string) => {
 
     setServices(prev =>
-      prev.filter((_, i) => i !== index)
+      prev.filter(item => item.id !== id)
     )
   }
 
   // TOTAL
   const totalPrice = services.reduce(
-    (sum, item) => sum + item.price,
+    (sum, item) =>
+      sum + (item.actualPrice ?? item.estimatedPrice),
     0
   )
 
@@ -127,25 +141,38 @@ export default function CreateJobScreen() {
 
         id: Date.now().toString(),
 
+        // CUSTOMER
         customer,
+        customerName: customer,
         phone,
         alternatePhone,
+        address,
 
-        vehicleType,
+        // VEHICLE
         vehicle: vehicleNumber,
         vehicleNumber,
+        vehicleType,
         vehicleBrand,
         vehicleModel,
         vehicleColor,
         fuelType,
         kmsDriven,
+        engineNumber,
+        chassisNumber,
 
+        // JOB
         problemDescription,
         expectedDelivery,
+        assignedWorker,
+        priority,
+        pickupRequired,
 
+        // SERVICES
         services,
 
-        status: "pending"
+        // META
+        status: "pending",
+        createdAt: new Date().toISOString()
       }
 
       await createJob(job)
@@ -156,10 +183,10 @@ export default function CreateJobScreen() {
       )
 
       // RESET
-
       setCustomer("")
       setPhone("")
       setAlternatePhone("")
+      setAddress("")
 
       setVehicleNumber("")
       setVehicleBrand("")
@@ -167,9 +194,14 @@ export default function CreateJobScreen() {
       setVehicleColor("")
       setFuelType("")
       setKmsDriven("")
+      setEngineNumber("")
+      setChassisNumber("")
 
       setProblemDescription("")
       setExpectedDelivery("")
+      setAssignedWorker("")
+      setPriority("Normal")
+      setPickupRequired(false)
 
       setServices([])
 
@@ -201,7 +233,7 @@ export default function CreateJobScreen() {
           </Text>
 
           <Text style={styles.subtitle}>
-            Garage job card for vehicle servicing
+            Digital garage job card
           </Text>
 
         </View>
@@ -247,6 +279,18 @@ export default function CreateJobScreen() {
           keyboardType="phone-pad"
           value={alternatePhone}
           onChangeText={setAlternatePhone}
+        />
+
+        <TextInput
+          placeholder="Customer Address"
+          style={[
+            styles.input,
+            styles.textArea
+          ]}
+          multiline
+          numberOfLines={3}
+          value={address}
+          onChangeText={setAddress}
         />
 
       </View>
@@ -356,7 +400,7 @@ export default function CreateJobScreen() {
         />
 
         <TextInput
-          placeholder="Fuel Type (Petrol/Diesel/Electric)"
+          placeholder="Fuel Type"
           style={styles.input}
           value={fuelType}
           onChangeText={setFuelType}
@@ -368,6 +412,20 @@ export default function CreateJobScreen() {
           keyboardType="numeric"
           value={kmsDriven}
           onChangeText={setKmsDriven}
+        />
+
+        <TextInput
+          placeholder="Engine Number"
+          style={styles.input}
+          value={engineNumber}
+          onChangeText={setEngineNumber}
+        />
+
+        <TextInput
+          placeholder="Chassis Number"
+          style={styles.input}
+          value={chassisNumber}
+          onChangeText={setChassisNumber}
         />
 
       </View>
@@ -393,11 +451,46 @@ export default function CreateJobScreen() {
         />
 
         <TextInput
-          placeholder="Expected Delivery Date"
+          placeholder="Expected Delivery Date & Time"
           style={styles.input}
           value={expectedDelivery}
           onChangeText={setExpectedDelivery}
         />
+
+        <TextInput
+          placeholder="Assigned Technician"
+          style={styles.input}
+          value={assignedWorker}
+          onChangeText={setAssignedWorker}
+        />
+
+        <TextInput
+          placeholder="Priority (Low / Normal / Urgent)"
+          style={styles.input}
+          value={priority}
+          onChangeText={setPriority}
+        />
+
+        <View style={styles.switchRow}>
+
+          <View>
+
+            <Text style={styles.switchTitle}>
+              Pickup & Drop Required
+            </Text>
+
+            <Text style={styles.switchSub}>
+              Enable if vehicle pickup needed
+            </Text>
+
+          </View>
+
+          <Switch
+            value={pickupRequired}
+            onValueChange={setPickupRequired}
+          />
+
+        </View>
 
       </View>
 
@@ -414,9 +507,11 @@ export default function CreateJobScreen() {
             setShowServiceForm(!showServiceForm)
           }
         >
+
           <Text style={styles.addServiceText}>
             + Add Service
           </Text>
+
         </TouchableOpacity>
 
       </View>
@@ -432,6 +527,13 @@ export default function CreateJobScreen() {
             style={styles.input}
             value={serviceName}
             onChangeText={setServiceName}
+          />
+
+          <TextInput
+            placeholder="Service Category"
+            style={styles.input}
+            value={serviceCategory}
+            onChangeText={setServiceCategory}
           />
 
           <TextInput
@@ -481,12 +583,12 @@ export default function CreateJobScreen() {
 
       )}
 
-      {/* SERVICES LIST */}
+      {/* SERVICE LIST */}
 
-      {services.map((item, index) => (
+      {services.map((item) => (
 
         <View
-          key={index}
+          key={item.id}
           style={styles.serviceCard}
         >
 
@@ -502,14 +604,18 @@ export default function CreateJobScreen() {
 
             </View>
 
-            <View>
+            <View style={{ flex: 1 }}>
 
               <Text style={styles.serviceName}>
                 {item.name}
               </Text>
 
+              <Text style={styles.serviceCategory}>
+                {item.category}
+              </Text>
+
               <Text style={styles.servicePrice}>
-                ₹{item.price}
+                ₹{item.estimatedPrice}
               </Text>
 
             </View>
@@ -517,7 +623,7 @@ export default function CreateJobScreen() {
           </View>
 
           <TouchableOpacity
-            onPress={() => deleteService(index)}
+            onPress={() => deleteService(item.id)}
           >
 
             <MaterialIcons
@@ -554,7 +660,7 @@ export default function CreateJobScreen() {
       >
 
         <Text style={styles.createText}>
-          Create Job
+          Create Job Card
         </Text>
 
       </TouchableOpacity>
@@ -621,7 +727,8 @@ const styles = StyleSheet.create({
     borderColor: "#E5E7EB",
     borderRadius: 12,
     padding: 14,
-    marginBottom: 14
+    marginBottom: 14,
+    color: "#111827"
   },
 
   textArea: {
@@ -659,6 +766,28 @@ const styles = StyleSheet.create({
 
   activeVehicleTypeText: {
     color: "white"
+  },
+
+  switchRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#E5E7EB"
+  },
+
+  switchTitle: {
+    fontWeight: "600",
+    color: "#111827"
+  },
+
+  switchSub: {
+    color: "#6B7280",
+    marginTop: 3,
+    fontSize: 12
   },
 
   sectionRow: {
@@ -717,7 +846,8 @@ const styles = StyleSheet.create({
 
   serviceLeft: {
     flexDirection: "row",
-    alignItems: "center"
+    alignItems: "center",
+    flex: 1
   },
 
   serviceIcon: {
@@ -732,12 +862,20 @@ const styles = StyleSheet.create({
 
   serviceName: {
     fontWeight: "bold",
-    fontSize: 16
+    fontSize: 16,
+    color: "#111827"
+  },
+
+  serviceCategory: {
+    color: "#6B7280",
+    marginTop: 2,
+    fontSize: 13
   },
 
   servicePrice: {
     color: "#16A34A",
-    marginTop: 3
+    marginTop: 4,
+    fontWeight: "600"
   },
 
   summaryCard: {

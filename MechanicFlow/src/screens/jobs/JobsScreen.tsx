@@ -1,23 +1,30 @@
 // JobsScreen.tsx
 
 import { useEffect, useMemo, useState } from "react"
+
 import {
   View,
   Text,
- StyleSheet,
+  StyleSheet,
   FlatList,
   TouchableOpacity,
   TextInput,
   RefreshControl,
-  SafeAreaView
+  SafeAreaView,
+  ScrollView
 } from "react-native"
 
-import { MaterialIcons, Ionicons } from "@expo/vector-icons"
+import {
+  MaterialIcons,
+  Ionicons,
+  Feather
+} from "@expo/vector-icons"
+
 import { useNavigation } from "@react-navigation/native"
 
-import JobCard from "../components/JobCard"
-import StatusTabs from "../components/StatusTabs"
-import { dummyJobs } from "../data/dummyJobs"
+import JobCard from "../../components/JobCard"
+import StatusTabs from "../../components/StatusTabs"
+import { dummyJobs } from "../../data/dummyJobs"
 
 export default function JobsScreen() {
 
@@ -59,7 +66,7 @@ export default function JobsScreen() {
       const searchText = search.toLowerCase()
 
       const matchesSearch =
-        job.customerName?.toLowerCase().includes(searchText) ||
+        job.customer?.toLowerCase().includes(searchText) ||
         job.vehicleNumber?.toLowerCase().includes(searchText) ||
         job.vehicleModel?.toLowerCase().includes(searchText)
 
@@ -78,6 +85,22 @@ export default function JobsScreen() {
   const pendingJobs = jobs.filter(
     j => j.status === "pending"
   ).length
+
+  const progressJobs = jobs.filter(
+    j => j.status === "progress"
+  ).length
+
+  const totalRevenue = jobs.reduce((sum, job) => {
+
+    const total = job.services.reduce(
+      (s: number, item: any) =>
+        s + (item.actualPrice ?? item.estimatedPrice),
+      0
+    )
+
+    return sum + total
+
+  }, 0)
 
   return (
 
@@ -111,11 +134,59 @@ export default function JobsScreen() {
 
       </View>
 
-      {/* SUMMARY CARDS */}
+      {/* PLAN CARD */}
+
+      <View style={styles.planCard}>
+
+        <View style={styles.planTop}>
+
+          <View>
+
+            <Text style={styles.planTitle}>
+              FREE PLAN
+            </Text>
+
+            <Text style={styles.planSub}>
+              18 / 20 jobs used this month
+            </Text>
+
+          </View>
+
+          <TouchableOpacity style={styles.upgradeBtn}>
+
+            <Text style={styles.upgradeText}>
+              Upgrade
+            </Text>
+
+          </TouchableOpacity>
+
+        </View>
+
+        <View style={styles.progressBg}>
+
+          <View
+            style={styles.progressFill}
+          />
+
+        </View>
+
+      </View>
+
+      {/* SUMMARY */}
 
       <View style={styles.summaryContainer}>
 
         <View style={styles.summaryCard}>
+
+          <View style={styles.summaryIconBlue}>
+
+            <MaterialIcons
+              name="build"
+              size={20}
+              color="#2563EB"
+            />
+
+          </View>
 
           <Text style={styles.summaryValue}>
             {totalJobs}
@@ -129,17 +200,37 @@ export default function JobsScreen() {
 
         <View style={styles.summaryCard}>
 
+          <View style={styles.summaryIconOrange}>
+
+            <Ionicons
+              name="time-outline"
+              size={20}
+              color="#EA580C"
+            />
+
+          </View>
+
           <Text style={styles.summaryValue}>
-            {pendingJobs}
+            {progressJobs}
           </Text>
 
           <Text style={styles.summaryLabel}>
-            Pending
+            In Progress
           </Text>
 
         </View>
 
         <View style={styles.summaryCard}>
+
+          <View style={styles.summaryIconGreen}>
+
+            <MaterialIcons
+              name="check-circle"
+              size={20}
+              color="#16A34A"
+            />
+
+          </View>
 
           <Text style={styles.summaryValue}>
             {completedJobs}
@@ -148,6 +239,34 @@ export default function JobsScreen() {
           <Text style={styles.summaryLabel}>
             Completed
           </Text>
+
+        </View>
+
+      </View>
+
+      {/* REVENUE CARD */}
+
+      <View style={styles.revenueCard}>
+
+        <View>
+
+          <Text style={styles.revenueLabel}>
+            Total Revenue
+          </Text>
+
+          <Text style={styles.revenueAmount}>
+            ₹{totalRevenue}
+          </Text>
+
+        </View>
+
+        <View style={styles.revenueIcon}>
+
+          <MaterialIcons
+            name="payments"
+            size={26}
+            color="#FFFFFF"
+          />
 
         </View>
 
@@ -164,7 +283,7 @@ export default function JobsScreen() {
         />
 
         <TextInput
-          placeholder="Search customer or vehicle..."
+          placeholder="Search customer, vehicle number..."
           placeholderTextColor="#9CA3AF"
           style={styles.searchInput}
           value={search}
@@ -173,7 +292,7 @@ export default function JobsScreen() {
 
       </View>
 
-      {/* STATUS TABS */}
+      {/* FILTER TABS */}
 
       <View style={styles.tabsWrapper}>
 
@@ -184,7 +303,7 @@ export default function JobsScreen() {
 
       </View>
 
-      {/* JOB LIST */}
+      {/* LIST */}
 
       {filteredJobs.length === 0 ? (
 
@@ -226,7 +345,7 @@ export default function JobsScreen() {
 
       )}
 
-      {/* FAB */}
+      {/* FLOATING BUTTON */}
 
       <TouchableOpacity
         style={styles.fab}
@@ -278,28 +397,110 @@ const styles = StyleSheet.create({
   notificationBtn: {
     width: 46,
     height: 46,
-    borderRadius: 14,
+    borderRadius: 16,
     backgroundColor: "white",
     alignItems: "center",
     justifyContent: "center",
     elevation: 2
   },
 
+  planCard: {
+    backgroundColor: "#111827",
+    marginHorizontal: 18,
+    marginTop: 22,
+    borderRadius: 22,
+    padding: 18
+  },
+
+  planTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+
+  planTitle: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "bold"
+  },
+
+  planSub: {
+    color: "#D1D5DB",
+    marginTop: 4
+  },
+
+  upgradeBtn: {
+    backgroundColor: "#2563EB",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12
+  },
+
+  upgradeText: {
+    color: "white",
+    fontWeight: "bold"
+  },
+
+  progressBg: {
+    height: 10,
+    backgroundColor: "#374151",
+    borderRadius: 20,
+    marginTop: 18,
+    overflow: "hidden"
+  },
+
+  progressFill: {
+    width: "90%",
+    height: "100%",
+    backgroundColor: "#3B82F6",
+    borderRadius: 20
+  },
+
   summaryContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 14,
-    marginTop: 22
+    marginTop: 20
   },
 
   summaryCard: {
     flex: 1,
     backgroundColor: "white",
     paddingVertical: 18,
-    borderRadius: 18,
+    borderRadius: 20,
     alignItems: "center",
     marginHorizontal: 4,
     elevation: 2
+  },
+
+  summaryIconBlue: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10
+  },
+
+  summaryIconOrange: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "#FFF7ED",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10
+  },
+
+  summaryIconGreen: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "#ECFDF5",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10
   },
 
   summaryValue: {
@@ -314,9 +515,41 @@ const styles = StyleSheet.create({
     fontSize: 13
   },
 
+  revenueCard: {
+    backgroundColor: "#2563EB",
+    marginHorizontal: 18,
+    marginTop: 18,
+    borderRadius: 22,
+    padding: 20,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+
+  revenueLabel: {
+    color: "#DBEAFE",
+    fontSize: 14
+  },
+
+  revenueAmount: {
+    color: "white",
+    fontSize: 28,
+    fontWeight: "bold",
+    marginTop: 5
+  },
+
+  revenueIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+
   searchBox: {
     backgroundColor: "white",
-    borderRadius: 16,
+    borderRadius: 18,
     paddingHorizontal: 14,
     flexDirection: "row",
     alignItems: "center",
@@ -328,19 +561,19 @@ const styles = StyleSheet.create({
 
   searchInput: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: 15,
     paddingLeft: 10,
     color: "#111827"
   },
 
   tabsWrapper: {
-    marginTop: 16,
+    marginTop: 18,
     paddingLeft: 18
   },
 
   listContent: {
     paddingHorizontal: 18,
-    paddingTop: 14,
+    paddingTop: 16,
     paddingBottom: 120
   },
 
@@ -367,9 +600,9 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 30,
     right: 24,
-    width: 64,
-    height: 64,
-    borderRadius: 20,
+    width: 66,
+    height: 66,
+    borderRadius: 22,
     backgroundColor: "#2563EB",
     alignItems: "center",
     justifyContent: "center",
