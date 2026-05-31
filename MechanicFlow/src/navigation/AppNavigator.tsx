@@ -11,6 +11,21 @@ import AddCustomerScreen from "../screens/customers/AddCustomerScreen"
 import InventoryScreen from "../screens/inventory/InventoryScreen"
 import PartDetailsScreen from "../screens/inventory/PartDetailsScreen"
 import AddEditPartScreen from "../screens/inventory/AddEditPartScreen"
+import SettingsScreen from "../screens/settings/SettingsScreen"
+import GarageProfileScreen from "../screens/settings/GarageProfileScreen"
+import WorkersScreen from "../screens/settings/WorkersScreen"
+import WorkerAccountsScreen from "../screens/settings/WorkerAccountsScreen"
+import WorkerDetailsScreen from "../screens/settings/WorkerDetailsScreen"
+import AddWorkerScreen from "../screens/settings/AddWorkerScreen"
+import LoginHistoryScreen from "../screens/settings/LoginHistoryScreen"
+import ServiceTypesScreen from "../screens/settings/ServiceTypesScreen"
+import AddServiceTypeScreen from "../screens/settings/AddServiceTypeScreen"
+import EditServiceTypeScreen from "../screens/settings/EditServiceTypeScreen"
+import GSTConfigScreen from "../screens/settings/GSTConfigScreen"
+import InvoiceSettingsScreen from "../screens/settings/InvoiceSettingsScreen"
+import BackupScreen from "../screens/settings/BackupScreen"
+import PlanUsageScreen from "../screens/settings/PlanUsageScreen"
+import LanguageScreen from "../screens/settings/LanguageScreen"
 
 import { RootStackParamList } from "../types/navigation"
 
@@ -78,6 +93,84 @@ export default function AppNavigator() {
       <Stack.Screen
         name="AddEditPart"
         component={AddEditPartScreen}
+      />
+
+      <Stack.Screen
+        name="Settings"
+        component={SettingsScreen}
+      />
+
+      <Stack.Screen
+        name="GarageProfile"
+        component={GarageProfileScreen}
+      />
+
+      <Stack.Screen
+        name="Workers"
+        component={WorkersScreen}
+      />
+
+      <Stack.Screen
+        name="WorkerAccounts"
+        component={WorkerAccountsScreen}
+      />
+
+      <Stack.Screen
+        name="WorkerDetails"
+        component={WorkerDetailsScreen}
+      />
+
+      <Stack.Screen
+        name="LoginHistory"
+        component={LoginHistoryScreen}
+      />
+
+      <Stack.Screen
+        name="AddWorker"
+        component={AddWorkerScreen}
+      />
+
+      <Stack.Screen
+        name="ServiceTypes"
+        component={ServiceTypesScreen}
+      />
+
+      <Stack.Screen
+        name="AddServiceType"
+        component={AddServiceTypeScreen}
+      />
+
+      <Stack.Screen
+        name="EditServiceType"
+        component={EditServiceTypeScreen}
+      />
+
+      <Stack.Screen
+        name="GSTConfig"
+        component={GSTConfigScreen}
+      />
+
+      <Stack.Screen
+        name="InvoiceSettings"
+        component={InvoiceSettingsScreen}
+      />
+
+      <Stack.Screen
+        name="Backup"
+        component={BackupScreen}
+      />
+
+      <Stack.Screen
+        name="Language"
+        component={LanguageScreen}
+      />
+
+      <Stack.Screen
+        name="PlanUsage"
+        component={PlanUsageScreen}
+        options={{
+          title: "Subscription & Billing"
+        }}
       />
 
     </Stack.Navigator>

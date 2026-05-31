@@ -26,4 +26,19 @@ export type RootStackParamList = {
   }
   AddCustomer: undefined
   Inventory: undefined
+  Settings: undefined
+  GarageProfile: undefined
+  Workers: undefined
+  ServiceTypes: undefined
+  GSTConfig: undefined
+  InvoiceSettings: undefined
+  Backup: undefined
+  PlanUsage: undefined
+  Language: undefined
+  WorkerAccounts: undefined
+  WorkerDetails: undefined
+  LoginHistory: undefined
+  AddWorker: undefined
+  AddServiceType: undefined
+  EditServiceType: undefined
 }

@@ -53,6 +53,14 @@ export default function DashboardScreen() {
   const jobsUsed = 18
   const jobLimit = 20
 
+  const jobsRemaining =
+    jobLimit - jobsUsed
+
+  const usagePercent =
+    Math.round(
+      (jobsUsed / jobLimit) * 100
+    )
+
   const recentJobs = dummyJobs.slice(0, 4)
 
   const getStatusColor = (status: string) => {
@@ -106,54 +114,39 @@ export default function DashboardScreen() {
 
         </View>
 
-        <TouchableOpacity style={styles.profileBtn}>
+        <View style={styles.headerRight}>
 
-          <Ionicons
-            name="person"
-            size={22}
-            color="#111827"
-          />
+          <TouchableOpacity
+            style={styles.planRing}
+            onPress={() =>
+              navigation.navigate("PlanUsage")
+            }
+          >
 
-        </TouchableOpacity>
-
-      </View>
-
-      {/* PLAN CARD */}
-
-      <View style={styles.planCard}>
-
-        <View style={styles.planTop}>
-
-          <View>
-
-            <Text style={styles.planName}>
-              FREE PLAN
+            <Text style={styles.planRingNumber}>
+              {usagePercent}%
             </Text>
 
-            <Text style={styles.planSub}>
-              {jobsUsed}/{jobLimit} jobs used this month
+            <Text style={styles.planRingLabel}>
+              USED
             </Text>
 
-          </View>
-
-          <TouchableOpacity style={styles.upgradeBtn}>
-            <Text style={styles.upgradeText}>
-              Upgrade
-            </Text>
           </TouchableOpacity>
 
-        </View>
+          <TouchableOpacity
+            style={styles.profileBtn}
+            onPress={() =>
+              navigation.navigate("Settings")
+            }
+          >
 
-        <View style={styles.progressBarBg}>
+            <Ionicons
+              name="person-circle-outline"
+              size={26}
+              color="#111827"
+            />
 
-          <View
-            style={[
-              styles.progressBarFill,
-              {
-                width: `${(jobsUsed / jobLimit) * 100}%`
-              }
-            ]}
-          />
+          </TouchableOpacity>
 
         </View>
 
@@ -501,6 +494,68 @@ export default function DashboardScreen() {
 
 const styles = StyleSheet.create({
 
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center"
+  },
+
+  planRing: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    borderWidth: 3,
+    borderColor: "#2563EB",
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10
+  },
+
+  planRingNumber: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#2563EB"
+  },
+
+  planRingLabel: {
+    fontSize: 9,
+    color: "#6B7280",
+    fontWeight: "600"
+  },
+
+  usageCard: {
+    backgroundColor: "white",
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 22,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+
+  usageTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827"
+  },
+
+  usageText: {
+    color: "#6B7280",
+    marginTop: 4
+  },
+
+  usageBadge: {
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20
+  },
+
+  usageBadgeText: {
+    color: "#2563EB",
+    fontWeight: "700"
+  },
+
   container: {
     flex: 1,
     backgroundColor: "#F3F4F6",
@@ -539,56 +594,6 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     alignItems: "center",
     justifyContent: "center"
-  },
-
-  planCard: {
-    backgroundColor: "#111827",
-    borderRadius: 22,
-    padding: 18,
-    marginBottom: 22
-  },
-
-  planTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center"
-  },
-
-  planName: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "bold"
-  },
-
-  planSub: {
-    color: "#D1D5DB",
-    marginTop: 4
-  },
-
-  upgradeBtn: {
-    backgroundColor: "#2563EB",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12
-  },
-
-  upgradeText: {
-    color: "white",
-    fontWeight: "bold"
-  },
-
-  progressBarBg: {
-    height: 10,
-    backgroundColor: "#374151",
-    borderRadius: 20,
-    marginTop: 18,
-    overflow: "hidden"
-  },
-
-  progressBarFill: {
-    height: "100%",
-    backgroundColor: "#3B82F6",
-    borderRadius: 20
   },
 
   statsContainer: {
