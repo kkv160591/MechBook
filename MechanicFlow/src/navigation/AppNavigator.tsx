@@ -26,6 +26,7 @@ import InvoiceSettingsScreen from "../screens/settings/InvoiceSettingsScreen"
 import BackupScreen from "../screens/settings/BackupScreen"
 import PlanUsageScreen from "../screens/settings/PlanUsageScreen"
 import LanguageScreen from "../screens/settings/LanguageScreen"
+import RegisterScreen from "../screens/auth/RegisterScreen"
 
 import { RootStackParamList } from "../types/navigation"
 
@@ -35,12 +36,17 @@ export default function AppNavigator() {
 
   return (
 
-    <Stack.Navigator initialRouteName="Dashboard">
+    <Stack.Navigator initialRouteName="Login">
 
       <Stack.Screen
         name="Login"
         component={LoginScreen}
         options={{ headerShown: false }}
+      />
+
+      <Stack.Screen
+        name="Register"
+        component={RegisterScreen}
       />
 
       <Stack.Screen

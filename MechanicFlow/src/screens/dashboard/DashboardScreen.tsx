@@ -18,7 +18,13 @@ import {
 import { useNavigation } from "@react-navigation/native"
 import { dummyJobs } from "../../data/dummyJobs"
 
+import {
+  useAuth
+} from "../../context/AuthContext"
+
 export default function DashboardScreen() {
+
+  const { user } = useAuth()
 
   const navigation: any = useNavigation()
 
