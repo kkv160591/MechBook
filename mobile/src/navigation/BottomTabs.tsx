@@ -1,8 +1,6 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs"
-
-import {
-  MaterialIcons
-} from "@expo/vector-icons"
+import { MaterialIcons } from "@expo/vector-icons"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 
 import DashboardScreen from "../screens/dashboard/DashboardScreen"
 import JobsScreen from "../screens/jobs/JobsScreen"
@@ -41,6 +39,8 @@ function SettingsScreen() {
 
 export default function BottomTabs() {
 
+  const insets = useSafeAreaInsets()
+
   return (
 
     <Tab.Navigator
@@ -55,38 +55,53 @@ export default function BottomTabs() {
 
         tabBarShowLabel: true,
 
+        tabBarHideOnKeyboard: true,
+
         tabBarStyle: {
-          height: 72,
-          paddingBottom: 10,
-          paddingTop: 10,
-          borderTopWidth: 0,
-          backgroundColor: "white",
-          elevation: 10
+          height: 60 + insets.bottom,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
+          paddingTop: 8,
+          borderTopWidth: 1,
+          borderTopColor: "#E5E7EB",
+          backgroundColor: "#FFFFFF",
+          elevation: 12
         },
 
         tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: "600"
+          fontSize: 11,
+          fontWeight: "600",
+          marginBottom: 2
+        },
+
+        tabBarIconStyle: {
+          marginTop: 2
         },
 
         tabBarIcon: ({ color, size }) => {
 
           let iconName: any
 
-          if (route.name === "Dashboard") {
-            iconName = "dashboard"
-          }
+          switch (route.name) {
 
-          else if (route.name === "Jobs") {
-            iconName = "build"
-          }
+            case "Dashboard":
+              iconName = "dashboard"
+              break
 
-          else if (route.name === "Customers") {
-            iconName = "people"
-          }
+            case "Jobs":
+              iconName = "build"
+              break
 
-          else if (route.name === "Inventory") {
-            iconName = "inventory"
+            case "Customers":
+              iconName = "people"
+              break
+
+            case "Inventory":
+              iconName = "inventory"
+              break
+
+            default:
+              iconName = "dashboard"
+
           }
 
           return (

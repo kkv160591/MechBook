@@ -134,43 +134,6 @@ export default function JobsScreen() {
 
       </View>
 
-      {/* PLAN CARD */}
-
-      <View style={styles.planCard}>
-
-        <View style={styles.planTop}>
-
-          <View>
-
-            <Text style={styles.planTitle}>
-              FREE PLAN
-            </Text>
-
-            <Text style={styles.planSub}>
-              18 / 20 jobs used this month
-            </Text>
-
-          </View>
-
-          <TouchableOpacity style={styles.upgradeBtn}>
-
-            <Text style={styles.upgradeText}>
-              Upgrade
-            </Text>
-
-          </TouchableOpacity>
-
-        </View>
-
-        <View style={styles.progressBg}>
-
-          <View
-            style={styles.progressFill}
-          />
-
-        </View>
-
-      </View>
 
       {/* SUMMARY */}
 
@@ -598,8 +561,8 @@ const styles = StyleSheet.create({
 
   fab: {
     position: "absolute",
-    bottom: 30,
-    right: 24,
+    bottom: 90,
+    right: 20,
     width: 66,
     height: 66,
     borderRadius: 22,
