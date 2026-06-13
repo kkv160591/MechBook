@@ -1,45 +1,71 @@
-// AuthContext.tsx
-
 import {
   createContext,
   useContext,
-  useState
+  useState,
+  useEffect
 } from "react"
 
-type UserType = {
-  role: "owner" | "worker"
-} | null
+import AsyncStorage from "@react-native-async-storage/async-storage"
 
-type AuthContextType = {
-  user: UserType
-  login: (
-    role: "owner" | "worker"
-  ) => void
-  logout: () => void
-}
+const AuthContext = createContext<any>(null)
 
-const AuthContext =
-  createContext<AuthContextType | null>(null)
+export function AuthProvider({ children }: any) {
 
-export function AuthProvider({
-  children
-}: any) {
+  const [user, setUser] = useState(null)
 
-  const [user, setUser] =
-    useState<UserType>(null)
+  const [loading, setLoading] =
+    useState(true)
 
-  const login = (
-    role: "owner" | "worker"
-  ) => {
+  useEffect(() => {
+    restoreSession()
+  }, [])
 
-    setUser({
-      role
-    })
+  const restoreSession = async () => {
+
+    try {
+
+      const userData =
+        await AsyncStorage.getItem("user")
+
+      if (userData) {
+        setUser(JSON.parse(userData))
+      }
+
+    } catch (error) {
+      console.log(error)
+    }
+
+    setLoading(false)
 
   }
 
-  const logout = () => {
+  const login = async (
+    userData: any,
+    token: string
+  ) => {
+
+    setUser(userData)
+
+    await AsyncStorage.setItem(
+      "user",
+      JSON.stringify(userData)
+    )
+
+    await AsyncStorage.setItem(
+      "token",
+      token
+    )
+
+  }
+
+  const logout = async () => {
+
     setUser(null)
+
+    await AsyncStorage.removeItem("user")
+
+    await AsyncStorage.removeItem("token")
+
   }
 
   return (
@@ -48,7 +74,8 @@ export function AuthProvider({
       value={{
         user,
         login,
-        logout
+        logout,
+        loading
       }}
     >
       {children}
@@ -58,17 +85,5 @@ export function AuthProvider({
 
 }
 
-export function useAuth() {
-
-  const context =
-    useContext(AuthContext)
-
-  if (!context) {
-    throw new Error(
-      "useAuth must be used inside AuthProvider"
-    )
-  }
-
-  return context
-
-}
+export const useAuth = () =>
+  useContext(AuthContext)

@@ -30,13 +30,32 @@ import RegisterScreen from "../screens/auth/RegisterScreen"
 
 import { RootStackParamList } from "../types/navigation"
 
+import {
+  useAuth
+} from "../context/AuthContext"
+
 const Stack = createNativeStackNavigator<RootStackParamList>()
 
 export default function AppNavigator() {
 
+  const {
+    user,
+    loading
+  } = useAuth()
+
+  if (loading) {
+    return null
+  }
+
   return (
 
-    <Stack.Navigator initialRouteName="Login">
+    <Stack.Navigator
+      initialRouteName={
+        user
+          ? "Dashboard"
+          : "Login"
+      }
+    >
 
       <Stack.Screen
         name="Login"

@@ -16,6 +16,10 @@ import { useState } from "react"
 
 import { useNavigation } from "@react-navigation/native"
 
+import {
+  createCustomer
+} from "../../services/customerService"
+
 export default function AddCustomerScreen() {
 
   const navigation: any = useNavigation()
@@ -31,51 +35,61 @@ export default function AddCustomerScreen() {
   const [notes, setNotes] =
     useState("")
 
-  const handleSave = () => {
+  const [loading, setLoading] =
+    useState(false)
 
-    if (!name || !phone) {
+  const handleSave = async () => {
+    setLoading(true)
+    try {
+
+      if (!name || !phone) {
+
+        Alert.alert(
+          "Validation",
+          "Name & phone required"
+        )
+
+        return
+      }
+
+      await createCustomer({
+
+        name,
+
+        phone,
+
+        alternatePhone,
+
+        address,
+
+        notes
+
+      })
 
       Alert.alert(
-        "Validation",
-        "Name & phone required"
+        "Success",
+        "Customer created successfully"
       )
 
-      return
+      navigation.goBack()
+
     }
 
-    const customer = {
+    catch (error: any) {
 
-      id: Date.now().toString(),
+      Alert.alert(
+        "Error",
+        error.response?.data?.message ||
+        "Failed to create customer"
+      )
 
-      name,
-
-      phone,
-
-      alternatePhone,
-
-      address,
-
-      notes,
-
-      totalVehicles: 0,
-
-      totalJobs: 0,
-
-      totalSpent: 0,
-
-      pendingAmount: 0,
-
-      lastVisit: "New Customer"
     }
 
-    console.log(customer)
+    finally {
 
-    Alert.alert(
-      "Success",
-      "Customer added successfully"
-    )
+      setLoading(false)
 
-    navigation.goBack()
+    }
 
   }
 
@@ -174,10 +188,13 @@ export default function AddCustomerScreen() {
       <TouchableOpacity
         style={styles.saveBtn}
         onPress={handleSave}
+        disabled={loading}
       >
 
         <Text style={styles.saveText}>
-          Save Customer
+          {loading
+            ? "Saving..."
+            : "Save Customer"}
         </Text>
 
       </TouchableOpacity>

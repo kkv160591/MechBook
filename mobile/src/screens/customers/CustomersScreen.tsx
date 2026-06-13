@@ -13,34 +13,19 @@ import {
   MaterialIcons
 } from "@expo/vector-icons"
 
-import { useMemo, useState } from "react"
+import {
+  useEffect,
+  useMemo,
+  useState
+} from "react"
 
 import { useNavigation } from "@react-navigation/native"
 
 import CustomerCard from "../../components/CustomerCard"
 
-const dummyCustomers = [
-  {
-    id: "1",
-    name: "Ravi Sharma",
-    phone: "+91 9876543210",
-    totalVehicles: 2,
-    totalJobs: 12,
-    totalSpent: 28500,
-    pendingAmount: 2500,
-    lastVisit: "2 days ago"
-  },
-  {
-    id: "2",
-    name: "Amit Verma",
-    phone: "+91 9988776655",
-    totalVehicles: 1,
-    totalJobs: 4,
-    totalSpent: 9200,
-    pendingAmount: 0,
-    lastVisit: "5 days ago"
-  }
-]
+import {
+  getCustomers
+} from "../../services/customerService"
 
 export default function CustomersScreen() {
 
@@ -48,9 +33,45 @@ export default function CustomersScreen() {
 
   const [search, setSearch] = useState("")
 
+  const [customers, setCustomers] =
+    useState<any[]>([])
+
+  useEffect(() => {
+
+    loadCustomers()
+
+  }, [])
+
+  const loadCustomers =
+  async () => {
+
+    try {
+
+      const response =
+        await getCustomers()
+
+      console.log(
+        "CUSTOMERS RESPONSE",
+        response
+      )
+
+      setCustomers(
+        response.customers || []
+      )
+
+    }
+
+    catch (error) {
+
+      console.log(error)
+
+    }
+
+  }
+
   const filteredCustomers = useMemo(() => {
 
-    return dummyCustomers.filter(customer => {
+    return customers.filter(customer => {
 
       const query = search.toLowerCase()
 
@@ -61,7 +82,7 @@ export default function CustomersScreen() {
 
     })
 
-  }, [search])
+  }, [search, customers])
 
   return (
 
@@ -102,7 +123,7 @@ export default function CustomersScreen() {
         <View style={styles.statCard}>
 
           <Text style={styles.statValue}>
-            128
+            {customers.length}
           </Text>
 
           <Text style={styles.statLabel}>

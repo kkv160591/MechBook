@@ -4,18 +4,17 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert
+  Alert,
+  ActivityIndicator
 } from "react-native"
 
 import { useState } from "react"
 
-import {
-  useNavigation
-} from "@react-navigation/native"
+import { useNavigation } from "@react-navigation/native"
 
-import {
-  useAuth
-} from "../../context/AuthContext"
+import { useAuth } from "../../context/AuthContext"
+
+import axios from "axios"
 
 export default function LoginScreen() {
 
@@ -31,7 +30,10 @@ export default function LoginScreen() {
   const [pin, setPin] =
     useState("")
 
-  const handleLogin = () => {
+  const [loading, setLoading] =
+    useState(false)
+
+  const handleLogin = async () => {
 
     if (!phone) {
 
@@ -41,6 +43,7 @@ export default function LoginScreen() {
       )
 
       return
+
     }
 
     if (phone.length !== 10) {
@@ -51,44 +54,70 @@ export default function LoginScreen() {
       )
 
       return
+
     }
 
-    if (pin !== "1111") {
+    if (!pin) {
 
       Alert.alert(
-        "Invalid PIN",
-        "Use 1111 for demo"
+        "Validation",
+        "Enter PIN"
       )
 
       return
+
     }
 
-    if (phone === "9999999999") {
+    try {
 
-      login("owner")
+      setLoading(true)
+
+      const response =
+        await axios.post(
+          "http://192.168.1.38:5000/auth/login",
+          {
+            phone,
+            pin
+          }
+        )
+
+      const data =
+        response.data
+
+      if (!data.success) {
+
+        Alert.alert(
+          "Login Failed",
+          data.message
+        )
+
+        return
+
+      }
+
+      await login(
+        data.user,
+        data.token
+      )
 
       navigation.replace(
         "Dashboard"
       )
 
-      return
-    }
+    } catch (error: any) {
 
-    if (phone === "8888888888") {
-
-      login("worker")
-
-      navigation.replace(
-        "Dashboard"
+      Alert.alert(
+        "Login Failed",
+        error?.response?.data?.message ||
+        "Unable to login"
       )
 
-      return
+    } finally {
+
+      setLoading(false)
+
     }
 
-    Alert.alert(
-      "Account Not Found",
-      "Use demo accounts below"
-    )
   }
 
   return (
@@ -108,6 +137,7 @@ export default function LoginScreen() {
         value={phone}
         onChangeText={setPhone}
         keyboardType="phone-pad"
+        maxLength={10}
         style={styles.input}
       />
 
@@ -115,18 +145,32 @@ export default function LoginScreen() {
         placeholder="4 Digit PIN"
         value={pin}
         onChangeText={setPin}
-        secureTextEntry
         keyboardType="numeric"
+        secureTextEntry
+        maxLength={4}
         style={styles.input}
       />
 
       <TouchableOpacity
         style={styles.button}
         onPress={handleLogin}
+        disabled={loading}
       >
-        <Text style={styles.buttonText}>
-          Login
-        </Text>
+
+        {loading ? (
+
+          <ActivityIndicator
+            color="white"
+          />
+
+        ) : (
+
+          <Text style={styles.buttonText}>
+            Login
+          </Text>
+
+        )}
+
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -136,30 +180,14 @@ export default function LoginScreen() {
           )
         }
       >
-        <Text style={styles.registerText}>
+
+        <Text
+          style={styles.registerText}
+        >
           Register Garage
         </Text>
+
       </TouchableOpacity>
-
-      <View style={styles.demoCard}>
-
-        <Text style={styles.demoTitle}>
-          Demo Accounts
-        </Text>
-
-        <Text style={styles.demoText}>
-          Owner: 9999999999
-        </Text>
-
-        <Text style={styles.demoText}>
-          Worker: 8888888888
-        </Text>
-
-        <Text style={styles.demoText}>
-          PIN: 1111
-        </Text>
-
-      </View>
 
     </View>
 
@@ -218,26 +246,6 @@ const styles = StyleSheet.create({
     marginTop: 24,
     color: "#2563EB",
     fontWeight: "600"
-  },
-
-  demoCard: {
-    marginTop: 40,
-    backgroundColor: "white",
-    padding: 18,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E5E7EB"
-  },
-
-  demoTitle: {
-    fontWeight: "700",
-    fontSize: 16,
-    marginBottom: 10
-  },
-
-  demoText: {
-    color: "#6B7280",
-    marginBottom: 4
   }
 
 })

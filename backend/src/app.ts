@@ -4,6 +4,9 @@ import cors from "cors"
 import authRoutes
   from "./routes/auth.routes"
 
+import customerRoutes
+  from "./routes/customer.routes"
+
 const app = express()
 
 app.use(cors())
@@ -25,6 +28,11 @@ app.get(
 app.use(
   "/auth",
   authRoutes
+)
+
+app.use(
+  "/api/customers",
+  customerRoutes
 )
 
 export default app

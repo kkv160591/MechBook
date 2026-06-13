@@ -5,7 +5,8 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView
+  ScrollView,
+  Alert
 } from "react-native"
 
 import {
@@ -24,7 +25,25 @@ import {
 
 export default function DashboardScreen() {
 
-  const { user } = useAuth()
+  const {
+    user,
+    logout
+  } = useAuth()
+
+  const handleLogout = async () => {
+
+    await logout()
+
+    navigation.reset({
+      index: 0,
+      routes: [
+        {
+          name: "Login"
+        }
+      ]
+    })
+
+  }
 
   const navigation: any = useNavigation()
 
@@ -118,6 +137,10 @@ export default function DashboardScreen() {
             RK Auto Service Center
           </Text>
 
+          <Text style={styles.roleText}>
+            {user?.role?.toUpperCase()}
+          </Text>
+
         </View>
 
         <View style={styles.headerRight}>
@@ -147,9 +170,21 @@ export default function DashboardScreen() {
           >
 
             <Ionicons
-              name="person-circle-outline"
-              size={26}
+              name="settings-outline"
+              size={24}
               color="#111827"
+            />
+
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={handleLogout}
+          >
+
+            <Ionicons
+              name="log-out-outline"
+              size={24}
+              color="#DC2626"
             />
 
           </TouchableOpacity>
@@ -775,6 +810,13 @@ const styles = StyleSheet.create({
   servicesText: {
     color: "#6B7280",
     fontWeight: "500"
+  },
+
+  roleText: {
+    marginTop: 6,
+    color: "#2563EB",
+    fontWeight: "700",
+    fontSize: 13
   }
 
 })

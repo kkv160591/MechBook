@@ -4,10 +4,238 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  ScrollView
+  ScrollView,
+  Alert,
+  ActivityIndicator
 } from "react-native"
 
+import { useState } from "react"
+
+import {
+  useNavigation
+} from "@react-navigation/native"
+
+import {
+  registerGarage
+} from "../../services/authService"
+
 export default function RegisterScreen() {
+
+  const navigation: any =
+    useNavigation()
+
+  const [loading, setLoading] =
+    useState(false)
+
+  const [ownerName, setOwnerName] =
+    useState("")
+
+  const [phone, setPhone] =
+    useState("")
+
+  const [pin, setPin] =
+    useState("")
+
+  const [confirmPin, setConfirmPin] =
+    useState("")
+
+  const [garageName, setGarageName] =
+    useState("")
+
+  const [gstNumber, setGstNumber] =
+    useState("")
+
+  const [email, setEmail] =
+    useState("")
+
+  const [address1, setAddress1] =
+    useState("")
+
+  const [address2, setAddress2] =
+    useState("")
+
+  const [city, setCity] =
+    useState("")
+
+  const [state, setState] =
+    useState("")
+
+  const [pincode, setPincode] =
+    useState("")
+
+  const [country, setCountry] =
+    useState("India")
+
+  const handleRegister =
+    async () => {
+
+      try {
+
+        if (!ownerName) {
+
+          Alert.alert(
+            "Validation",
+            "Owner name is required"
+          )
+
+          return
+
+        }
+
+        if (!phone) {
+
+          Alert.alert(
+            "Validation",
+            "Phone number is required"
+          )
+
+          return
+
+        }
+
+        if (phone.length !== 10) {
+
+          Alert.alert(
+            "Validation",
+            "Enter valid 10 digit phone number"
+          )
+
+          return
+
+        }
+
+        if (!garageName) {
+
+          Alert.alert(
+            "Validation",
+            "Garage name is required"
+          )
+
+          return
+
+        }
+
+        if (!address1) {
+
+          Alert.alert(
+            "Validation",
+            "Address is required"
+          )
+
+          return
+
+        }
+
+        if (!city || !state) {
+
+          Alert.alert(
+            "Validation",
+            "City and State are required"
+          )
+
+          return
+
+        }
+
+        if (!pin) {
+
+          Alert.alert(
+            "Validation",
+            "PIN is required"
+          )
+
+          return
+
+        }
+
+        if (pin.length !== 4) {
+
+          Alert.alert(
+            "Validation",
+            "PIN must be 4 digits"
+          )
+
+          return
+
+        }
+
+        if (pin !== confirmPin) {
+
+          Alert.alert(
+            "Validation",
+            "PIN does not match"
+          )
+
+          return
+
+        }
+
+        setLoading(true)
+
+        const payload = {
+
+          garageName,
+
+          ownerName,
+
+          phone,
+
+          pin,
+
+          city,
+
+          state,
+
+          country,
+
+          address:
+            address1 +
+            (
+              address2
+                ? `, ${address2}`
+                : ""
+            ),
+
+          logo: ""
+
+        }
+
+        const response =
+          await registerGarage(
+            payload
+          )
+
+        if (response.success) {
+
+          Alert.alert(
+            "Success",
+            "Garage registered successfully",
+            [
+              {
+                text: "Login Now",
+                onPress: () =>
+                  navigation.replace("Login")
+              }
+            ]
+          )
+
+        }
+
+      } catch (error: any) {
+
+        Alert.alert(
+          "Registration Failed",
+          error?.response?.data?.message ||
+          "Something went wrong"
+        )
+
+      } finally {
+
+        setLoading(false)
+
+      }
+
+    }
 
   return (
 
@@ -24,25 +252,29 @@ export default function RegisterScreen() {
         Setup your garage and start managing jobs digitally.
       </Text>
 
-      {/* OWNER DETAILS */}
-
       <Text style={styles.sectionTitle}>
         Owner Details
       </Text>
 
       <TextInput
         placeholder="Owner Name"
+        value={ownerName}
+        onChangeText={setOwnerName}
         style={styles.input}
       />
 
       <TextInput
         placeholder="Mobile Number"
+        value={phone}
+        onChangeText={setPhone}
         keyboardType="phone-pad"
         style={styles.input}
       />
 
       <TextInput
         placeholder="Create 4 Digit PIN"
+        value={pin}
+        onChangeText={setPin}
         secureTextEntry
         keyboardType="numeric"
         style={styles.input}
@@ -50,12 +282,12 @@ export default function RegisterScreen() {
 
       <TextInput
         placeholder="Confirm PIN"
+        value={confirmPin}
+        onChangeText={setConfirmPin}
         secureTextEntry
         keyboardType="numeric"
         style={styles.input}
       />
-
-      {/* GARAGE DETAILS */}
 
       <Text style={styles.sectionTitle}>
         Garage Details
@@ -63,21 +295,25 @@ export default function RegisterScreen() {
 
       <TextInput
         placeholder="Garage Name"
+        value={garageName}
+        onChangeText={setGarageName}
         style={styles.input}
       />
 
       <TextInput
         placeholder="GST Number (Optional)"
+        value={gstNumber}
+        onChangeText={setGstNumber}
         style={styles.input}
       />
 
       <TextInput
         placeholder="Email (Optional)"
+        value={email}
+        onChangeText={setEmail}
         keyboardType="email-address"
         style={styles.input}
       />
-
-      {/* ADDRESS */}
 
       <Text style={styles.sectionTitle}>
         Address
@@ -85,37 +321,46 @@ export default function RegisterScreen() {
 
       <TextInput
         placeholder="Address Line 1"
+        value={address1}
+        onChangeText={setAddress1}
         style={styles.input}
       />
 
       <TextInput
         placeholder="Address Line 2 (Optional)"
+        value={address2}
+        onChangeText={setAddress2}
         style={styles.input}
       />
 
       <TextInput
         placeholder="City"
+        value={city}
+        onChangeText={setCity}
         style={styles.input}
       />
 
       <TextInput
         placeholder="State"
+        value={state}
+        onChangeText={setState}
         style={styles.input}
       />
 
       <TextInput
         placeholder="Pincode"
+        value={pincode}
+        onChangeText={setPincode}
         keyboardType="numeric"
         style={styles.input}
       />
 
       <TextInput
         placeholder="Country"
-        defaultValue="India"
+        value={country}
+        onChangeText={setCountry}
         style={styles.input}
       />
-
-      {/* VEHICLE TYPES */}
 
       <Text style={styles.sectionTitle}>
         Vehicle Types Supported
@@ -123,36 +368,48 @@ export default function RegisterScreen() {
 
       <View style={styles.vehicleRow}>
 
-        <TouchableOpacity style={styles.vehicleChip}>
+        <View style={styles.vehicleChip}>
           <Text style={styles.vehicleText}>
             2 Wheeler
           </Text>
-        </TouchableOpacity>
+        </View>
 
-        <TouchableOpacity style={styles.vehicleChip}>
+        <View style={styles.vehicleChip}>
           <Text style={styles.vehicleText}>
             4 Wheeler
           </Text>
-        </TouchableOpacity>
+        </View>
 
       </View>
 
-      {/* LOGO */}
-
-      <TouchableOpacity style={styles.logoButton}>
+      <TouchableOpacity
+        style={styles.logoButton}
+      >
         <Text style={styles.logoButtonText}>
           Upload Garage Logo (Optional)
         </Text>
       </TouchableOpacity>
 
-      {/* SUBMIT */}
-
       <TouchableOpacity
         style={styles.button}
+        onPress={handleRegister}
+        disabled={loading}
       >
-        <Text style={styles.buttonText}>
-          Create Garage Account
-        </Text>
+
+        {
+          loading
+            ? (
+              <ActivityIndicator
+                color="white"
+              />
+            )
+            : (
+              <Text style={styles.buttonText}>
+                Create Garage Account
+              </Text>
+            )
+        }
+
       </TouchableOpacity>
 
       <View style={{ height: 40 }} />
@@ -160,6 +417,7 @@ export default function RegisterScreen() {
     </ScrollView>
 
   )
+
 }
 
 const styles = StyleSheet.create({
