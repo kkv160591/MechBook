@@ -20,3 +20,10 @@ AttributeName=customerId,AttributeType=S ^
 AttributeName=customerId,KeyType=HASH ^
 --billing-mode PAY_PER_REQUEST ^
 --endpoint-url http://localhost:8000
+
+aws dynamodb create-table ^
+--table-name Inventory ^
+--attribute-definitions AttributeName=partId,AttributeType=S ^
+--key-schema AttributeName=partId,KeyType=HASH ^
+--billing-mode PAY_PER_REQUEST ^
+--endpoint-url http://localhost:8000

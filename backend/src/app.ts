@@ -7,6 +7,15 @@ import authRoutes
 import customerRoutes
   from "./routes/customer.routes"
 
+import inventoryRoutes
+  from "./routes/inventory.routes"
+
+import garageRoutes
+  from "./routes/garage.routes"
+
+import workerRoutes
+  from "./routes/worker.routes"
+
 const app = express()
 
 app.use(cors())
@@ -33,6 +42,21 @@ app.use(
 app.use(
   "/api/customers",
   customerRoutes
+)
+
+app.use(
+  "/api/inventory",
+  inventoryRoutes
+)
+
+app.use(
+  "/api/garage",
+  garageRoutes
+)
+
+app.use(
+  "/api/workers",
+  workerRoutes
 )
 
 export default app

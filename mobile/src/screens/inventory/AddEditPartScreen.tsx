@@ -17,6 +17,11 @@ import {
   useNavigation
 } from "@react-navigation/native"
 
+import {
+  createInventory,
+  updateInventory
+} from "../../services/inventoryService"
+
 type Props = {
   route: RouteProp<any, any>
 }
@@ -62,7 +67,7 @@ export default function AddEditPartScreen({
       part?.minStock?.toString() || ""
     )
 
-  const handleSave = () => {
+  const handleSave = async () => {
 
     if (
       !name ||
@@ -72,20 +77,72 @@ export default function AddEditPartScreen({
 
       Alert.alert(
         "Validation",
-        "Please fill all required fields"
+        "Please fill all fields"
       )
 
       return
     }
 
-    Alert.alert(
-      "Success",
-      mode === "add"
-        ? "Part added successfully"
-        : "Part updated successfully"
-    )
+    try {
 
-    navigation.goBack()
+      const payload = {
+
+        name,
+        sku,
+        category,
+
+        buyingPrice:
+          Number(buyingPrice),
+
+        sellingPrice:
+          Number(sellingPrice),
+
+        stock:
+          Number(stock),
+
+        minStock:
+          Number(minStock)
+      }
+
+      if (mode === "add") {
+
+        await createInventory(
+          payload
+        )
+
+        Alert.alert(
+          "Success",
+          "Part added successfully"
+        )
+
+      } else {
+
+        await updateInventory(
+          part.inventoryId,
+          payload
+        )
+
+        Alert.alert(
+          "Success",
+          "Part updated successfully"
+        )
+
+      }
+
+      navigation.goBack()
+
+    }
+
+    catch (error: any) {
+
+      Alert.alert(
+        "Error",
+        error?.response?.data
+          ?.message ||
+          "Something went wrong"
+      )
+
+    }
 
   }
 

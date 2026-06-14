@@ -9,7 +9,11 @@ import {
   TextInput
 } from "react-native"
 
-import { useMemo, useState } from "react"
+import {
+  useEffect,
+  useMemo,
+  useState
+} from "react"
 
 import {
   MaterialIcons,
@@ -20,38 +24,9 @@ import { useNavigation } from "@react-navigation/native"
 
 import InventoryCard from "../../components/InventoryCard"
 
-const initialParts = [
-  {
-    id: "1",
-    name: "Engine Oil",
-    sku: "ENG-001",
-    category: "Oil",
-    buyingPrice: 500,
-    sellingPrice: 700,
-    stock: 22,
-    minStock: 5
-  },
-  {
-    id: "2",
-    name: "Brake Pads",
-    sku: "BRK-002",
-    category: "Brake",
-    buyingPrice: 1200,
-    sellingPrice: 1800,
-    stock: 4,
-    minStock: 5
-  },
-  {
-    id: "3",
-    name: "Air Filter",
-    sku: "AIR-003",
-    category: "Filter",
-    buyingPrice: 350,
-    sellingPrice: 550,
-    stock: 14,
-    minStock: 4
-  }
-]
+import {
+  getInventory
+} from "../../services/inventoryService"
 
 export default function InventoryScreen() {
 
@@ -59,23 +34,54 @@ export default function InventoryScreen() {
 
   const [search, setSearch] = useState("")
 
+  const [parts, setParts] =
+  useState<any[]>([])
+
+  useEffect(() => {
+
+    loadInventory()
+
+  }, [])
+
+  const loadInventory =
+  async () => {
+
+    try {
+
+      const response =
+        await getInventory()
+
+      setParts(
+        response.parts || []
+      )
+
+    }
+
+    catch (error) {
+
+      console.log(error)
+
+    }
+
+  }
+
   const filteredParts = useMemo(() => {
 
-    return initialParts.filter((item) => {
+    return parts.filter((item) => {
 
       const text = search.toLowerCase()
 
       return (
-        item.name.toLowerCase().includes(text) ||
-        item.sku.toLowerCase().includes(text) ||
-        item.category.toLowerCase().includes(text)
+        item.name?.toLowerCase().includes(text) ||
+        item.sku?.toLowerCase().includes(text) ||
+        item.category?.toLowerCase().includes(text)
       )
 
     })
 
-  }, [search])
+  }, [search, parts])
 
-  const lowStockCount = initialParts.filter(
+  const lowStockCount = parts.filter(
     item => item.stock <= item.minStock
   ).length
 
@@ -128,7 +134,7 @@ export default function InventoryScreen() {
         <View style={styles.summaryCard}>
 
           <Text style={styles.summaryValue}>
-            {initialParts.length}
+            {parts.length}
           </Text>
 
           <Text style={styles.summaryLabel}>
@@ -185,7 +191,7 @@ export default function InventoryScreen() {
 
       <FlatList
         data={filteredParts}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.partId}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           paddingBottom: 120,

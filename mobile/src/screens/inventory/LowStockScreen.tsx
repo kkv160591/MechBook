@@ -1,32 +1,47 @@
 import { View, Text, StyleSheet, FlatList } from "react-native"
 import StockAlertCard from "../../components/StockAlertCard"
 
-const lowStockItems = [
-  {
-    id: "1",
-    name: "Engine Oil 10W30",
-    sku: "EO-1030",
-    stock: 2,
-    minimum: 5
-  },
-  {
-    id: "2",
-    name: "Air Filter",
-    sku: "AF-220",
-    stock: 1,
-    minimum: 4
-  },
-  {
-    id: "3",
-    name: "Brake Pads",
-    sku: "BP-880",
-    stock: 3,
-    minimum: 6
-  }
-]
+import {
+  useEffect,
+  useState
+} from "react"
+
+import {
+  getLowStockItems
+} from "../../services/inventoryService"
 
 export default function LowStockScreen() {
 
+  const [items, setItems] =
+  useState<any[]>([])
+
+  useEffect(() => {
+
+    loadItems()
+
+  }, [])
+
+  const loadItems =
+    async () => {
+
+      try {
+
+        const response =
+          await getLowStockItems()
+
+        setItems(
+          response.inventory || []
+        )
+
+      }
+
+      catch (error) {
+
+        console.log(error)
+
+      }
+
+  }
   return (
 
     <View style={styles.container}>
@@ -44,7 +59,7 @@ export default function LowStockScreen() {
       </View>
 
       <FlatList
-        data={lowStockItems}
+        data={items}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <StockAlertCard item={item} />

@@ -8,40 +8,93 @@ import {
   Alert
 } from "react-native"
 
-import { useState } from "react"
+import {
+  useEffect,
+  useState
+} from "react"
 
 import {
   MaterialIcons
 } from "@expo/vector-icons"
 
+import {
+  getGarageProfile,
+  updateGarageProfile
+} from "../../services/garageService"
+
 export default function GarageProfileScreen() {
+  
+  const [garage, setGarage] =
+    useState<any>(null)
 
-  const [garage, setGarage] = useState({
+  const loadProfile = async () => {
 
-    garageName: "RK Auto Service Center",
+    try {
 
-    ownerName: "Rahul Kumar",
+      const response =
+        await getGarageProfile()
 
-    phone: "9876543210",
+      console.log(
+        "Garage Response:",
+        response.garage
+      )
 
-    email: "garage@email.com",
+      const vehicleTypes =
+        Array.isArray(
+          response.garage?.vehicleTypes
+        )
+          ? response.garage.vehicleTypes
+          : response.garage?.vehicleTypes
+          ? String(
+              response.garage.vehicleTypes
+            )
+              .split(",")
+              .map((v: string) =>
+                v.trim()
+              )
+          : []
 
-    gstNumber: "27ABCDE1234F1Z5",
+      setGarage({
 
-    address: "Shop No. 12 Main Road",
+        ...response.garage,
 
-    city: "Pune",
+        vehicleTypes
 
-    state: "Maharashtra",
+      })
 
-    pincode: "411033",
+    }
 
-    vehicleTypes: [
-      "2 Wheeler",
-      "4 Wheeler"
-    ]
+    catch (error) {
 
-  })
+      console.log(error)
+
+    }
+
+  }
+  
+  useEffect(() => {
+
+    loadProfile()
+
+  }, [])
+
+  if (!garage) {
+
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center"
+        }}
+      >
+        <Text>
+          Loading...
+        </Text>
+      </View>
+    )
+
+  }
 
   const vehicleOptions = [
     "2 Wheeler",
@@ -55,40 +108,74 @@ export default function GarageProfileScreen() {
     type: string
   ) => {
 
+    const currentVehicles =
+      Array.isArray(
+        garage.vehicleTypes
+      )
+        ? garage.vehicleTypes
+        : []
+
     if (
-      garage.vehicleTypes.includes(type)
+      currentVehicles.includes(type)
     ) {
 
-      setGarage(prev => ({
+      setGarage((prev: any) => ({
+
         ...prev,
+
         vehicleTypes:
-          prev.vehicleTypes.filter(
-            v => v !== type
+          currentVehicles.filter(
+            (v: string) =>
+              v !== type
           )
+
       }))
 
-    } else {
+    }
 
-      setGarage(prev => ({
+    else {
+
+      setGarage((prev: any) => ({
+
         ...prev,
+
         vehicleTypes: [
-          ...prev.vehicleTypes,
+          ...currentVehicles,
           type
         ]
+
       }))
 
     }
 
   }
 
-  const saveProfile = () => {
+  const saveProfile =
+    async () => {
 
-    Alert.alert(
-      "Success",
-      "Garage Profile Updated"
-    )
+      try {
 
-  }
+        await updateGarageProfile(
+          garage
+        )
+
+        Alert.alert(
+          "Success",
+          "Garage Profile Updated"
+        )
+
+      }
+
+      catch (error) {
+
+        Alert.alert(
+          "Error",
+          "Failed to update profile"
+        )
+
+      }
+
+    }
 
   return (
 
@@ -144,7 +231,7 @@ export default function GarageProfileScreen() {
           value={garage.garageName}
           placeholder="Garage Name"
           onChangeText={value =>
-            setGarage(prev => ({
+            setGarage((prev: any) => ({
               ...prev,
               garageName: value
             }))
@@ -156,7 +243,7 @@ export default function GarageProfileScreen() {
           value={garage.ownerName}
           placeholder="Owner Name"
           onChangeText={value =>
-            setGarage(prev => ({
+            setGarage((prev: any) => ({
               ...prev,
               ownerName: value
             }))
@@ -169,7 +256,7 @@ export default function GarageProfileScreen() {
           placeholder="Phone"
           keyboardType="phone-pad"
           onChangeText={value =>
-            setGarage(prev => ({
+            setGarage((prev: any) => ({
               ...prev,
               phone: value
             }))
@@ -181,7 +268,7 @@ export default function GarageProfileScreen() {
           value={garage.email}
           placeholder="Email"
           onChangeText={value =>
-            setGarage(prev => ({
+            setGarage((prev: any) => ({
               ...prev,
               email: value
             }))
@@ -193,7 +280,7 @@ export default function GarageProfileScreen() {
           value={garage.gstNumber}
           placeholder="GST Number"
           onChangeText={value =>
-            setGarage(prev => ({
+            setGarage((prev: any) => ({
               ...prev,
               gstNumber: value
             }))
@@ -215,7 +302,7 @@ export default function GarageProfileScreen() {
           value={garage.address}
           placeholder="Address"
           onChangeText={value =>
-            setGarage(prev => ({
+            setGarage((prev: any) => ({
               ...prev,
               address: value
             }))
@@ -227,7 +314,7 @@ export default function GarageProfileScreen() {
           value={garage.city}
           placeholder="City"
           onChangeText={value =>
-            setGarage(prev => ({
+            setGarage((prev: any) => ({
               ...prev,
               city: value
             }))
@@ -239,7 +326,7 @@ export default function GarageProfileScreen() {
           value={garage.state}
           placeholder="State"
           onChangeText={value =>
-            setGarage(prev => ({
+            setGarage((prev: any) => ({
               ...prev,
               state: value
             }))
@@ -252,7 +339,7 @@ export default function GarageProfileScreen() {
           placeholder="Pincode"
           keyboardType="numeric"
           onChangeText={value =>
-            setGarage(prev => ({
+            setGarage((prev: any) => ({
               ...prev,
               pincode: value
             }))
@@ -281,6 +368,9 @@ export default function GarageProfileScreen() {
 
             <MaterialIcons
               name={
+                Array.isArray(
+                  garage.vehicleTypes
+                ) &&
                 garage.vehicleTypes.includes(type)
                   ? "check-box"
                   : "check-box-outline-blank"
