@@ -97,14 +97,14 @@ async (
 
   const workers =
     (response.Items || [])
-      .map(unmarshall)
+      .map(item =>
+        unmarshall(item)
+      )
       .filter(
         (worker: any) =>
           worker.garageId === garageId
       )
-
   return workers
-
 }
 
 export const getWorkerById =

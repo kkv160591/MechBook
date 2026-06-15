@@ -107,10 +107,9 @@ async (
 
   try {
 
+    const workerId = req.params.workerId as string
     const worker =
-      await getWorkerById(
-        req.params.workerId
-      )
+      await getWorkerById(workerId)
 
     if (!worker) {
 
@@ -160,10 +159,11 @@ async (
 
   try {
 
+    const workerId = req.params.workerId as string
     const worker =
       await updateWorker(
 
-        req.params.workerId,
+        workerId,
 
         req.body
 
@@ -204,9 +204,10 @@ async (
 
   try {
 
+    const workerId = req.params.workerId as string
     await updateWorkerStatus(
 
-      req.params.workerId,
+      workerId,
 
       req.body.active
 
@@ -248,9 +249,10 @@ async (
 
   try {
 
+    const workerId = req.params.workerId as string
     await resetWorkerPin(
 
-      req.params.workerId,
+      workerId,
 
       req.body.pin
 

@@ -3,7 +3,8 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView
+  ScrollView,
+  Alert
 } from "react-native"
 
 import {
@@ -11,12 +12,76 @@ import {
   Ionicons
 } from "@expo/vector-icons"
 
+import {
+  useEffect,
+  useState
+} from "react"
+
+import {
+  getWorkerById,
+  resetWorkerPin,
+  updateWorkerStatus
+} from "../../services/workerService"
+
 export default function WorkerDetailsScreen({
   route,
   navigation
 }: any) {
 
-  const worker = route.params.worker
+  const [worker, setWorker] =
+    useState<any>(null)
+
+  useEffect(() => {
+
+    loadWorker()
+
+  }, [])
+
+  const loadWorker =
+    async () => {
+
+      try {
+
+        const response =
+          await getWorkerById(
+            route.params.workerId
+          )
+
+        setWorker(
+          response.worker
+        )
+
+      }
+
+      catch (error) {
+
+        console.log(error)
+
+      }
+
+    }
+
+  if (!worker) {
+
+    return (
+
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center"
+        }}
+      >
+
+        <Text>
+          Loading...
+        </Text>
+
+      </View>
+
+    )
+
+  }
 
   return (
 
@@ -159,35 +224,60 @@ export default function WorkerDetailsScreen({
 
       <TouchableOpacity
         style={styles.orangeBtn}
-      >
+        onPress={async () => {
 
-        <MaterialIcons
-          name="lock-reset"
-          size={20}
-          color="white"
-        />
+          try {
 
-        <Text style={styles.btnText}>
-          Reset PIN
-        </Text>
+            await resetWorkerPin(
+              worker.workerId,
+              "1234"
+            )
 
-      </TouchableOpacity>
+            Alert.alert(
+              "Success",
+              "PIN reset to 1234"
+            )
+
+          }
+
+          catch {
+
+            Alert.alert(
+              "Error",
+              "Failed to reset PIN"
+            )
+
+          }
+
+        }}
+      ></TouchableOpacity>
 
       <TouchableOpacity
         style={styles.redBtn}
-      >
+        onPress={async () => {
 
-        <MaterialIcons
-          name="block"
-          size={20}
-          color="white"
-        />
+          try {
 
-        <Text style={styles.btnText}>
-          Deactivate Worker
-        </Text>
+            await updateWorkerStatus(
+              worker.workerId,
+              false
+            )
 
-      </TouchableOpacity>
+            loadWorker()
+
+          }
+
+          catch {
+
+            Alert.alert(
+              "Error",
+              "Failed to update worker"
+            )
+
+          }
+
+        }}
+      ></TouchableOpacity>
 
       <View style={{ height: 40 }} />
 

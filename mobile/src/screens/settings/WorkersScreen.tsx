@@ -9,29 +9,47 @@ import {
 import { MaterialIcons } from "@expo/vector-icons"
 import { useNavigation } from "@react-navigation/native"
 
-const workers = [
-  {
-    id: "1",
-    name: "Rahul Sharma",
-    role: "Senior Mechanic",
-    active: true
-  },
-  {
-    id: "2",
-    name: "Amit Kumar",
-    role: "Helper",
-    active: true
-  },
-  {
-    id: "3",
-    name: "Vijay Singh",
-    role: "Electrician",
-    active: false
-  }
-]
+import {
+  useEffect,
+  useState
+} from "react"
+
+import {
+  getWorkers
+} from "../../services/workerService"
 
 export default function WorkersScreen() {
   const navigation: any = useNavigation()
+  const [workers, setWorkers] =
+  useState<any[]>([])
+
+useEffect(() => {
+
+  loadWorkers()
+
+}, [])
+
+const loadWorkers =
+async () => {
+
+  try {
+
+    const response =
+      await getWorkers()
+
+    setWorkers(
+      response.workers || []
+    )
+
+  }
+
+  catch (error) {
+
+    console.log(error)
+
+  }
+
+}
   return (
 
     <View style={styles.container}>
@@ -45,9 +63,12 @@ export default function WorkersScreen() {
             style={styles.card}
             onPress={() =>
               navigation.navigate(
-                "WorkerDetails",
-                { worker: item }
-              )
+              "WorkerDetails",
+              {
+                workerId:
+                  item.workerId
+              }
+            )
             }
           >
 

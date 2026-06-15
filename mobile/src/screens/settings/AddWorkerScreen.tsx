@@ -3,10 +3,15 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet
+  StyleSheet,
+  Alert
 } from "react-native"
 
 import { useState } from "react"
+
+import {
+  createWorker
+} from "../../services/workerService"
 
 export default function AddWorkerScreen() {
 
@@ -14,20 +19,42 @@ export default function AddWorkerScreen() {
   const [role, setRole] = useState("")
   const [phone, setPhone] = useState("")
 
-  const saveWorker = () => {
+  const saveWorker =
+    async () => {
 
-    const worker = {
-      id: Date.now().toString(),
-      name,
-      role,
-      phone,
-      active: true
+      try {
+
+        await createWorker({
+
+          name,
+
+          role,
+
+          phone
+
+        })
+
+        Alert.alert(
+          "Success",
+          "Worker Added"
+        )
+
+        setName("")
+        setRole("")
+        setPhone("")
+
+      }
+
+      catch {
+
+        Alert.alert(
+          "Error",
+          "Failed to add worker"
+        )
+
+      }
+
     }
-
-    console.log(worker)
-
-    alert("Worker Added")
-  }
 
   return (
 
