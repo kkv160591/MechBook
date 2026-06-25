@@ -3,47 +3,199 @@ import {
   TextInput,
   TouchableOpacity,
   Text,
-  StyleSheet
+  StyleSheet,
+  Alert
 } from "react-native"
+
+import {
+  useEffect,
+  useState
+} from "react"
+
+import {
+  getServiceTypeById,
+  updateServiceType,
+  deleteServiceType
+} from "../../services/serviceTypesService"
 
 export default function EditServiceTypeScreen({
   route,
   navigation
 }: any) {
 
-  const service =
-    route.params.service
+  const [service, setService] =
+    useState<any>(null)
+
+  const loadService =
+  async () => {
+
+    try {
+
+      const response =
+        await getServiceTypeById(
+          route.params.serviceId
+        )
+
+      setService(
+        response.data.service
+      )
+
+    }
+
+    catch (error) {
+
+      console.log(error)
+
+    }
+
+  }
+
+  useEffect(() => {
+
+    loadService()
+
+  }, [])
+
+  if (!service) {
+
+    return (
+      <Text>
+        Loading...
+      </Text>
+    )
+
+  }
+
+  const saveChanges =
+  async () => {
+
+    try {
+
+      await updateServiceType(
+
+        service.serviceTypeId,
+
+        service
+
+      )
+
+      Alert.alert(
+        "Success",
+        "Service Updated"
+      )
+
+      navigation.goBack()
+
+    }
+
+    catch {
+
+      Alert.alert(
+        "Error",
+        "Update Failed"
+      )
+
+    }
+
+  }
+
+  const removeService =
+  async () => {
+
+    Alert.alert(
+
+      "Delete Service",
+
+      "Are you sure?",
+
+      [
+
+        {
+          text: "Cancel"
+        },
+
+        {
+
+          text: "Delete",
+
+          onPress: async () => {
+
+            await deleteServiceType(
+              service.serviceTypeId
+            )
+
+            navigation.goBack()
+
+          }
+
+        }
+
+      ]
+
+    )
+
+  }
 
   return (
 
     <View style={styles.container}>
 
       <TextInput
-        defaultValue={service.name}
+        value={service.name}
         style={styles.input}
+        onChangeText={value =>
+          setService({
+            ...service,
+            name: value
+          })
+        }
       />
 
       <TextInput
-        defaultValue={service.category}
+        value={service.category}
         style={styles.input}
+        onChangeText={value =>
+          setService({
+            ...service,
+            category: value
+          })
+        }
       />
 
       <TextInput
-        defaultValue={
-          service.defaultPrice.toString()
+        value={
+          String(
+            service.defaultPrice
+          )
         }
         style={styles.input}
+        keyboardType="numeric"
+        onChangeText={value =>
+          setService({
+            ...service,
+            defaultPrice:
+              Number(value)
+          })
+        }
       />
 
       <TextInput
-        defaultValue={
+        value={
           service.estimatedDuration
         }
         style={styles.input}
+        onChangeText={value =>
+          setService({
+            ...service,
+            estimatedDuration:
+              value
+          })
+        }
       />
 
       <TouchableOpacity
         style={styles.saveBtn}
+        onPress={saveChanges}
       >
 
         <Text style={styles.btnText}>
@@ -54,6 +206,7 @@ export default function EditServiceTypeScreen({
 
       <TouchableOpacity
         style={styles.deleteBtn}
+        onPress={removeService}
       >
 
         <Text style={styles.btnText}>

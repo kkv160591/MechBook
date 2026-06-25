@@ -2,27 +2,115 @@ import {
   View,
   FlatList,
   TouchableOpacity,
-  StyleSheet
+  StyleSheet,
+  ActivityIndicator,
+  Text
 } from "react-native"
 
-import { Ionicons } from "@expo/vector-icons"
+import {
+  Ionicons
+} from "@expo/vector-icons"
+
+import {
+  useState,
+  useCallback
+} from "react"
+
+import {
+  useFocusEffect
+} from "@react-navigation/native"
 
 import ServiceTypeCard
 from "../../components/settings/ServiceTypeCard"
 
-import { dummyServiceTypes } from "../../data/settings/dummyServiceTypes"
+import {
+  getServiceTypes
+} from "../../services/serviceTypesService"
 
 export default function ServiceTypesScreen({
   navigation
 }: any) {
+
+  const [services, setServices] =
+    useState<any[]>([])
+
+  const [loading, setLoading] =
+    useState(true)
+
+  const loadServices =
+  async () => {
+
+    try {
+
+      setLoading(true)
+
+      const response =
+        await getServiceTypes()
+
+      setServices(
+        response.data.services || []
+      )
+
+    }
+
+    catch (error) {
+
+      console.log(error)
+
+    }
+
+    finally {
+
+      setLoading(false)
+
+    }
+
+  }
+
+  useFocusEffect(
+    useCallback(() => {
+
+      loadServices()
+
+    }, [])
+  )
+
+  if (loading) {
+
+    return (
+
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center"
+        }}
+      >
+
+        <ActivityIndicator
+          size="large"
+          color="#2563EB"
+        />
+
+        <Text>
+          Loading Services...
+        </Text>
+
+      </View>
+
+    )
+
+  }
 
   return (
 
     <View style={styles.container}>
 
       <FlatList
-        data={dummyServiceTypes}
-        keyExtractor={(item) => item.id}
+        data={services}
+        keyExtractor={(item) =>
+          item.serviceTypeId
+        }
         renderItem={({ item }) => (
 
           <ServiceTypeCard
@@ -30,10 +118,30 @@ export default function ServiceTypesScreen({
             onPress={() =>
               navigation.navigate(
                 "EditServiceType",
-                { service: item }
+                {
+                  serviceId:
+                    item.serviceTypeId
+                }
               )
             }
           />
+
+        )}
+
+        ListEmptyComponent={() => (
+
+          <View
+            style={{
+              marginTop: 100,
+              alignItems: "center"
+            }}
+          >
+
+            <Text>
+              No Services Added
+            </Text>
+
+          </View>
 
         )}
       />

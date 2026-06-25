@@ -3,15 +3,20 @@ import {
   Text,
   FlatList,
   TouchableOpacity,
-  StyleSheet
+  StyleSheet,
+  ActivityIndicator
 } from "react-native"
 
 import { MaterialIcons } from "@expo/vector-icons"
-import { useNavigation } from "@react-navigation/native"
+import { 
+  useNavigation,
+  useFocusEffect
+} from "@react-navigation/native"
 
 import {
   useEffect,
-  useState
+  useState,
+  useCallback
 } from "react"
 
 import {
@@ -23,40 +28,113 @@ export default function WorkersScreen() {
   const [workers, setWorkers] =
   useState<any[]>([])
 
-useEffect(() => {
+  useFocusEffect(
+    useCallback(() => {
 
-  loadWorkers()
+      loadWorkers()
 
-}, [])
+    }, [])
+  )
 
-const loadWorkers =
-async () => {
+  const [loading, setLoading] =
+  useState(true)
 
-  try {
+  const loadWorkers =
+  async () => {
 
-    const response =
-      await getWorkers()
+    try {
 
-    setWorkers(
-      response.workers || []
+      setLoading(true)
+      const response =
+        await getWorkers()
+
+      setWorkers(
+        response.workers || []
+      )
+
+    }
+
+    catch (error) {
+
+      console.log(error)
+
+    }
+    finally {
+
+      setLoading(false)
+
+    }
+
+  
+  }
+
+  if (loading) {
+
+    return (
+
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center"
+        }}
+      >
+
+        <ActivityIndicator
+          size="large"
+          color="#2563EB"
+        />
+
+        <Text
+          style={{
+            marginTop: 12,
+            color: "#6B7280"
+          }}
+        >
+          Loading workers...
+        </Text>
+
+      </View>
+
     )
 
   }
-
-  catch (error) {
-
-    console.log(error)
-
-  }
-
-}
+  
   return (
 
     <View style={styles.container}>
 
       <FlatList
+        ListEmptyComponent={() => (
+
+          <View
+            style={{
+              marginTop: 80,
+              alignItems: "center"
+            }}
+          >
+
+            <MaterialIcons
+              name="people-outline"
+              size={60}
+              color="#9CA3AF"
+            />
+
+            <Text
+              style={{
+                marginTop: 12,
+                fontSize: 16,
+                color: "#6B7280"
+              }}
+            >
+              No workers found
+            </Text>
+
+          </View>
+
+        )}
         data={workers}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.workerId}
         renderItem={({ item }) => (
 
           <TouchableOpacity
@@ -132,7 +210,6 @@ async () => {
 
     </View>
   )
-
 }
 
 const styles = StyleSheet.create({

@@ -27,3 +27,11 @@ aws dynamodb create-table ^
 --key-schema AttributeName=partId,KeyType=HASH ^
 --billing-mode PAY_PER_REQUEST ^
 --endpoint-url http://localhost:8000
+
+aws dynamodb create-table ^
+--table-name ServiceTypes ^
+--attribute-definitions AttributeName=serviceTypeId,AttributeType=S ^
+--key-schema AttributeName=serviceTypeId,KeyType=HASH ^
+--billing-mode PAY_PER_REQUEST ^
+--endpoint-url http://localhost:8000 ^
+--region ap-south-1

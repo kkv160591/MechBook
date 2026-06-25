@@ -16,6 +16,9 @@ import garageRoutes
 import workerRoutes
   from "./routes/worker.routes"
 
+import serviceRoutes
+  from "./routes/service.routes"
+
 const app = express()
 
 app.use(cors())
@@ -57,6 +60,11 @@ app.use(
 app.use(
   "/api/workers",
   workerRoutes
+)
+
+app.use(
+  "/api/services",
+  serviceRoutes
 )
 
 export default app

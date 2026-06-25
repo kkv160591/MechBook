@@ -226,31 +226,53 @@ export default function WorkerDetailsScreen({
         style={styles.orangeBtn}
         onPress={async () => {
 
-          try {
+          Alert.prompt?.(
+            "Change PIN",
+            "Enter new 4 digit PIN",
+            async (newPin) => {
 
-            await resetWorkerPin(
-              worker.workerId,
-              "1234"
-            )
+              if (!newPin) return
 
-            Alert.alert(
-              "Success",
-              "PIN reset to 1234"
-            )
+              try {
 
-          }
+                await resetWorkerPin(
+                  worker.workerId,
+                  newPin
+                )
 
-          catch {
+                Alert.alert(
+                  "Success",
+                  "PIN Updated"
+                )
 
-            Alert.alert(
-              "Error",
-              "Failed to reset PIN"
-            )
+              }
 
-          }
+              catch {
+
+                Alert.alert(
+                  "Error",
+                  "Failed to update PIN"
+                )
+
+              }
+
+            }
+          )
 
         }}
-      ></TouchableOpacity>
+      >
+
+        <MaterialIcons
+          name="lock-reset"
+          size={20}
+          color="white"
+        />
+
+        <Text style={styles.btnText}>
+          Change PIN
+        </Text>
+
+      </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.redBtn}
@@ -260,10 +282,10 @@ export default function WorkerDetailsScreen({
 
             await updateWorkerStatus(
               worker.workerId,
-              false
+              !worker.active
             )
 
-            loadWorker()
+            await loadWorker()
 
           }
 
@@ -277,7 +299,23 @@ export default function WorkerDetailsScreen({
           }
 
         }}
-      ></TouchableOpacity>
+      >
+
+        <MaterialIcons
+          name="block"
+          size={20}
+          color="white"
+        />
+
+        <Text style={styles.btnText}>
+          {
+            worker.active
+              ? "Deactivate Worker"
+              : "Activate Worker"
+          }
+        </Text>
+
+      </TouchableOpacity>
 
       <View style={{ height: 40 }} />
 

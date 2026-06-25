@@ -13,48 +13,83 @@ import {
   createWorker
 } from "../../services/workerService"
 
+import { useNavigation } from "@react-navigation/native"
+
 export default function AddWorkerScreen() {
 
   const [name, setName] = useState("")
   const [role, setRole] = useState("")
   const [phone, setPhone] = useState("")
+  const navigation: any =
+  useNavigation()
+
+  const [pin, setPin] =
+    useState("")
+
+  const [confirmPin, setConfirmPin] =
+    useState("")
 
   const saveWorker =
-    async () => {
+  async () => {
 
-      try {
+    if (
+      !name ||
+      !role ||
+      !phone ||
+      !pin
+    ) {
 
-        await createWorker({
+      Alert.alert(
+        "Error",
+        "Please fill all fields"
+      )
 
-          name,
+      return
+    }
 
-          role,
+    if (pin !== confirmPin) {
 
-          phone
+      Alert.alert(
+        "Error",
+        "PINs do not match"
+      )
 
-        })
+      return
+    }
 
-        Alert.alert(
-          "Success",
-          "Worker Added"
-        )
+    try {
 
-        setName("")
-        setRole("")
-        setPhone("")
+      await createWorker({
 
-      }
+        name,
 
-      catch {
+        role,
 
-        Alert.alert(
-          "Error",
-          "Failed to add worker"
-        )
+        phone,
 
-      }
+        pin
+
+      })
+
+      Alert.alert(
+        "Success",
+        "Worker Added"
+      )
+
+      navigation.goBack()
 
     }
+
+    catch {
+
+      Alert.alert(
+        "Error",
+        "Failed to add worker"
+      )
+
+    }
+
+  }  
 
   return (
 
@@ -79,6 +114,26 @@ export default function AddWorkerScreen() {
         style={styles.input}
         value={phone}
         onChangeText={setPhone}
+      />
+
+      <TextInput
+        placeholder="4 Digit PIN"
+        style={styles.input}
+        value={pin}
+        onChangeText={setPin}
+        keyboardType="numeric"
+        secureTextEntry
+        maxLength={4}
+      />
+
+      <TextInput
+        placeholder="Confirm PIN"
+        style={styles.input}
+        value={confirmPin}
+        onChangeText={setConfirmPin}
+        keyboardType="numeric"
+        secureTextEntry
+        maxLength={4}
       />
 
       <TouchableOpacity

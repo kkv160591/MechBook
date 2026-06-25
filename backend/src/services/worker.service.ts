@@ -25,7 +25,7 @@ async (
 
   const pinHash =
     await bcrypt.hash(
-      "1234",
+      data.pin,
       10
     )
 

@@ -3,12 +3,72 @@ import {
   TextInput,
   TouchableOpacity,
   Text,
-  StyleSheet
+  StyleSheet,
+  Alert
 } from "react-native"
+
+import {
+  useState
+} from "react"
+
+import {
+  createServiceType
+} from "../../services/serviceTypesService"
 
 export default function AddServiceTypeScreen({
   navigation
 }: any) {
+
+  const [name, setName] =
+    useState("")
+
+  const [category, setCategory] =
+    useState("")
+
+  const [defaultPrice, setDefaultPrice] =
+    useState("")
+
+  const [estimatedDuration,
+    setEstimatedDuration] =
+      useState("")
+
+  const saveService =
+  async () => {
+
+    try {
+
+      await createServiceType({
+
+        name,
+
+        category,
+
+        defaultPrice:
+          Number(defaultPrice),
+
+        estimatedDuration
+
+      })
+
+      Alert.alert(
+        "Success",
+        "Service Added"
+      )
+
+      navigation.goBack()
+
+    }
+
+    catch {
+
+      Alert.alert(
+        "Error",
+        "Failed to save service"
+      )
+
+    }
+
+  }
 
   return (
 
@@ -17,29 +77,37 @@ export default function AddServiceTypeScreen({
       <TextInput
         placeholder="Service Name"
         style={styles.input}
+        value={name}
+        onChangeText={setName}
       />
 
       <TextInput
         placeholder="Category"
         style={styles.input}
+        value={category}
+        onChangeText={setCategory}
       />
 
       <TextInput
         placeholder="Default Price"
         keyboardType="numeric"
         style={styles.input}
+        value={defaultPrice}
+        onChangeText={setDefaultPrice}
       />
 
       <TextInput
         placeholder="Duration"
         style={styles.input}
+        value={estimatedDuration}
+        onChangeText={
+          setEstimatedDuration
+        }
       />
 
       <TouchableOpacity
         style={styles.btn}
-        onPress={() =>
-          navigation.goBack()
-        }
+        onPress={saveService}
       >
 
         <Text style={styles.btnText}>
