@@ -7,35 +7,87 @@ import {
   ScrollView
 } from "react-native"
 
-import { useState } from "react"
+import { 
+  useState,
+  useEffect
+} from "react"
 
 import {
   Ionicons,
   MaterialIcons
 } from "@expo/vector-icons"
 
-import { dummyBackup }
-from "../../data/dummyBackup"
+import {
+  getBackupSettings,
+  runBackup
+}
+from "../../services/settingsService"
 
 export default function BackupScreen() {
 
   const [backupInfo, setBackupInfo] =
-    useState(dummyBackup)
+  useState<any>(null)
 
-  const runBackup = () => {
+  const [loading, setLoading] =
+  useState(true)
 
-    const now =
-      new Date().toLocaleString()
+  useEffect(() => {
 
-    setBackupInfo(prev => ({
-      ...prev,
-      lastBackup: now
-    }))
+    loadBackup()
 
-    Alert.alert(
-      "Backup Completed",
-      "All garage data backed up successfully."
-    )
+  }, [])
+
+  const loadBackup =
+  async () => {
+
+    try {
+
+      const data =
+        await getBackupSettings()
+
+      setBackupInfo(data)
+
+    }
+
+    finally {
+
+      setLoading(false)
+
+    }
+
+  }
+
+  const backupNow =
+  async () => {
+
+    try {
+
+      const response =
+        await runBackup()
+
+      setBackupInfo(
+        (prev: any) => ({
+          ...prev,
+          lastBackup:
+            response.lastBackup
+        })
+      )
+
+      Alert.alert(
+        "Success",
+        "Backup completed"
+      )
+
+    }
+
+    catch {
+
+      Alert.alert(
+        "Error",
+        "Backup failed"
+      )
+
+    }
 
   }
 
@@ -147,7 +199,7 @@ export default function BackupScreen() {
 
       <TouchableOpacity
         style={styles.backupBtn}
-        onPress={runBackup}
+        onPress={backupNow}
       >
 
         <MaterialIcons

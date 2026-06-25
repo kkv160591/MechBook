@@ -9,14 +9,53 @@ import {
 
 import { MaterialIcons } from "@expo/vector-icons"
 
-import { dummyPlan }
-from "../../data/dummyPlan"
+import {
+  useEffect,
+  useState
+} from "react"
+
+import {
+  getPlanDetails
+}
+from "../../services/settingsService"
 
 export default function PlanUsageScreen() {
 
+  const [plan, setPlan] =
+  useState<any>(null)
+
+  const [loading, setLoading] =
+  useState(true)
+
+  useEffect(() => {
+
+    loadPlan()
+
+  }, [])
+
+  const loadPlan =
+  async () => {
+
+    try {
+
+      const data =
+        await getPlanDetails()
+
+      setPlan(data)
+
+    }
+
+    finally {
+
+      setLoading(false)
+
+    }
+
+  }
+
   const usagePercentage =
-    (dummyPlan.jobsUsed /
-      dummyPlan.jobsLimit) * 100
+    (plan.jobsUsed /
+      plan.jobsLimit) * 100
 
   const buyBooster = (
     jobs: number
@@ -58,7 +97,7 @@ export default function PlanUsageScreen() {
           />
 
           <Text style={styles.planName}>
-            {dummyPlan.planName}
+            {plan.planName}
           </Text>
 
         </View>
@@ -66,11 +105,11 @@ export default function PlanUsageScreen() {
         <Text style={styles.renewal}>
           Renewal Date:
           {" "}
-          {dummyPlan.renewalDate}
+          {plan.renewalDate}
         </Text>
 
         <Text style={styles.remaining}>
-          {dummyPlan.daysRemaining}
+          {plan.daysRemaining}
           {" "}
           days remaining
         </Text>
@@ -86,9 +125,9 @@ export default function PlanUsageScreen() {
         </Text>
 
         <Text style={styles.usageText}>
-          {dummyPlan.jobsUsed}
+          {plan.jobsUsed}
           /
-          {dummyPlan.jobsLimit}
+          {plan.jobsLimit}
           {" "}
           Jobs Used
         </Text>

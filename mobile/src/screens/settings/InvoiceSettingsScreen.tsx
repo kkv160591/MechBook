@@ -9,15 +9,50 @@ import {
   Alert
 } from "react-native"
 
-import { useState } from "react"
+import { 
+  useState,
+  useEffect
+} from "react"
 
-import { dummyInvoiceSettings }
-from "../../data/dummyInvoiceSettings"
+import {
+  getInvoiceSettings,
+  updateInvoiceSettings
+}
+from "../../services/settingsService"
 
 export default function InvoiceSettingsScreen() {
 
   const [settings, setSettings] =
-    useState(dummyInvoiceSettings)
+    useState<any>({})
+
+    const [loading, setLoading] =
+    useState(true)
+
+    useEffect(() => {
+
+    loadSettings()
+
+  }, [])
+
+  const loadSettings =
+  async () => {
+
+    try {
+
+      const data =
+        await getInvoiceSettings()
+
+      setSettings(data || {})
+
+    }
+
+    finally {
+
+      setLoading(false)
+
+    }
+
+  }
 
   const toggle = (key: string) => {
 
@@ -28,12 +63,30 @@ export default function InvoiceSettingsScreen() {
 
   }
 
-  const saveSettings = () => {
+  const saveSettings =
+  async () => {
 
-    Alert.alert(
-      "Success",
-      "Invoice settings saved"
-    )
+    try {
+
+      await updateInvoiceSettings(
+        settings
+      )
+
+      Alert.alert(
+        "Success",
+        "Invoice settings saved"
+      )
+
+    }
+
+    catch {
+
+      Alert.alert(
+        "Error",
+        "Failed to save"
+      )
+
+    }
 
   }
 

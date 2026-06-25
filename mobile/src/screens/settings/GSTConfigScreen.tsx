@@ -9,31 +9,107 @@ import {
   ScrollView
 } from "react-native"
 
-import { useState } from "react"
+import { 
+  useState,
+  useEffect
+} from "react"
 
-import { dummyGSTConfig }
-from "../../data/dummyGSTConfig"
+import {
+  getGSTSettings,
+  updateGSTSettings
+}
+from "../../services/settingsService"
 
 export default function GSTConfigScreen() {
 
   const [enabled, setEnabled] =
-    useState(dummyGSTConfig.enabled)
+  useState(false)
 
   const [gstNumber, setGstNumber] =
-    useState(dummyGSTConfig.gstNumber)
+  useState("")
 
   const [defaultRate, setDefaultRate] =
-    useState(dummyGSTConfig.defaultRate)
+  useState(18)
 
   const [applyMode, setApplyMode] =
-    useState(dummyGSTConfig.applyMode)
+  useState("invoice")
 
-  const saveSettings = () => {
+  const [loading, setLoading] =
+  useState(true)
 
-    Alert.alert(
-      "Success",
-      "GST configuration saved"
-    )
+  useEffect(() => {
+
+    loadSettings()
+
+  }, [])
+
+  const loadSettings =
+  async () => {
+
+    try {
+
+      const data =
+        await getGSTSettings()
+
+      if (data) {
+
+        setEnabled(
+          data.enabled ?? false
+        )
+
+        setGstNumber(
+          data.gstNumber ?? ""
+        )
+
+        setDefaultRate(
+          data.defaultRate ?? 18
+        )
+
+        setApplyMode(
+          data.applyMode ?? "invoice"
+        )
+
+      }
+
+    }
+
+    finally {
+
+      setLoading(false)
+
+    }
+
+  }
+
+  const saveSettings =
+  async () => {
+
+    try {
+
+      await updateGSTSettings({
+
+        enabled,
+        gstNumber,
+        defaultRate,
+        applyMode
+
+      })
+
+      Alert.alert(
+        "Success",
+        "GST settings saved"
+      )
+
+    }
+
+    catch {
+
+      Alert.alert(
+        "Error",
+        "Failed to save GST settings"
+      )
+
+    }
 
   }
 

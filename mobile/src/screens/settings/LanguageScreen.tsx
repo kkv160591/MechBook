@@ -7,12 +7,20 @@ import {
   Alert
 } from "react-native"
 
-import { useState } from "react"
+import { 
+  useState,
+  useEffect
+} from "react"
+
+import { supportedLanguages } from "../../data/supportedLanguages"
 
 import { Ionicons } from "@expo/vector-icons"
 
-import { supportedLanguages }
-from "../../data/supportedLanguages"
+import {
+  getLanguageSettings,
+  updateLanguageSettings
+}
+from "../../services/settingsService"
 
 export default function LanguageScreen() {
 
@@ -20,16 +28,66 @@ export default function LanguageScreen() {
     setSelectedLanguage] =
     useState("en")
 
-  const saveLanguage = (
+  useEffect(() => {
+
+    loadLanguage()
+
+  }, [])
+
+  const loadLanguage =
+  async () => {
+
+    try {
+
+      const data =
+        await getLanguageSettings()
+
+      if (data?.language) {
+
+        setSelectedLanguage(
+          data.language
+        )
+
+      }
+
+    }
+
+    catch {}
+
+  }
+
+  const saveLanguage =
+  async (
     code: string
   ) => {
 
-    setSelectedLanguage(code)
+    try {
 
-    Alert.alert(
-      "Language Updated",
-      "Language preference saved."
-    )
+      await updateLanguageSettings({
+
+        language: code
+
+      })
+
+      setSelectedLanguage(
+        code
+      )
+
+      Alert.alert(
+        "Success",
+        "Language updated"
+      )
+
+    }
+
+    catch {
+
+      Alert.alert(
+        "Error",
+        "Failed to update language"
+      )
+
+    }
 
   }
 

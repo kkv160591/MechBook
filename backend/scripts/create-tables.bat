@@ -35,3 +35,14 @@ aws dynamodb create-table ^
 --billing-mode PAY_PER_REQUEST ^
 --endpoint-url http://localhost:8000 ^
 --region ap-south-1
+
+aws dynamodb create-table ^
+--table-name GarageSettings ^
+--attribute-definitions ^
+AttributeName=garageId,AttributeType=S ^
+AttributeName=settingType,AttributeType=S ^
+--key-schema ^
+AttributeName=garageId,KeyType=HASH ^
+AttributeName=settingType,KeyType=RANGE ^
+--billing-mode PAY_PER_REQUEST ^
+--endpoint-url http://localhost:8000
