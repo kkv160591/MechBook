@@ -22,6 +22,9 @@ import serviceRoutes
 import settingsRoutes
   from "./routes/settings.routes"
 
+import jobRoutes 
+  from "./routes/job.routes"
+
 const app = express()
 
 app.use(cors())
@@ -73,6 +76,11 @@ app.use(
 app.use(
   "/api/settings",
   settingsRoutes
+)
+
+app.use(
+  "/jobs",
+  jobRoutes
 )
 
 export default app

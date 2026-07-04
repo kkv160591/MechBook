@@ -1,421 +1,224 @@
-// JobDetailScreen.tsx
-
 import {
   View,
   Text,
-  FlatList,
-  TouchableOpacity,
+  ScrollView,
   StyleSheet,
-  TextInput,
-  Alert,
-  Modal,
-  ScrollView
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert
 } from "react-native"
 
-import { useMemo, useState } from "react"
-
 import {
-  RouteProp,
-  useNavigation
-} from "@react-navigation/native"
-
-import {
-  NativeStackNavigationProp
-} from "@react-navigation/native-stack"
-
-import {
-  MaterialIcons,
   Ionicons,
-  FontAwesome5
+  MaterialCommunityIcons,
+  MaterialIcons
 } from "@expo/vector-icons"
 
-import { RootStackParamList } from "../../types/navigation"
+import {
+  useEffect,
+  useState
+} from "react"
 
-type JobDetailRouteProp =
-  RouteProp<RootStackParamList, "JobDetail">
+import {
+  getJobById,
+  updateJobStatus,
+  deleteJob,
+  assignWorker
+} from "../../services/jobService"
 
-type Props = {
-  route: JobDetailRouteProp
-}
+export default function JobDetailsScreen({
+  route,
+  navigation
+}: any) {
 
-type NavigationType =
-  NativeStackNavigationProp<
-    RootStackParamList,
-    "JobDetail"
-  >
+  const jobId =
+    route.params.jobId
 
-type Service = {
-  id: string
-  name: string
-  estimatedPrice: number
-  actualPrice?: number
-}
+  const [loading, setLoading] =
+    useState(true)
 
-export default function JobDetailScreen({
-  route
-}: Props) {
+  const [job, setJob] =
+    useState<any>(null)
 
-  const navigation =
-    useNavigation<NavigationType>()
+  useEffect(() => {
 
-  const { job } = route.params
+    loadJob()
 
-  const [services, setServices] =
-    useState<Service[]>(
-      (job.services || []).map(
-        (s: any, index: number) => ({
-          id:
-            s.id ||
-            `${Date.now()}-${index}`,
-          name: s.name,
-          estimatedPrice:
-            s.estimatedPrice ??
-            s.price ??
-            0,
-          actualPrice: s.actualPrice
-        })
-      )
-    )
+  }, [])
 
-  const [status, setStatus] =
-    useState(
-      job.status || "pending"
-    )
+  const loadJob =
+    async () => {
 
-  const [showModal, setShowModal] =
-    useState(false)
+      try {
 
-  const [newService, setNewService] =
-    useState("")
+        const response =
+          await getJobById(jobId)
 
-  const [newPrice, setNewPrice] =
-    useState("")
+        setJob(
+          response.job
+        )
 
-  const addService = () => {
+      }
 
-    if (!newService || !newPrice) {
+      catch (error) {
 
-      Alert.alert(
-        "Validation",
-        "Enter service details"
-      )
+        console.log(error)
 
-      return
+        Alert.alert(
+          "Error",
+          "Unable to load job."
+        )
+
+      }
+
+      finally {
+
+        setLoading(false)
+
+      }
+
     }
 
-    const service: Service = {
-      id: Date.now().toString(),
-      name: newService,
-      estimatedPrice:
-        Number(newPrice)
-    }
+  if (loading) {
 
-    setServices(prev => [
-      ...prev,
-      service
-    ])
+    return (
 
-    setNewService("")
-    setNewPrice("")
-    setShowModal(false)
+      <View style={styles.loader}>
 
-  }
-
-  const removeService = (
-    id: string
-  ) => {
-
-    Alert.alert(
-      "Delete Service",
-      "Are you sure?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-
-            setServices(prev =>
-              prev.filter(
-                s => s.id !== id
-              )
-            )
-
-          }
-        }
-      ]
-    )
-
-  }
-
-  const updateActualPrice = (
-    id: string,
-    value: string
-  ) => {
-
-    setServices(prev =>
-      prev.map(service => {
-
-        if (service.id === id) {
-
-          return {
-            ...service,
-            actualPrice:
-              value === ""
-                ? undefined
-                : Number(value)
-          }
-
-        }
-
-        return service
-
-      })
-    )
-
-  }
-
-  const total = useMemo(() => {
-
-    return services.reduce(
-      (sum, s) =>
-        sum +
-        (
-          s.actualPrice ??
-          s.estimatedPrice
-        ),
-      0
-    )
-
-  }, [services])
-
-  const markComplete = () => {
-
-    setStatus("completed")
-
-    Alert.alert(
-      "Job Completed",
-      "Invoice is ready",
-      [
-        {
-          text: "View Invoice",
-          onPress: () =>
-
-            navigation.navigate(
-              "Invoice",
-              {
-                job: {
-                  ...job,
-                  services,
-                  status: "completed"
-                }
-              }
-            )
-        }
-      ]
-    )
-
-  }
-
-  const renderService = ({
-    item
-  }: {
-    item: Service
-  }) => (
-
-    <View style={styles.serviceCard}>
-
-      <View style={styles.serviceTop}>
-
-        <View style={{ flex: 1 }}>
-
-          <Text style={styles.serviceName}>
-            {item.name}
-          </Text>
-
-          <Text style={styles.estimate}>
-            Estimated ₹
-            {item.estimatedPrice}
-          </Text>
-
-        </View>
-
-        {status !== "completed" && (
-
-          <TouchableOpacity
-            onPress={() =>
-              removeService(item.id)
-            }
-          >
-
-            <MaterialIcons
-              name="delete-outline"
-              size={22}
-              color="#DC2626"
-            />
-
-          </TouchableOpacity>
-
-        )}
-
-      </View>
-
-      <View style={styles.actualPriceRow}>
-
-        <Text style={styles.actualLabel}>
-          Final Price
-        </Text>
-
-        <TextInput
-          placeholder="0"
-          keyboardType="numeric"
-          placeholderTextColor="#9CA3AF"
-          style={styles.priceInput}
-          editable={
-            status !== "completed"
-          }
-          value={
-            item.actualPrice !==
-            undefined
-              ? String(
-                  item.actualPrice
-                )
-              : ""
-          }
-          onChangeText={value =>
-            updateActualPrice(
-              item.id,
-              value
-            )
-          }
+        <ActivityIndicator
+          size="large"
+          color="#2563EB"
         />
 
       </View>
 
-    </View>
+    )
 
-  )
+  }
+
+  if (!job) {
+
+    return (
+
+      <View style={styles.loader}>
+
+        <Text>
+          Job not found
+        </Text>
+
+      </View>
+
+    )
+
+  }
+
+  const total =
+
+    (job.services || []).reduce(
+
+      (sum: number, service: any) =>
+
+        sum +
+
+        (
+
+          service.actualPrice ??
+
+          service.price ??
+
+          service.estimatedPrice ??
+
+          0
+
+        ),
+
+      0
+
+    )
+
+  const statusColor =
+
+    job.status === "completed"
+
+      ? "#16A34A"
+
+      : job.status === "progress"
+
+      ? "#F59E0B"
+
+      : "#DC2626"
 
   return (
 
     <ScrollView
       style={styles.container}
-      showsVerticalScrollIndicator={
-        false
-      }
+      showsVerticalScrollIndicator={false}
     >
 
-      {/* HEADER */}
+      {/* VEHICLE */}
 
-      <View style={styles.headerCard}>
+      <View style={styles.vehicleCard}>
 
-        <View style={styles.vehicleIcon}>
+        <View style={styles.vehicleTop}>
 
-          <Ionicons
-            name={
-              job.vehicleType ===
-              "2W"
-                ? "bicycle"
-                : "car-sport"
-            }
-            size={24}
-            color="#2563EB"
-          />
+          <View style={styles.vehicleIcon}>
 
-        </View>
+            <MaterialCommunityIcons
 
-        <View style={{ flex: 1 }}>
+              name={
+                job.vehicleType === "2 Wheeler"
+                  ? "motorbike"
+                  : "car"
+              }
 
-          <Text
-            style={styles.vehicleNumber}
-          >
-            {
-              job.vehicleNumber
-            }
-          </Text>
+              size={30}
 
-          <Text
-            style={styles.vehicleModel}
-          >
-            {job.vehicleBrand}{" "}
-            {job.vehicleModel}
-          </Text>
+              color="#2563EB"
 
-        </View>
+            />
 
-        <View
-          style={[
-            styles.statusBadge,
-            {
-              backgroundColor:
-                status ===
-                "completed"
-                  ? "#DCFCE7"
-                  : "#FEF3C7"
-            }
-          ]}
-        >
+          </View>
 
-          <Text
+          <View style={{ flex: 1 }}>
+
+            <Text style={styles.vehicleNumber}>
+
+              {job.vehicleNumber}
+
+            </Text>
+
+            <Text style={styles.vehicleModel}>
+
+              {job.vehicleModel}
+
+            </Text>
+
+          </View>
+
+          <View
             style={[
-              styles.statusText,
+              styles.statusBadge,
               {
-                color:
-                  status ===
-                  "completed"
-                    ? "#16A34A"
-                    : "#D97706"
+                backgroundColor:
+                  `${statusColor}20`
               }
             ]}
           >
-            {status.toUpperCase()}
-          </Text>
 
-        </View>
+            <Text
+              style={[
+                styles.statusText,
+                {
+                  color: statusColor
+                }
+              ]}
+            >
 
-      </View>
+              {job.status.toUpperCase()}
 
-      {/* JOB INFO */}
+            </Text>
 
-      <View style={styles.quickInfoRow}>
-
-        <View style={styles.quickInfoCard}>
-
-          <Ionicons
-            name="calendar-outline"
-            size={18}
-            color="#2563EB"
-          />
-
-          <Text style={styles.quickLabel}>
-            Delivery
-          </Text>
-
-          <Text style={styles.quickValue}>
-            {job.expectedDelivery ||
-              "Not Set"}
-          </Text>
-
-        </View>
-
-        <View style={styles.quickInfoCard}>
-
-          <FontAwesome5
-            name="tools"
-            size={16}
-            color="#2563EB"
-          />
-
-          <Text style={styles.quickLabel}>
-            Services
-          </Text>
-
-          <Text style={styles.quickValue}>
-            {services.length}
-          </Text>
+          </View>
 
         </View>
 
@@ -423,25 +226,28 @@ export default function JobDetailScreen({
 
       {/* CUSTOMER */}
 
-      <View style={styles.sectionCard}>
+      <View style={styles.card}>
 
-        <Text
-          style={styles.sectionTitle}
-        >
-          Customer Details
+        <Text style={styles.sectionTitle}>
+          Customer
         </Text>
 
         <View style={styles.infoRow}>
 
           <Ionicons
+
             name="person-outline"
+
             size={18}
+
             color="#6B7280"
+
           />
 
           <Text style={styles.infoText}>
-            {job.customer ||
-              "Unknown"}
+
+            {job.customerName}
+
           </Text>
 
         </View>
@@ -449,350 +255,405 @@ export default function JobDetailScreen({
         <View style={styles.infoRow}>
 
           <Ionicons
+
             name="call-outline"
+
             size={18}
+
             color="#6B7280"
+
           />
 
           <Text style={styles.infoText}>
-            {job.phone ||
-              "No Phone"}
+
+            {job.phone}
+
           </Text>
 
         </View>
 
-        {!!job.alternatePhone && (
-
-          <View
-            style={styles.infoRow}
-          >
-
-            <Ionicons
-              name="call"
-              size={18}
-              color="#6B7280"
-            />
-
-            <Text
-              style={styles.infoText}
-            >
-              {
-                job.alternatePhone
-              }
-            </Text>
-
-          </View>
-
-        )}
-
       </View>
 
-      {/* VEHICLE DETAILS */}
+      {/* WORKER */}
 
-      <View style={styles.sectionCard}>
+      <View style={styles.card}>
 
-        <Text
-          style={styles.sectionTitle}
-        >
-          Vehicle Details
+        <Text style={styles.sectionTitle}>
+          Assigned Worker
         </Text>
 
-        <View style={styles.grid}>
+        {
 
-          <View
-            style={styles.gridItem}
-          >
+          job.workerId
 
-            <Text
-              style={styles.label}
-            >
-              Type
+            ?
+
+            <View style={styles.infoRow}>
+
+              <Ionicons
+
+                name="person-circle-outline"
+
+                size={22}
+
+                color="#2563EB"
+
+              />
+
+              <Text style={styles.infoText}>
+
+                {job.workerId}
+
+              </Text>
+
+            </View>
+
+            :
+
+            <Text style={styles.emptyText}>
+
+              No worker assigned
+
             </Text>
 
-            <Text
-              style={styles.value}
-            >
-              {
-                job.vehicleType
-              }
-            </Text>
-
-          </View>
-
-          <View
-            style={styles.gridItem}
-          >
-
-            <Text
-              style={styles.label}
-            >
-              Fuel
-            </Text>
-
-            <Text
-              style={styles.value}
-            >
-              {job.fuelType ||
-                "-"}
-            </Text>
-
-          </View>
-
-          <View
-            style={styles.gridItem}
-          >
-
-            <Text
-              style={styles.label}
-            >
-              KM Driven
-            </Text>
-
-            <Text
-              style={styles.value}
-            >
-              {job.kmsDriven ||
-                "-"}
-            </Text>
-
-          </View>
-
-          <View
-            style={styles.gridItem}
-          >
-
-            <Text
-              style={styles.label}
-            >
-              Color
-            </Text>
-
-            <Text
-              style={styles.value}
-            >
-              {
-                job.vehicleColor ||
-                "-"
-              }
-            </Text>
-
-          </View>
-
-        </View>
-
-      </View>
-
-      {/* COMPLAINT */}
-
-      <View style={styles.sectionCard}>
-
-        <Text
-          style={styles.sectionTitle}
-        >
-          Complaint / Notes
-        </Text>
-
-        <Text style={styles.notes}>
-          {job.problemDescription ||
-            "No description added"}
-        </Text>
+        }
 
       </View>
 
       {/* SERVICES */}
 
-      <View
-        style={styles.servicesHeader}
-      >
+      <View style={styles.card}>
 
-        <Text
-          style={styles.sectionTitle}
-        >
-          Services & Labour
+        <Text style={styles.sectionTitle}>
+          Services
         </Text>
 
-        {status !==
-          "completed" && (
+        {
 
-          <TouchableOpacity
-            onPress={() =>
-              setShowModal(true)
-            }
-          >
+          (job.services || []).map(
 
-            <Text
-              style={
-                styles.addService
-              }
-            >
-              + Add
-            </Text>
+            (service: any, index: number) => (
 
-          </TouchableOpacity>
+              <View
+                key={index}
+                style={styles.serviceRow}
+              >
 
-        )}
+                <Text
+                  style={styles.serviceName}
+                >
 
-      </View>
+                  {service.name}
 
-      <FlatList
-        data={services}
-        scrollEnabled={false}
-        keyExtractor={item =>
-          item.id
-        }
-        renderItem={renderService}
-      />
+                </Text>
 
-      {/* TOTAL */}
+                <Text
+                  style={styles.servicePrice}
+                >
 
-      <View style={styles.totalCard}>
+                  ₹
 
-        <Text
-          style={styles.totalLabel}
-        >
-          Total Invoice Amount
-        </Text>
+                  {
 
-        <Text
-          style={styles.totalAmount}
-        >
-          ₹{total}
-        </Text>
+                    service.actualPrice ??
 
-      </View>
+                    service.price ??
 
-      {/* ACTION BUTTON */}
+                    service.estimatedPrice
 
-      {status !==
-      "completed" ? (
+                  }
 
-        <TouchableOpacity
-          style={styles.completeBtn}
-          onPress={markComplete}
-        >
+                </Text>
 
-          <Text
-            style={
-              styles.completeText
-            }
-          >
-            Complete Job &
-            Generate Invoice
-          </Text>
+              </View>
 
-        </TouchableOpacity>
-
-      ) : (
-
-        <TouchableOpacity
-          style={styles.invoiceBtn}
-          onPress={() =>
-            navigation.navigate(
-              "Invoice",
-              {
-                job: {
-                  ...job,
-                  services,
-                  status
-                }
-              }
             )
-          }
-        >
 
-          <Text
-            style={
-              styles.invoiceText
-            }
-          >
-            View Invoice
+          )
+
+        }
+
+        <View style={styles.totalRow}>
+
+          <Text style={styles.totalLabel}>
+            Total
           </Text>
 
-        </TouchableOpacity>
-
-      )}
-
-      <View style={{ height: 40 }} />
-
-      {/* MODAL */}
-
-      <Modal
-        visible={showModal}
-        transparent
-        animationType="slide"
-      >
-
-        <View
-          style={styles.modalOverlay}
-        >
-
-          <View
-            style={styles.modalContent}
-          >
-
-            <Text
-              style={styles.modalTitle}
-            >
-              Add Service
-            </Text>
-
-            <TextInput
-              placeholder="Service Name"
-              style={
-                styles.modalInput
-              }
-              value={newService}
-              onChangeText={
-                setNewService
-              }
-            />
-
-            <TextInput
-              placeholder="Estimated Price"
-              keyboardType="numeric"
-              style={
-                styles.modalInput
-              }
-              value={newPrice}
-              onChangeText={
-                setNewPrice
-              }
-            />
-
-            <TouchableOpacity
-              style={styles.modalBtn}
-              onPress={addService}
-            >
-
-              <Text
-                style={
-                  styles.modalBtnText
-                }
-              >
-                Save Service
-              </Text>
-
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() =>
-                setShowModal(false)
-              }
-            >
-
-              <Text
-                style={styles.cancel}
-              >
-                Cancel
-              </Text>
-
-            </TouchableOpacity>
-
-          </View>
+          <Text style={styles.totalPrice}>
+            ₹{total}
+          </Text>
 
         </View>
 
-      </Modal>
+      </View>
+            {/* NOTES */}
+
+      <View style={styles.card}>
+
+        <Text style={styles.sectionTitle}>
+          Notes
+        </Text>
+
+        <Text style={styles.notes}>
+
+          {job.notes || "No notes added."}
+
+        </Text>
+
+      </View>
+
+      {/* ACTION BUTTONS */}
+
+      <TouchableOpacity
+
+        style={styles.primaryBtn}
+
+        onPress={() =>
+          navigation.navigate(
+            "AssignWorker",
+            {
+              jobId: job.jobId
+            }
+          )
+        }
+
+      >
+
+        <Ionicons
+          name="person-add"
+          size={20}
+          color="white"
+        />
+
+        <Text style={styles.btnText}>
+          Assign Worker
+        </Text>
+
+      </TouchableOpacity>
+
+      <TouchableOpacity
+
+        style={styles.orangeBtn}
+
+        onPress={async () => {
+
+          try {
+
+            const nextStatus =
+
+              job.status === "pending"
+
+                ? "progress"
+
+                : job.status === "progress"
+
+                ? "completed"
+
+                : "delivered"
+
+            await updateJobStatus(
+
+              job.jobId,
+
+              nextStatus
+
+            )
+
+            loadJob()
+
+          }
+
+          catch {
+
+            Alert.alert(
+
+              "Error",
+
+              "Unable to update status."
+
+            )
+
+          }
+
+        }}
+
+      >
+
+        <MaterialIcons
+
+          name="update"
+
+          size={20}
+
+          color="white"
+
+        />
+
+        <Text style={styles.btnText}>
+          Change Status
+        </Text>
+
+      </TouchableOpacity>
+
+      <TouchableOpacity
+
+        style={styles.blueBtn}
+
+        onPress={() =>
+
+          navigation.navigate(
+
+            "EditJob",
+
+            {
+
+              job
+
+            }
+
+          )
+
+        }
+
+      >
+
+        <MaterialIcons
+
+          name="edit"
+
+          size={20}
+
+          color="white"
+
+        />
+
+        <Text style={styles.btnText}>
+          Edit Job
+        </Text>
+
+      </TouchableOpacity>
+
+      <TouchableOpacity
+
+        style={styles.greenBtn}
+
+        onPress={() =>
+
+          navigation.navigate(
+
+            "InvoicePreview",
+
+            {
+
+              jobId: job.jobId
+
+            }
+
+          )
+
+        }
+
+      >
+
+        <Ionicons
+
+          name="document-text"
+
+          size={20}
+
+          color="white"
+
+        />
+
+        <Text style={styles.btnText}>
+          Generate Invoice
+        </Text>
+
+      </TouchableOpacity>
+
+      <TouchableOpacity
+
+        style={styles.redBtn}
+
+        onPress={() =>
+
+          Alert.alert(
+
+            "Delete Job",
+
+            "Are you sure?",
+
+            [
+
+              {
+
+                text: "Cancel",
+
+                style: "cancel"
+
+              },
+
+              {
+
+                text: "Delete",
+
+                style: "destructive",
+
+                onPress: async () => {
+
+                  try {
+
+                    await deleteJob(
+
+                      job.jobId
+
+                    )
+
+                    navigation.goBack()
+
+                  }
+
+                  catch {
+
+                    Alert.alert(
+
+                      "Error",
+
+                      "Unable to delete job."
+
+                    )
+
+                  }
+
+                }
+
+              }
+
+            ]
+
+          )
+
+        }
+
+      >
+
+        <MaterialIcons
+
+          name="delete"
+
+          size={20}
+
+          color="white"
+
+        />
+
+        <Text style={styles.btnText}>
+          Delete Job
+        </Text>
+
+      </TouchableOpacity>
+
+      <View style={{ height: 40 }} />
 
     </ScrollView>
 
@@ -803,282 +664,315 @@ export default function JobDetailScreen({
 const styles = StyleSheet.create({
 
   container: {
+
     flex: 1,
+
     backgroundColor: "#F3F4F6",
-    padding: 18
+
+    padding: 16
+
   },
 
-  headerCard: {
+  loader: {
+
+    flex: 1,
+
+    justifyContent: "center",
+
+    alignItems: "center"
+
+  },
+
+  vehicleCard: {
+
     backgroundColor: "white",
-    borderRadius: 24,
-    padding: 18,
-    flexDirection: "row",
-    alignItems: "center",
+
+    borderRadius: 22,
+
+    padding: 20,
+
     marginBottom: 16
+
+  },
+
+  vehicleTop: {
+
+    flexDirection: "row",
+
+    alignItems: "center"
+
   },
 
   vehicleIcon: {
+
     width: 60,
+
     height: 60,
+
     borderRadius: 18,
+
     backgroundColor: "#EFF6FF",
-    alignItems: "center",
+
     justifyContent: "center",
+
+    alignItems: "center",
+
     marginRight: 14
+
   },
 
   vehicleNumber: {
-    fontSize: 22,
-    fontWeight: "bold",
+
+    fontSize: 20,
+
+    fontWeight: "700",
+
     color: "#111827"
+
   },
 
   vehicleModel: {
+
     color: "#6B7280",
+
     marginTop: 4
+
   },
 
   statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 30
+
+    paddingHorizontal: 14,
+
+    paddingVertical: 8,
+
+    borderRadius: 20
+
   },
 
   statusText: {
-    fontWeight: "bold",
+
+    fontWeight: "700",
+
     fontSize: 12
+
   },
 
-  quickInfoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 16
-  },
+  card: {
 
-  quickInfoCard: {
-    width: "48%",
     backgroundColor: "white",
-    borderRadius: 18,
-    padding: 16
-  },
 
-  quickLabel: {
-    color: "#6B7280",
-    marginTop: 10,
-    marginBottom: 4
-  },
-
-  quickValue: {
-    fontWeight: "bold",
-    color: "#111827"
-  },
-
-  sectionCard: {
-    backgroundColor: "white",
     borderRadius: 20,
+
     padding: 18,
+
     marginBottom: 16
+
   },
 
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
+
+    fontSize: 17,
+
+    fontWeight: "700",
+
     marginBottom: 14,
+
     color: "#111827"
+
   },
 
   infoRow: {
+
     flexDirection: "row",
+
     alignItems: "center",
-    marginBottom: 14
+
+    marginBottom: 12
+
   },
 
   infoText: {
+
     marginLeft: 10,
-    color: "#111827",
-    fontSize: 15
+
+    fontSize: 15,
+
+    color: "#374151"
+
   },
 
-  grid: {
+  emptyText: {
+
+    color: "#9CA3AF",
+
+    fontStyle: "italic"
+
+  },
+
+  serviceRow: {
+
     flexDirection: "row",
-    flexWrap: "wrap"
-  },
 
-  gridItem: {
-    width: "50%",
-    marginBottom: 18
-  },
-
-  label: {
-    color: "#6B7280",
-    marginBottom: 5,
-    fontSize: 13
-  },
-
-  value: {
-    fontWeight: "bold",
-    color: "#111827",
-    fontSize: 15
-  },
-
-  notes: {
-    color: "#374151",
-    lineHeight: 22
-  },
-
-  servicesHeader: {
-    flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10
-  },
 
-  addService: {
-    color: "#2563EB",
-    fontWeight: "bold",
-    fontSize: 15
-  },
+    marginBottom: 12
 
-  serviceCard: {
-    backgroundColor: "white",
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 14
-  },
-
-  serviceTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 14
   },
 
   serviceName: {
-    fontWeight: "bold",
-    fontSize: 16,
-    color: "#111827"
-  },
 
-  estimate: {
-    marginTop: 5,
-    color: "#6B7280"
-  },
-
-  actualPriceRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center"
-  },
-
-  actualLabel: {
     color: "#374151",
-    fontWeight: "600"
+
+    fontSize: 15
+
   },
 
-  priceInput: {
-    width: 120,
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
+  servicePrice: {
+
+    fontWeight: "700"
+
+  },
+
+  totalRow: {
+
+    borderTopWidth: 1,
+
     borderColor: "#E5E7EB",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    textAlign: "right",
-    fontWeight: "bold",
-    color: "#111827"
-  },
 
-  totalCard: {
-    backgroundColor: "#111827",
-    borderRadius: 22,
-    padding: 22,
-    marginTop: 8
+    paddingTop: 14,
+
+    marginTop: 10,
+
+    flexDirection: "row",
+
+    justifyContent: "space-between"
+
   },
 
   totalLabel: {
-    color: "#D1D5DB"
+
+    fontWeight: "700",
+
+    fontSize: 17
+
   },
 
-  totalAmount: {
-    color: "white",
-    fontSize: 34,
-    fontWeight: "bold",
-    marginTop: 8
+  totalPrice: {
+
+    fontWeight: "700",
+
+    fontSize: 18,
+
+    color: "#16A34A"
+
   },
 
-  completeBtn: {
-    backgroundColor: "#16A34A",
-    padding: 18,
-    borderRadius: 18,
-    alignItems: "center",
-    marginTop: 18
+  notes: {
+
+    color: "#374151",
+
+    lineHeight: 22
+
   },
 
-  completeText: {
-    color: "white",
-    fontWeight: "bold",
-    fontSize: 16
-  },
+  primaryBtn: {
 
-  invoiceBtn: {
     backgroundColor: "#2563EB",
-    padding: 18,
+
     borderRadius: 18,
-    alignItems: "center",
-    marginTop: 18
-  },
 
-  invoiceText: {
-    color: "white",
-    fontWeight: "bold",
-    fontSize: 16
-  },
+    padding: 18,
 
-  modalOverlay: {
-    flex: 1,
+    flexDirection: "row",
+
     justifyContent: "center",
-    backgroundColor:
-      "rgba(0,0,0,0.4)",
-    padding: 20
+
+    alignItems: "center",
+
+    marginBottom: 12
+
   },
 
-  modalContent: {
-    backgroundColor: "white",
-    borderRadius: 24,
-    padding: 20
+  orangeBtn: {
+
+    backgroundColor: "#F59E0B",
+
+    borderRadius: 18,
+
+    padding: 18,
+
+    flexDirection: "row",
+
+    justifyContent: "center",
+
+    alignItems: "center",
+
+    marginBottom: 12
+
   },
 
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 16,
-    color: "#111827"
+  blueBtn: {
+
+    backgroundColor: "#1D4ED8",
+
+    borderRadius: 18,
+
+    padding: 18,
+
+    flexDirection: "row",
+
+    justifyContent: "center",
+
+    alignItems: "center",
+
+    marginBottom: 12
+
   },
 
-  modalInput: {
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 14
+  greenBtn: {
+
+    backgroundColor: "#16A34A",
+
+    borderRadius: 18,
+
+    padding: 18,
+
+    flexDirection: "row",
+
+    justifyContent: "center",
+
+    alignItems: "center",
+
+    marginBottom: 12
+
   },
 
-  modalBtn: {
-    backgroundColor: "#2563EB",
-    padding: 16,
-    borderRadius: 14,
+  redBtn: {
+
+    backgroundColor: "#DC2626",
+
+    borderRadius: 18,
+
+    padding: 18,
+
+    flexDirection: "row",
+
+    justifyContent: "center",
+
     alignItems: "center"
+
   },
 
-  modalBtnText: {
+  btnText: {
+
     color: "white",
-    fontWeight: "bold"
-  },
 
-  cancel: {
-    textAlign: "center",
-    marginTop: 16,
-    color: "#6B7280"
+    fontWeight: "700",
+
+    marginLeft: 10,
+
+    fontSize: 15
+
   }
 
 })

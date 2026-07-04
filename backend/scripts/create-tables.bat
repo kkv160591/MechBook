@@ -46,3 +46,13 @@ AttributeName=garageId,KeyType=HASH ^
 AttributeName=settingType,KeyType=RANGE ^
 --billing-mode PAY_PER_REQUEST ^
 --endpoint-url http://localhost:8000
+
+aws dynamodb create-table ^
+--table-name Jobs ^
+--attribute-definitions ^
+AttributeName=jobId,AttributeType=S ^
+--key-schema ^
+AttributeName=jobId,KeyType=HASH ^
+--billing-mode PAY_PER_REQUEST ^
+--endpoint-url http://localhost:8000 ^
+--region ap-south-1

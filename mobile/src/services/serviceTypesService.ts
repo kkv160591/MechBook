@@ -1,32 +1,38 @@
 import api from "./api"
 
-export const getServiceTypes =
-() =>
-  api.get("/api/services")
+export const getServiceTypes = async () => {
+  const response = await api.get("/api/services")
+  return response.data
+}
 
-export const getServiceTypeById =
-(id: string) =>
-  api.get(`/api/services/${id}`)
+export const getServiceTypeById = async (id: string) => {
+  const response = await api.get(`/api/services/${id}`)
+  return response.data
+}
 
-export const createServiceType =
-(data: any) =>
-  api.post(
-    "/api/services",
-    data
-  )
+export const createServiceType = async (data: any) => {
+  const response = await api.post("/api/services", data)
+  return response.data
+}
 
-export const updateServiceType =
-(
+export const updateServiceType = async (
   id: string,
   data: any
-) =>
-  api.put(
+) => {
+  const response = await api.put(
     `/api/services/${id}`,
     data
   )
 
-export const deleteServiceType =
-(id: string) =>
-  api.delete(
+  return response.data
+}
+
+export const deleteServiceType = async (
+  id: string
+) => {
+  const response = await api.delete(
     `/api/services/${id}`
   )
+
+  return response.data
+}

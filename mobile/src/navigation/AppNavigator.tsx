@@ -2,7 +2,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack"
 
 import LoginScreen from "../screens/auth/LoginScreen"
 import BottomTabs from "./BottomTabs"
-import CreateJobScreen from "../screens/jobs/CreateJobScreen"
+import CreateJobScreen from "../screens/jobs/AddJobScreen"
 import JobsScreen from "../screens/jobs/JobsScreen"
 import JobDetailScreen from "../screens/jobs/JobDetailScreen"
 import InvoiceScreen from "../screens/invoices/InvoiceScreen"
