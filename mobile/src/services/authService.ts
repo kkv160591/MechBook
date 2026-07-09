@@ -1,7 +1,7 @@
 import axios from "axios"
 
 const API_BASE_URL =
-  "http://192.168.1.38:5000/auth"
+  "http://localhost:5000/auth"
 
 export const loginUser =
   async (

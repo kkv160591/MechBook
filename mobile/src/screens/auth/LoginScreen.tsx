@@ -74,7 +74,7 @@ export default function LoginScreen() {
 
       const response =
         await axios.post(
-          "http://192.168.1.38:5000/auth/login",
+          "http://localhost:5000/auth/login",
           {
             phone,
             pin
