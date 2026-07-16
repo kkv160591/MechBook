@@ -5,14 +5,16 @@ import {
   StyleSheet,
   ActivityIndicator,
   Text,
-  RefreshControl
+  RefreshControl,
+  TextInput
 } from "react-native"
 
 import { Ionicons } from "@expo/vector-icons"
 
 import {
   useState,
-  useCallback
+  useCallback,
+  useEffect
 } from "react"
 
 import {
@@ -33,40 +35,97 @@ export default function JobsScreen({
   const [jobs, setJobs] =
     useState<any[]>([])
 
+  const [filteredJobs, setFilteredJobs] =
+    useState<any[]>([])
+
   const [loading, setLoading] =
     useState(true)
 
   const [refreshing, setRefreshing] =
     useState(false)
 
-  const loadJobs =
-    async () => {
+  const [search, setSearch] =
+    useState("")
 
-      try {
+  const [statusFilter, setStatusFilter] =
+    useState("all")
 
-        const response =
-          await getJobs()
+  const applyFilters = (
+    jobList: any[],
+    searchText: string,
+    status: string
+  ) => {
 
-        setJobs(
-          response.jobs || []
-        )
+    let list = [...jobList]
 
-      }
+    if (status !== "all") {
 
-      catch (error) {
-
-        console.log(error)
-
-      }
-
-      finally {
-
-        setLoading(false)
-        setRefreshing(false)
-
-      }
+      list = list.filter(
+        j => j.status === status
+      )
 
     }
+
+    if (searchText.trim()) {
+
+      const text =
+        searchText.toLowerCase()
+
+      list = list.filter(job =>
+
+        job.customerName
+          ?.toLowerCase()
+          .includes(text) ||
+
+        job.vehicleNumber
+          ?.toLowerCase()
+          .includes(text) ||
+
+        job.phone
+          ?.includes(text)
+
+      )
+
+    }
+
+    setFilteredJobs(list)
+
+  }
+
+  const loadJobs = async () => {
+
+    try {
+
+      const response =
+        await getJobs()
+
+      const list =
+        response.jobs || []
+
+      setJobs(list)
+
+      applyFilters(
+        list,
+        search,
+        statusFilter
+      )
+
+    }
+
+    catch (error) {
+
+      console.log(error)
+
+    }
+
+    finally {
+
+      setLoading(false)
+      setRefreshing(false)
+
+    }
+
+  }
 
   useFocusEffect(
 
@@ -79,6 +138,20 @@ export default function JobsScreen({
     }, [])
 
   )
+
+  useEffect(() => {
+
+    applyFilters(
+      jobs,
+      search,
+      statusFilter
+    )
+
+  }, [
+    search,
+    statusFilter,
+    jobs
+  ])
 
   const onRefresh =
     () => {
@@ -110,9 +183,52 @@ export default function JobsScreen({
 
     <View style={styles.container}>
 
+      <TextInput
+        placeholder="Search customer, phone or vehicle..."
+        value={search}
+        onChangeText={setSearch}
+        style={styles.search}
+      />
+      <View style={styles.filterRow}>
+
+        {[
+          "all",
+          "pending",
+          "progress",
+          "completed",
+          "delivered"
+        ].map(status => (
+
+          <TouchableOpacity
+            key={status}
+            style={[
+              styles.filterChip,
+              statusFilter === status &&
+                styles.selectedChip
+            ]}
+            onPress={() =>
+              setStatusFilter(status)
+            }
+          >
+
+            <Text
+              style={[
+                styles.filterText,
+                statusFilter === status &&
+                  styles.selectedFilterText
+              ]}
+            >
+              {status.toUpperCase()}
+            </Text>
+
+          </TouchableOpacity>
+
+        ))}
+
+      </View>
       <FlatList
 
-        data={jobs}
+        data={filteredJobs}
 
         keyExtractor={(item) =>
           item.jobId
@@ -141,7 +257,9 @@ export default function JobsScreen({
             />
 
             <Text style={styles.emptyTitle}>
-              No Jobs Found
+              {search || statusFilter !== "all"
+                ? "No matching jobs"
+                : "No Jobs Yet"}
             </Text>
 
             <Text style={styles.emptyText}>
@@ -203,6 +321,65 @@ const styles = StyleSheet.create({
     backgroundColor: "#F3F4F6",
 
     padding: 16
+
+  },
+  search: {
+
+    backgroundColor: "white",
+
+    borderRadius: 16,
+
+    paddingHorizontal: 16,
+
+    paddingVertical: 14,
+
+    marginBottom: 14
+
+  },
+
+  filterRow: {
+
+    flexDirection: "row",
+
+    marginBottom: 14,
+
+    flexWrap: "wrap"
+
+  },
+
+  filterChip: {
+
+    paddingHorizontal: 14,
+
+    paddingVertical: 8,
+
+    borderRadius: 18,
+
+    backgroundColor: "white",
+
+    marginRight: 10,
+
+    marginBottom: 10
+
+  },
+
+  selectedChip: {
+
+    backgroundColor: "#2563EB"
+
+  },
+
+  filterText: {
+
+    color: "#374151",
+
+    fontWeight: "600"
+
+  },
+
+  selectedFilterText: {
+
+    color: "white"
 
   },
 

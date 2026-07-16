@@ -48,7 +48,9 @@ export default function JobCard({ job }: any) {
       style={styles.card}
       activeOpacity={0.8}
       onPress={() =>
-        navigation.navigate("JobDetail", { job })
+        navigation.navigate("JobDetail", {
+          jobId: job.jobId
+        })
       }
     >
 

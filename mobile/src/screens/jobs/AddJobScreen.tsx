@@ -35,6 +35,8 @@ import {
   getServiceTypes
 } from "../../services/serviceTypesService"
 
+import DateTimePicker from "@react-native-community/datetimepicker"
+
 export default function AddJobScreen({
   navigation
 }: any) {
@@ -59,16 +61,25 @@ export default function AddJobScreen({
   const [phone, setPhone] =
     useState("")
 
+  const [customerAddress, setCustomerAddress] =
+  useState("")
+
   /* Vehicle */
 
   const [vehicleNumber, setVehicleNumber] =
     useState("")
+
+  const [vehicleBrand, setVehicleBrand] =
+  useState("")
 
   const [vehicleModel, setVehicleModel] =
     useState("")
 
   const [vehicleType, setVehicleType] =
     useState("2 Wheeler")
+
+  const [complaint, setComplaint] =
+  useState("")
 
   const [odometer, setOdometer] =
     useState("")
@@ -84,10 +95,25 @@ export default function AddJobScreen({
     useState("Normal")
 
   const [deliveryDate, setDeliveryDate] =
-    useState("")
+    useState<Date | null>(null)
+
+  const [showDatePicker, setShowDatePicker] =
+    useState(false)
+
+  const [showTimePicker, setShowTimePicker] =
+    useState(false)
 
   const [notes, setNotes] =
     useState("")
+
+  const [inspectionNotes, setInspectionNotes] =
+  useState("")
+
+  const [paymentStatus,setPaymentStatus] =
+  useState("Pending")
+
+  const [paymentMethod,setPaymentMethod]=
+  useState("")
 
   /* Services */
 
@@ -300,9 +326,55 @@ export default function AddJobScreen({
 
     }, [selectedServices])
 
-  const saveJob =
-    async () => {
+  const onDateChange = (
+  event: any,
+  selectedDate?: Date
+) => {
 
+  setShowDatePicker(false)
+
+  if (!selectedDate) return
+
+  const current =
+    deliveryDate || new Date()
+
+  current.setFullYear(
+    selectedDate.getFullYear(),
+    selectedDate.getMonth(),
+    selectedDate.getDate()
+  )
+
+  setDeliveryDate(new Date(current))
+
+  setShowTimePicker(true)
+
+}
+
+const onTimeChange = (
+  event: any,
+  selectedTime?: Date
+) => {
+
+  setShowTimePicker(false)
+
+  if (!selectedTime) return
+
+  const current =
+    deliveryDate || new Date()
+
+  current.setHours(
+    selectedTime.getHours(),
+    selectedTime.getMinutes()
+  )
+
+  setDeliveryDate(new Date(current))
+
+}
+
+  const saveJob =
+
+    async () => {
+      console.log("===== SAVE JOB =====");
       if (
 
         !customerName ||
@@ -347,19 +419,37 @@ export default function AddJobScreen({
 
           phone,
 
+          customerAddress,
+
           vehicleNumber,
 
           vehicleModel,
+
+          vehicleBrand,
 
           vehicleType,
 
           odometer,
 
+          complaint,
+
+          inspectionNotes,
+
           workerId,
 
           priority,
 
-          deliveryDate,
+          deliveryDate:
+
+          deliveryDate
+
+          ? deliveryDate.toISOString()
+
+          : "",
+
+          paymentStatus,
+
+          paymentMethod,
 
           notes,
 
@@ -412,6 +502,24 @@ export default function AddJobScreen({
 
   }
 
+  const formatDate = (date: Date) => {
+
+  return date.toLocaleString("en-IN", {
+
+    day: "2-digit",
+
+    month: "short",
+
+    year: "numeric",
+
+    hour: "2-digit",
+
+    minute: "2-digit"
+
+  })
+
+}
+
   return (
 
 <ScrollView
@@ -435,9 +543,17 @@ onChangeText={setCustomerName}
 <TextInput
 placeholder="Phone Number"
 keyboardType="phone-pad"
+maxLength={10}
 style={styles.input}
 value={phone}
 onChangeText={setPhone}
+/>
+
+<TextInput
+  placeholder="Customer Address (Optional)"
+  style={styles.input}
+  value={customerAddress}
+  onChangeText={setCustomerAddress}
 />
 
 {/* VEHICLE */}
@@ -450,7 +566,18 @@ Vehicle Details
 placeholder="Vehicle Number"
 style={styles.input}
 value={vehicleNumber}
-onChangeText={setVehicleNumber}
+onChangeText={(text)=>
+  setVehicleNumber(
+  text.toUpperCase()
+  )
+}
+/>
+
+<TextInput
+    placeholder="Vehicle Brand (Honda, Tata...)"
+    style={styles.input}
+    value={vehicleBrand}
+    onChangeText={setVehicleBrand}
 />
 
 <TextInput
@@ -463,6 +590,7 @@ onChangeText={setVehicleModel}
 <TextInput
 placeholder="Current Odometer (KM)"
 keyboardType="numeric"
+maxLength={7}
 style={styles.input}
 value={odometer}
 onChangeText={setOdometer}
@@ -650,17 +778,36 @@ priority===item
 
 </View>
 
-<TextInput
+<Text style={styles.label}>
+Expected Delivery Date
+</Text>
 
-placeholder="Expected Delivery Date"
-
+<TouchableOpacity
 style={styles.input}
+onPress={() => {
 
-value={deliveryDate}
+  setShowDatePicker(true)
 
-onChangeText={setDeliveryDate}
+}}
+>
 
-/>
+<Text
+style={{
+color: deliveryDate
+? "#111827"
+: "#9CA3AF"
+}}
+>
+
+{deliveryDate
+
+? formatDate(deliveryDate)
+
+: "Select Delivery Date"}
+
+</Text>
+
+</TouchableOpacity>
 
 {/* SERVICES */}
 
@@ -915,7 +1062,7 @@ Subtotal
 
 <Text style={styles.totalLabel}>
 
-Estimated Total
+Estimated Bill
 
 </Text>
 
@@ -930,17 +1077,136 @@ Estimated Total
 {/* NOTES */}
 
 <Text style={styles.heading}>
-Notes
+Customer Complaint
 </Text>
 
 <TextInput
-style={styles.notes}
 multiline
-placeholder="Additional notes..."
-value={notes}
-onChangeText={setNotes}
+placeholder="Describe customer complaint..."
+style={styles.notes}
+value={complaint}
+onChangeText={setComplaint}
 />
 
+<Text style={styles.heading}>
+Inspection Notes
+</Text>
+
+<TextInput
+multiline
+placeholder="Initial inspection..."
+style={styles.notes}
+value={inspectionNotes}
+onChangeText={setInspectionNotes}
+/>
+
+<Text style={styles.heading}>
+Payment Status
+</Text>
+
+<View style={styles.priorityRow}>
+
+{["Pending","Advance","Paid"].map(item=>(
+
+<TouchableOpacity
+key={item}
+style={[
+styles.priorityButton,
+paymentStatus===item &&
+styles.selectedPriority
+]}
+onPress={()=>setPaymentStatus(item)}
+>
+
+<Text
+style={{
+color:
+paymentStatus===item
+? "white"
+:"#111827"
+}}
+>
+{item}
+</Text>
+
+</TouchableOpacity>
+
+))}
+
+</View>
+
+<View style={styles.pickerContainer}>
+
+<Picker
+selectedValue={paymentMethod}
+onValueChange={setPaymentMethod}
+>
+
+<Picker.Item
+label="Payment Method"
+value=""
+/>
+
+<Picker.Item
+label="Cash"
+value="Cash"
+/>
+
+<Picker.Item
+label="UPI"
+value="UPI"
+/>
+
+<Picker.Item
+label="Card"
+value="Card"
+/>
+
+<Picker.Item
+label="Bank Transfer"
+value="Bank Transfer"
+/>
+
+</Picker>
+
+</View>
+{
+
+showDatePicker && (
+
+<DateTimePicker
+
+value={
+
+deliveryDate ||
+
+new Date()
+
+}
+
+mode="time"
+
+display="default"
+
+minimumDate={new Date()}
+
+onChange={(event, selectedDate) => {
+
+setShowDatePicker(false)
+
+if (selectedDate) {
+
+setDeliveryDate(selectedDate)
+
+}
+
+}}
+
+/>
+
+)
+
+}
 <TouchableOpacity
 style={styles.saveBtn}
 disabled={saving}
