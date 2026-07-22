@@ -18,6 +18,7 @@ export type RootStackParamList = {
   Dashboard: undefined
   WorkerDashboard: undefined
   CreateJob: undefined
+  EditJobScreen: undefined
   BottomTabs: undefined
   Jobs: undefined
   JobDetail: { job: Job }

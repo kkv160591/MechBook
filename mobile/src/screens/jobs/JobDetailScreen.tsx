@@ -1,106 +1,52 @@
 import {
   View,
   Text,
-  TextInput,
   ScrollView,
-  StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
+  StyleSheet,
   Alert,
-  RefreshControl
+  ActivityIndicator
 } from "react-native"
+
+import { useEffect, useState } from "react"
+
+import { Picker } from "@react-native-picker/picker"
 
 import {
   Ionicons,
-  MaterialCommunityIcons,
-  MaterialIcons
+  MaterialCommunityIcons
 } from "@expo/vector-icons"
 
 import {
-  useEffect,
-  useState,
-  useCallback
-} from "react"
-
-import {
-  Picker
-} from "@react-native-picker/picker"
-
-import {
   getJobById,
-  updateJobStatus,
-  deleteJob,
-  assignWorker
+  updateJob,
+  deleteJob
 } from "../../services/jobService"
 
-import {
-  getWorkers
-} from "../../services/workerService"
-
-export default function JobDetailsScreen({
+export default function JobDetailScreen({
   route,
   navigation
 }: any) {
 
-  const jobId = route.params.jobId
+  const { jobId } = route.params
 
-  const [loading, setLoading] =
-    useState(true)
+  const [loading, setLoading] = useState(true)
 
-  const [refreshing, setRefreshing] =
-    useState(false)
+  const [job, setJob] = useState<any>(null)
 
-  const [job, setJob] =
-    useState<any>(null)
-
-  const [workers, setWorkers] =
-    useState<any[]>([])
-
-  const [selectedWorker, setSelectedWorker] =
-    useState("")
-
-  useEffect(() => {
-
-    loadData()
-
-  }, [])
-
-  const loadData = async () => {
+  const loadJob = async () => {
 
     try {
 
-      const [
+      const response = await getJobById(jobId)
 
-        jobResponse,
-
-        workerResponse
-
-      ] = await Promise.all([
-
-        getJobById(jobId),
-
-        getWorkers()
-
-      ])
-
-      const loadedJob =
-        jobResponse.job
-
-      setJob(loadedJob)
-
-      setWorkers(
-        workerResponse.workers || []
-      )
-
-      setSelectedWorker(
-        loadedJob.workerId || ""
-      )
+      setJob(response.job)
 
     }
 
-    catch (error) {
+    catch (err) {
 
-      console.log(error)
+      console.log(err)
 
       Alert.alert(
         "Error",
@@ -112,182 +58,92 @@ export default function JobDetailsScreen({
     finally {
 
       setLoading(false)
-      setRefreshing(false)
 
     }
 
   }
 
-  const onRefresh =
-    useCallback(() => {
+  useEffect(() => {
 
-      setRefreshing(true)
+    loadJob()
 
-      loadData()
+  }, [])
 
-    }, [])
+  const updateStatus = async (status: string) => {
 
-  const workerName = () => {
+    try {
 
-    const worker =
-      workers.find(
-        w =>
-          w.workerId ===
-          job?.workerId
-      )
+      await updateJob(jobId, {
+        status
+      })
 
-    return worker
-      ? worker.name
-      : "Not Assigned"
-
-  }
-
-  const updateStatus =
-    async () => {
-
-      try {
-
-        let nextStatus =
-          "pending"
-
-        switch (job.status) {
-
-          case "pending":
-
-            nextStatus =
-              "progress"
-
-            break
-
-          case "progress":
-
-            nextStatus =
-              "completed"
-
-            break
-
-          case "completed":
-
-            nextStatus =
-              "delivered"
-
-            break
-
-          default:
-
-            nextStatus =
-              "pending"
-
-        }
-
-        await updateJobStatus(
-
-          job.jobId,
-
-          nextStatus
-
-        )
-
-        loadData()
-
-      }
-
-      catch {
-
-        Alert.alert(
-          "Error",
-          "Unable to update status."
-        )
-
-      }
+      setJob({
+        ...job,
+        status
+      })
 
     }
 
-  const saveWorker =
-    async () => {
-
-      try {
-
-        await assignWorker(
-
-          job.jobId,
-
-          selectedWorker
-
-        )
-
-        Alert.alert(
-          "Success",
-          "Worker assigned successfully."
-        )
-
-        loadData()
-
-      }
-
-      catch {
-
-        Alert.alert(
-          "Error",
-          "Unable to assign worker."
-        )
-
-      }
-
-    }
-
-  const removeJob =
-    () => {
+    catch {
 
       Alert.alert(
+        "Error",
+        "Unable to update status."
+      )
 
-        "Delete Job",
+    }
 
-        "Are you sure?",
+  }
 
-        [
+  const deleteCurrentJob = () => {
 
-          {
-            text: "Cancel",
-            style: "cancel"
-          },
+    Alert.alert(
 
-          {
+      "Delete Job",
 
-            text: "Delete",
+      "Are you sure?",
 
-            style: "destructive",
+      [
 
-            onPress: async () => {
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
 
-              try {
+        {
 
-                await deleteJob(
-                  job.jobId
-                )
+          text: "Delete",
 
-                navigation.goBack()
+          style: "destructive",
 
-              }
+          onPress: async () => {
 
-              catch {
+            try {
 
-                Alert.alert(
-                  "Error",
-                  "Unable to delete job."
-                )
+              await deleteJob(jobId)
 
-              }
+              navigation.goBack()
+
+            }
+
+            catch {
+
+              Alert.alert(
+                "Error",
+                "Unable to delete job."
+              )
 
             }
 
           }
 
-        ]
+        }
 
-      )
+      ]
 
-    }
+    )
+
+  }
 
   if (loading) {
 
@@ -306,146 +162,86 @@ export default function JobDetailsScreen({
 
   }
 
-  if (!job) {
+  const total = job.services.reduce(
 
-    return (
+    (sum: number, item: any) =>
 
-      <View style={styles.loader}>
+      sum +
 
-        <Text>
-          Job not found
-        </Text>
+      item.actualPrice *
 
-      </View>
+      item.quantity,
 
-    )
+    0
 
-  }
-
-  const total =
-
-    (job.services || []).reduce(
-
-      (sum: number, service: any) =>
-
-        sum +
-
-        (
-
-          service.actualPrice ??
-
-          service.price ??
-
-          service.estimatedPrice ??
-
-          0
-
-        ),
-
-      0
-
-    )
-
-  const statusColor =
-
-    job.status === "completed"
-
-      ? "#16A34A"
-
-      : job.status === "progress"
-
-      ? "#F59E0B"
-
-      : job.status === "delivered"
-
-      ? "#2563EB"
-
-      : "#DC2626"
+  )
 
   return (
 
     <ScrollView
-
       style={styles.container}
-
-      refreshControl={
-
-        <RefreshControl
-
-          refreshing={refreshing}
-
-          onRefresh={onRefresh}
-
-        />
-
-      }
-
       showsVerticalScrollIndicator={false}
-
     >
-          {/* VEHICLE */}
 
-      <View style={styles.vehicleCard}>
+      {/* HEADER */}
 
-        <View style={styles.vehicleTop}>
+      <View style={styles.headerCard}>
 
-          <View style={styles.vehicleIcon}>
+        <View>
 
-            <MaterialCommunityIcons
-              name={
-                job.vehicleType === "2 Wheeler"
-                  ? "motorbike"
-                  : "car"
-              }
-              size={30}
-              color="#2563EB"
-            />
+          <Text style={styles.vehicleNumber}>
+            {job.vehicleNumber}
+          </Text>
 
-          </View>
+          <Text style={styles.vehicleModel}>
+            {job.vehicleBrand} {job.vehicleModel}
+          </Text>
 
-          <View style={{ flex: 1 }}>
+        </View>
 
-            <Text style={styles.vehicleNumber}>
-              {job.vehicleNumber}
-            </Text>
+        <View style={styles.statusContainer}>
 
-            <Text style={styles.vehicleModel}>
-              {job.vehicleModel}
-            </Text>
+          <Picker
 
-            <Text
-              style={{
-                color: "#6B7280",
-                marginTop: 6
-              }}
-            >
-              {job.vehicleType}
-            </Text>
+            selectedValue={job.status}
 
-          </View>
+            style={styles.statusPicker}
 
-          <View
-            style={[
-              styles.statusBadge,
-              {
-                backgroundColor:
-                  `${statusColor}20`
-              }
-            ]}
+            onValueChange={updateStatus}
+
           >
 
-            <Text
-              style={[
-                styles.statusText,
-                {
-                  color: statusColor
-                }
-              ]}
-            >
-              {job.status.toUpperCase()}
-            </Text>
+            <Picker.Item
+              label="Pending"
+              value="pending"
+            />
 
-          </View>
+            <Picker.Item
+              label="In Progress"
+              value="progress"
+            />
+
+            <Picker.Item
+              label="Waiting Parts"
+              value="waiting_parts"
+            />
+
+            <Picker.Item
+              label="Ready"
+              value="ready"
+            />
+
+            <Picker.Item
+              label="Completed"
+              value="completed"
+            />
+
+            <Picker.Item
+              label="Delivered"
+              value="delivered"
+            />
+
+          </Picker>
 
         </View>
 
@@ -456,7 +252,7 @@ export default function JobDetailsScreen({
       <View style={styles.card}>
 
         <Text style={styles.sectionTitle}>
-          Customer Details
+          Customer
         </Text>
 
         <View style={styles.infoRow}>
@@ -464,7 +260,7 @@ export default function JobDetailsScreen({
           <Ionicons
             name="person-outline"
             size={18}
-            color="#6B7280"
+            color="#2563EB"
           />
 
           <Text style={styles.infoText}>
@@ -478,7 +274,7 @@ export default function JobDetailsScreen({
           <Ionicons
             name="call-outline"
             size={18}
-            color="#6B7280"
+            color="#2563EB"
           />
 
           <Text style={styles.infoText}>
@@ -487,187 +283,155 @@ export default function JobDetailsScreen({
 
         </View>
 
-        <View
-          style={{
-            flexDirection: "row",
-            marginTop: 18
-          }}
-        >
+        <View style={styles.infoRow}>
 
-          <TouchableOpacity
-            style={styles.smallActionBtn}
-          >
+          <Ionicons
+            name="location-outline"
+            size={18}
+            color="#2563EB"
+          />
 
-            <Ionicons
-              name="call"
-              color="white"
-              size={18}
-            />
-
-            <Text style={styles.smallBtnText}>
-              Call
-            </Text>
-
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.smallActionBtn,
-              {
-                marginLeft: 10,
-                backgroundColor: "#16A34A"
-              }
-            ]}
-          >
-
-            <Ionicons
-              name="logo-whatsapp"
-              color="white"
-              size={18}
-            />
-
-            <Text style={styles.smallBtnText}>
-              WhatsApp
-            </Text>
-
-          </TouchableOpacity>
+          <Text style={styles.infoText}>
+            {job.customerAddress || "-"}
+          </Text>
 
         </View>
 
       </View>
 
-      {/* ASSIGNED WORKER */}
+      {/* VEHICLE */}
 
       <View style={styles.card}>
 
         <Text style={styles.sectionTitle}>
-          Assigned Worker
+          Vehicle
         </Text>
 
-        <Text
-          style={{
-            color: "#6B7280",
-            marginBottom: 12
-          }}
-        >
-          Current:
-          {" "}
-          {workerName()}
-        </Text>
+        <View style={styles.detailRow}>
 
-        <View
-          style={{
-            borderWidth: 1,
-            borderColor: "#E5E7EB",
-            borderRadius: 14,
-            overflow: "hidden"
-          }}
-        >
+          <Text style={styles.label}>
+            Brand
+          </Text>
 
-          <Picker
-            style={styles.picker}
-            selectedValue={selectedWorker}
-            onValueChange={setSelectedWorker}
-          >
-
-            <Picker.Item
-              label="Select Worker"
-              value=""
-            />
-
-            {workers.map(worker => (
-
-              <Picker.Item
-                key={worker.workerId}
-                label={`${worker.name} (${worker.role})`}
-                value={worker.workerId}
-              />
-
-            ))}
-
-          </Picker>
+          <Text style={styles.value}>
+            {job.vehicleBrand || "-"}
+          </Text>
 
         </View>
 
-        <TouchableOpacity
-          style={[
-            styles.primaryBtn,
-            {
-              marginTop: 16
+        <View style={styles.detailRow}>
+
+          <Text style={styles.label}>
+            Model
+          </Text>
+
+          <Text style={styles.value}>
+            {job.vehicleModel}
+          </Text>
+
+        </View>
+
+        <View style={styles.detailRow}>
+
+          <Text style={styles.label}>
+            Type
+          </Text>
+
+          <Text style={styles.value}>
+            {job.vehicleType}
+          </Text>
+
+        </View>
+
+        <View style={styles.detailRow}>
+
+          <Text style={styles.label}>
+            Odometer
+          </Text>
+
+          <Text style={styles.value}>
+            {job.odometer || "-"} km
+          </Text>
+
+        </View>
+
+      </View>
+
+      {/* JOB INFO */}
+
+      <View style={styles.card}>
+
+        <Text style={styles.sectionTitle}>
+          Job Information
+        </Text>
+
+        <View style={styles.detailRow}>
+
+          <Text style={styles.label}>
+            Assigned Worker
+          </Text>
+
+          <Text style={styles.value}>
+            {job.worker?.name || "-"}
+          </Text>
+
+        </View>
+
+        <View style={styles.detailRow}>
+
+          <Text style={styles.label}>
+            Priority
+          </Text>
+
+          <Text style={styles.value}>
+            {job.priority || "-"}
+          </Text>
+
+        </View>
+
+        <View style={styles.detailRow}>
+
+          <Text style={styles.label}>
+            Delivery
+          </Text>
+
+          <Text style={styles.value}>
+            {job.deliveryDate
+              ? new Date(
+                  job.deliveryDate
+                ).toLocaleString()
+              : "-"
             }
-          ]}
-          onPress={saveWorker}
-        >
-
-          <Ionicons
-            name="person-add"
-            size={20}
-            color="white"
-          />
-
-          <Text style={styles.btnText}>
-            Update Worker
-          </Text>
-
-        </TouchableOpacity>
-
-      </View>
-
-      {/* JOB SUMMARY */}
-
-      <View style={styles.card}>
-
-        <Text style={styles.sectionTitle}>
-          Job Summary
-        </Text>
-
-        <View style={styles.infoRow}>
-
-          <MaterialIcons
-            name="build-circle"
-            size={18}
-            color="#6B7280"
-          />
-
-          <Text style={styles.infoText}>
-            {job.services.length} Services
           </Text>
 
         </View>
 
-        <View style={styles.infoRow}>
+        <View style={styles.detailRow}>
 
-          <Ionicons
-            name="cash-outline"
-            size={18}
-            color="#6B7280"
-          />
+          <Text style={styles.label}>
+            Complaint
+          </Text>
 
-          <Text style={styles.infoText}>
-            Estimated Total : ₹{total}
+          <Text style={styles.value}>
+            {job.complaint || "-"}
           </Text>
 
         </View>
 
-        <View style={styles.infoRow}>
+        <View style={styles.detailRow}>
 
-          <MaterialIcons
-            name="schedule"
-            size={18}
-            color="#6B7280"
-          />
+          <Text style={styles.label}>
+            Inspection
+          </Text>
 
-          <Text style={styles.infoText}>
-            Created :
-            {" "}
-            {new Date(
-              job.createdAt
-            ).toLocaleString()}
+          <Text style={styles.value}>
+            {job.inspectionNotes || "-"}
           </Text>
 
         </View>
 
       </View>
+
       {/* SERVICES */}
 
       <View style={styles.card}>
@@ -676,87 +440,77 @@ export default function JobDetailsScreen({
           Services
         </Text>
 
-        {(job.services || []).map(
-          (
-            service: any,
-            index: number
-          ) => (
+        {job.services.map((service: any, index: number) => (
 
-            <View
-              key={index}
-              style={styles.serviceCard}
-            >
+          <View
+            key={index}
+            style={styles.serviceRow}
+          >
 
-              <View
-                style={{
-                  flex: 1
-                }}
-              >
+            <View style={{ flex: 1 }}>
 
-                <Text
-                  style={styles.serviceName}
-                >
-                  {service.name}
-                </Text>
+              <Text style={styles.serviceName}>
+                {service.name}
+              </Text>
 
-                <Text
-                  style={styles.servicePrice}
-                >
-                  Estimated :
-                  {" "}
-                  ₹
-                  {
-                    service.estimatedPrice ??
-                    service.price ??
-                    0
-                  }
-                </Text>
-
-              </View>
-
-              <View
-                style={{
-                  width: 110
-                }}
-              >
-
-                <Text
-                  style={styles.inputLabel}
-                >
-                  Actual Price
-                </Text>
-
-                <TextInput
-                  style={styles.priceInput}
-                  keyboardType="numeric"
-                  value={
-                    (
-                      service.actualPrice ??
-                      service.estimatedPrice ??
-                      0
-                    ).toString()
-                  }
-                />
-
-              </View>
+              <Text style={styles.serviceQty}>
+                Qty : {service.quantity}
+              </Text>
 
             </View>
 
-          )
-        )}
+            <Text style={styles.servicePrice}>
+              ₹{service.actualPrice * service.quantity}
+            </Text>
 
-        <View style={styles.totalRow}>
+          </View>
 
-          <Text
-            style={styles.totalLabel}
-          >
-            Total Amount
+        ))}
+
+      </View>
+
+      {/* BILL */}
+
+      <View style={styles.totalCard}>
+
+        <Text style={styles.totalLabel}>
+          Estimated Bill
+        </Text>
+
+        <Text style={styles.totalAmount}>
+          ₹{total}
+        </Text>
+
+      </View>
+
+      {/* PAYMENT */}
+
+      <View style={styles.card}>
+
+        <Text style={styles.sectionTitle}>
+          Payment
+        </Text>
+
+        <View style={styles.detailRow}>
+
+          <Text style={styles.label}>
+            Status
           </Text>
 
-          <Text
-            style={styles.totalPrice}
-          >
-            ₹{total}
+          <Text style={styles.value}>
+            {job.paymentStatus || "Pending"}
+          </Text>
+
+        </View>
+
+        <View style={styles.detailRow}>
+
+          <Text style={styles.label}>
+            Method
+          </Text>
+
+          <Text style={styles.value}>
+            {job.paymentMethod || "-"}
           </Text>
 
         </View>
@@ -771,241 +525,97 @@ export default function JobDetailsScreen({
           Notes
         </Text>
 
-        <Text style={styles.notes}>
-          {
-            job.notes ||
-            "No notes added."
-          }
+        <Text style={styles.notesText}>
+          {job.notes || "No notes added."}
         </Text>
 
       </View>
 
-      {/* JOB TIMELINE */}
-
-      <View style={styles.card}>
-
-        <Text style={styles.sectionTitle}>
-          Timeline
-        </Text>
-
-        <View style={styles.timelineRow}>
-
-          <View
-            style={styles.timelineDot}
-          />
-
-          <View>
-
-            <Text
-              style={styles.timelineTitle}
-            >
-              Job Created
-            </Text>
-
-            <Text
-              style={styles.timelineTime}
-            >
-              {
-                new Date(
-                  job.createdAt
-                ).toLocaleString()
-              }
-            </Text>
-
-          </View>
-
-        </View>
-
-        {job.updatedAt && (
-
-          <View
-            style={styles.timelineRow}
-          >
-
-            <View
-              style={[
-                styles.timelineDot,
-                {
-                  backgroundColor:
-                    "#16A34A"
-                }
-              ]}
-            />
-
-            <View>
-
-              <Text
-                style={styles.timelineTitle}
-              >
-                Last Updated
-              </Text>
-
-              <Text
-                style={styles.timelineTime}
-              >
-                {
-                  new Date(
-                    job.updatedAt
-                  ).toLocaleString()
-                }
-              </Text>
-
-            </View>
-
-          </View>
-
-        )}
-
-      </View>
+      {/* ACTION BUTTONS */}
 
       <TouchableOpacity
-        style={styles.orangeBtn}
-        onPress={async () => {
 
-          try {
+        style={styles.primaryButton}
 
-            const nextStatus =
-              job.status === "pending"
-                ? "progress"
-                : job.status === "progress"
-                ? "completed"
-                : "delivered"
-
-            await updateJobStatus(
-              job.jobId,
-              nextStatus
-            )
-
-            loadData()
-
-          }
-
-          catch {
-
-            Alert.alert(
-              "Error",
-              "Unable to update status."
-            )
-
-          }
-
-        }}
-      >
-        <MaterialIcons
-          name="update"
-          size={20}
-          color="white"
-        />
-
-        <Text style={styles.btnText}>
-          Move to Next Status
-        </Text>
-
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.blueBtn}
         onPress={() =>
-          navigation.navigate(
-            "EditJob",
-            {
+          navigation.navigate("EditJobScreen", {
               job
-            }
-          )
+          })
         }
+
       >
-        <MaterialIcons
-          name="edit"
+
+        <Ionicons
+          name="create-outline"
           size={20}
           color="white"
         />
-        <Text style={styles.btnText}>
+
+        <Text style={styles.buttonText}>
           Edit Job
         </Text>
+
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={styles.greenBtn}
-        onPress={() =>
-          navigation.navigate(
-            "InvoicePreview",
-            {
-              jobId: job.jobId
-            }
-          )
-        }
+
+  style={[
+
+    styles.invoiceButton,
+
+    job.status !== "completed" &&
+
+    styles.disabledButton
+
+  ]}
+
+  disabled={job.status !== "completed"}
+
+  onPress={() =>
+    navigation.navigate(
+      "Invoice",
+      { jobId }
+    )
+  }
+
+>
+
+  <Ionicons
+    name="document-text-outline"
+    size={20}
+    color="white"
+  />
+
+  <Text style={styles.buttonText}>
+
+    {job.status === "completed"
+
+      ? "Generate Invoice"
+
+      : "Complete Job First"}
+
+  </Text>
+
+</TouchableOpacity>
+{job.status !== "completed" && ( 
+  <Text style={styles.invoiceHint}> Complete the job to enable invoice generation. </Text> 
+)}
+
+      <TouchableOpacity
+
+        style={styles.deleteButton}
+
+        onPress={deleteCurrentJob}
+
       >
+
         <Ionicons
-          name="document-text"
+          name="trash-outline"
           size={20}
           color="white"
         />
 
-        <Text style={styles.btnText}>
-          Generate Invoice
-        </Text>
-
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.redBtn}
-        onPress={() =>
-
-          Alert.alert(
-
-            "Delete Job",
-
-            "Are you sure you want to delete this job?",
-
-            [
-
-              {
-                text: "Cancel",
-                style: "cancel"
-              },
-
-              {
-                text: "Delete",
-                style: "destructive",
-
-                onPress: async () => {
-
-                  try {
-
-                    await deleteJob(
-                      job.jobId
-                    )
-
-                    navigation.goBack()
-
-                  }
-
-                  catch {
-
-                    Alert.alert(
-                      "Error",
-                      "Unable to delete job."
-                    )
-
-                  }
-
-                }
-
-              }
-
-            ]
-
-          )
-
-        }
-      >
-        <MaterialIcons
-          name="delete"
-          size={20}
-          color="white"
-        />
-
-        <Text style={styles.btnText}>
+        <Text style={styles.buttonText}>
           Delete Job
         </Text>
 
@@ -1022,338 +632,309 @@ export default function JobDetailsScreen({
 const styles = StyleSheet.create({
 
   container: {
+
     flex: 1,
+
     backgroundColor: "#F3F4F6",
+
     padding: 16
+
+  },
+
+  disabledButton: { 
+    backgroundColor: "#9CA3AF", 
+    opacity: 0.7 
+  }, 
+  
+  invoiceHint: { 
+    textAlign: "center", 
+    color: "#6B7280", 
+    fontSize: 13, 
+    marginTop: 8, 
+    marginBottom: 14, 
+    fontStyle: "italic" 
   },
 
   loader: {
+
     flex: 1,
+
     justifyContent: "center",
+
     alignItems: "center"
+
   },
 
-  vehicleCard: {
-    backgroundColor: "white",
+  headerCard: {
+
+    backgroundColor: "#2563EB",
+
     borderRadius: 22,
+
     padding: 20,
-    marginBottom: 16
-  },
 
-  vehicleTop: {
-    flexDirection: "row",
-    alignItems: "center"
-  },
+    marginBottom: 18
 
-  vehicleIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 18,
-    backgroundColor: "#EFF6FF",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 14
   },
 
   vehicleNumber: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#111827"
+
+    color: "white",
+
+    fontSize: 26,
+
+    fontWeight: "700"
+
   },
 
   vehicleModel: {
-    color: "#6B7280",
-    marginTop: 4
+
+    color: "#DBEAFE",
+
+    marginTop: 6,
+
+    fontSize: 15
+
   },
 
-  statusBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20
+  statusContainer: {
+
+    marginTop: 18,
+
+    backgroundColor: "white",
+
+    borderRadius: 12,
+
+    overflow: "hidden"
+
   },
 
-  statusText: {
-    fontWeight: "700",
-    fontSize: 12
+  statusPicker: {
+
+    height: 50
+
   },
 
   card: {
+
     backgroundColor: "white",
-    borderRadius: 20,
+
+    borderRadius: 18,
+
     padding: 18,
+
     marginBottom: 16
+
   },
 
   sectionTitle: {
+
     fontSize: 17,
+
     fontWeight: "700",
-    color: "#111827",
-    marginBottom: 16
+
+    marginBottom: 16,
+
+    color: "#111827"
+
   },
 
   infoRow: {
+
     flexDirection: "row",
+
     alignItems: "center",
+
     marginBottom: 12
+
   },
 
   infoText: {
+
     marginLeft: 10,
+
+    color: "#374151",
+
     fontSize: 15,
-    color: "#374151"
+
+    flex: 1
+
   },
 
-  emptyText: {
-    color: "#9CA3AF",
-    fontStyle: "italic"
-  },
+  detailRow: {
 
-  serviceCard: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
     flexDirection: "row",
+
     justifyContent: "space-between",
-    alignItems: "center"
+
+    marginBottom: 14
+
+  },
+
+  label: {
+
+    color: "#6B7280",
+
+    fontSize: 14
+
+  },
+
+  value: {
+
+    color: "#111827",
+
+    fontWeight: "600",
+
+    flex: 1,
+
+    textAlign: "right",
+
+    marginLeft: 20
+
+  },
+
+  serviceRow: {
+
+    flexDirection: "row",
+
+    justifyContent: "space-between",
+
+    alignItems: "center",
+
+    paddingVertical: 12,
+
+    borderBottomWidth: 1,
+
+    borderBottomColor: "#F3F4F6"
+
   },
 
   serviceName: {
+
     fontWeight: "600",
-    color: "#111827",
-    fontSize: 15
+
+    color: "#111827"
+
+  },
+
+  serviceQty: {
+
+    color: "#6B7280",
+
+    marginTop: 4
+
   },
 
   servicePrice: {
-    color: "#6B7280",
-    marginTop: 4
+
+    fontWeight: "700",
+
+    color: "#16A34A"
+
   },
 
-  inputLabel: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginBottom: 6
-  },
+  totalCard: {
 
-  priceInput: {
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 10,
-    padding: 8,
-    textAlign: "center"
-  },
+    backgroundColor: "#111827",
 
-  totalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 18,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderColor: "#E5E7EB"
+    borderRadius: 18,
+
+    padding: 22,
+
+    marginBottom: 18
+
   },
 
   totalLabel: {
-    fontSize: 18,
-    fontWeight: "700"
+
+    color: "#D1D5DB"
+
   },
 
-  totalPrice: {
-    fontSize: 20,
+  totalAmount: {
+
+    color: "white",
+
+    fontSize: 30,
+
     fontWeight: "700",
-    color: "#16A34A"
+
+    marginTop: 8
+
   },
 
-  notes: {
+  notesText: {
+
     color: "#374151",
+
     lineHeight: 22
+
   },
 
-  timelineRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 18
-  },
+  primaryButton: {
 
-  timelineDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
     backgroundColor: "#2563EB",
-    marginRight: 14
-  },
 
-  timelineTitle: {
-    fontWeight: "600",
-    color: "#111827"
-  },
+    height: 55,
 
-  timelineTime: {
-    color: "#6B7280",
-    marginTop: 4
-  },
-
-  primaryBtn: {
-    backgroundColor: "#2563EB",
-    padding: 18,
-    borderRadius: 18,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12
-  },
-
-  orangeBtn: {
-    backgroundColor: "#F59E0B",
-    padding: 18,
-    borderRadius: 18,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12
-  },
-
-  blueBtn: {
-    backgroundColor: "#1D4ED8",
-    padding: 18,
-    borderRadius: 18,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12
-  },
-
-  greenBtn: {
-    backgroundColor: "#16A34A",
-    padding: 18,
-    borderRadius: 18,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12
-  },
-
-  redBtn: {
-    backgroundColor: "#DC2626",
-    padding: 18,
-    borderRadius: 18,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center"
-  },
-
-  btnText: {
-    color: "white",
-    fontWeight: "700",
-    fontSize: 15,
-    marginLeft: 10
-  },
-
-  smallActionBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#2563EB",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10
-  },
-
-  smallBtnText: {
-    color: "white",
-    fontWeight: "700",
-    marginLeft: 6
-  },
-
-  pickerContainer: {
-    backgroundColor: "white",
     borderRadius: 16,
-    marginBottom: 16,
-    overflow: "hidden"
-  },
 
-  picker: {
-    height: 55
-  },
-
-  divider: {
-    height: 1,
-    backgroundColor: "#E5E7EB",
-    marginVertical: 18
-  },
-
-  subHeading: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 12
-  },
-
-  chipContainer: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    marginBottom: 12
-  },
 
-  chip: {
-    backgroundColor: "#EFF6FF",
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginRight: 10,
-    marginBottom: 10
-  },
+    justifyContent: "center",
 
-  selectedChip: {
-    backgroundColor: "#2563EB"
-  },
-
-  chipText: {
-    color: "#2563EB",
-    fontWeight: "600"
-  },
-
-  selectedChipText: {
-    color: "white"
-  },
-
-  selectedServiceCard: {
-    backgroundColor: "#F9FAFB",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12
-  },
-
-  serviceHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10
+
+    marginBottom: 14
+
   },
 
-  removeBtn: {
-    padding: 4
-  },
+  invoiceButton: {
 
-  serviceInput: {
-    backgroundColor: "white",
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: "#E5E7EB"
-  },
-
-  addManualBtn: {
     backgroundColor: "#16A34A",
-    padding: 14,
-    borderRadius: 14,
+
+    height: 55,
+
+    borderRadius: 16,
+
+    flexDirection: "row",
+
+    justifyContent: "center",
+
     alignItems: "center",
-    marginTop: 12
+
+    marginBottom: 14
+
   },
 
-  addManualText: {
+  deleteButton: {
+
+    backgroundColor: "#DC2626",
+
+    height: 55,
+
+    borderRadius: 16,
+
+    flexDirection: "row",
+
+    justifyContent: "center",
+
+    alignItems: "center"
+
+  },
+
+  buttonText: {
+
     color: "white",
-    fontWeight: "700"
+
+    fontWeight: "700",
+
+    fontSize: 16,
+
+    marginLeft: 8
+
   }
 
 })
+
+      

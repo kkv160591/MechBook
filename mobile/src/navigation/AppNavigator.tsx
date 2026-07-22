@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack"
 import LoginScreen from "../screens/auth/LoginScreen"
 import BottomTabs from "./BottomTabs"
 import CreateJobScreen from "../screens/jobs/AddJobScreen"
+import EditJobScreen from "../screens/jobs/EditJobScreen"
 import JobsScreen from "../screens/jobs/JobsScreen"
 import JobDetailScreen from "../screens/jobs/JobDetailScreen"
 import InvoiceScreen from "../screens/invoices/InvoiceScreen"
@@ -78,6 +79,12 @@ export default function AppNavigator() {
         name="CreateJob"
         component={CreateJobScreen}
         options={{ title: "Create Job" }}
+      />
+
+      <Stack.Screen
+        name="EditJobScreen"
+        component={EditJobScreen}
+        options={{ title: "Edit Job" }}
       />
 
       <Stack.Screen

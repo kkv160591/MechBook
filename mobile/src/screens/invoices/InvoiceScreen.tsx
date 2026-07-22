@@ -1,998 +1,1087 @@
-// InvoiceScreen.tsx
-
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
-  TouchableOpacity,
   ScrollView,
-  Linking
+  TouchableOpacity,
+  ActivityIndicator,
+  Image
 } from "react-native"
 
 import {
-  RouteProp,
-  useNavigation
-} from "@react-navigation/native"
-
-import {
-  MaterialIcons,
   Ionicons,
-  FontAwesome5
+  MaterialCommunityIcons
 } from "@expo/vector-icons"
 
-import { LinearGradient } from "expo-linear-gradient"
+import { useEffect, useMemo, useState } from "react"
 
-import { RootStackParamList } from "../../types/navigation"
-import { generateInvoice } from "../../utils/generateInvoice"
+import { useRoute } from "@react-navigation/native"
 
-type Props = {
-  route: RouteProp<RootStackParamList, "Invoice">
-}
+import { getJobById } from "../../services/jobService"
 
-export default function InvoiceScreen({
-  route
-}: Props) {
+export default function InvoiceScreen() {
 
-  const navigation = useNavigation()
+  const route = useRoute<any>()
 
-  const { job } = route.params
+  const { jobId } = route.params
 
-  // LABOUR ITEMS
-  const labourItems =
-    job.labourItems ||
-    job.services ||
-    []
+  const [loading, setLoading] = useState(true)
 
-  // PARTS ITEMS
-  const partItems =
-    job.partItems || []
+  const [job, setJob] = useState<any>(null)
 
-  // GST
-  const gstPercent =
-    job.gstPercent || 18
+  useEffect(() => {
 
-  // PAYMENT
-  const paymentMode =
-    job.paymentMode || "Pending"
+    loadJob()
 
-  const paidAmount =
-    Number(job.paidAmount || 0)
+  }, [])
 
-  // LABOUR TOTAL
-  const labourTotal =
-    labourItems.reduce(
-      (sum: number, item: any) =>
-        sum +
-        (
-          item.amount ??
-          item.actualPrice ??
-          item.estimatedPrice ??
-          0
-        ),
-      0
-    )
+  const loadJob = async () => {
 
-  // PARTS TOTAL
-  const partsTotal =
-    partItems.reduce(
-      (sum: number, item: any) =>
-        sum +
-        (
-          item.total ??
-          (
-            item.price * item.qty
-          )
-        ),
-      0
-    )
+    try {
 
-  // SUBTOTAL
-  const subtotal =
-    labourTotal + partsTotal
+      const response = await getJobById(jobId)
 
-  // GST
-  const gst =
-    Math.round(
-      subtotal *
-      (gstPercent / 100)
-    )
-
-  // GRAND TOTAL
-  const total =
-    subtotal + gst
-
-  // BALANCE
-  const balance =
-    total - paidAmount
-
-  // PAYMENT STATUS
-  const paymentStatus =
-    balance <= 0
-      ? "PAID"
-      : paidAmount > 0
-      ? "PARTIAL"
-      : "PENDING"
-
-  // STATUS COLORS
-  const getStatusColor = () => {
-
-    if (paymentStatus === "PAID") {
-
-      return {
-        bg: "#DCFCE7",
-        text: "#16A34A"
-      }
+      setJob(response.job)
 
     }
 
-    if (paymentStatus === "PARTIAL") {
+    catch (err) {
 
-      return {
-        bg: "#FEF3C7",
-        text: "#D97706"
-      }
+      console.log(err)
 
     }
 
-    return {
-      bg: "#FEE2E2",
-      text: "#DC2626"
+    finally {
+
+      setLoading(false)
+
     }
 
   }
 
-  const statusColors =
-    getStatusColor()
+  const partsTotal = useMemo(() => {
 
-  // INVOICE NUMBER
-  const invoiceNumber =
-    `INV-${job.id?.slice(-5) || "1001"}`
+    if (!job) return 0
 
-  // WHATSAPP SHARE
-  const shareOnWhatsapp = () => {
+    return job.services.reduce(
 
-    const message = `
-Invoice: ${invoiceNumber}
+      (sum: number, item: any) =>
 
-Customer:
-${job.customerName || job.customer}
+        sum +
 
-Vehicle:
-${job.vehicleNumber}
+        Number(item.actualPrice || 0) *
 
-Total:
-₹${total}
+        Number(item.quantity || 1),
 
-Paid:
-₹${paidAmount}
+      0
 
-Balance:
-₹${balance}
+    )
 
-Thank you for choosing MechanicFlow Garage.
-`
+  }, [job])
 
-    Linking.openURL(
-      `whatsapp://send?text=${encodeURIComponent(message)}`
+  const labourCharge = job?.labourCharge || 0
+
+  const discount = job?.discount || 0
+
+  const gstPercent = job?.gstPercent || 0
+
+  const subTotal = partsTotal + labourCharge
+
+  const gstAmount =
+    (subTotal - discount) *
+    gstPercent / 100
+
+  const roundOff =
+    Math.round(subTotal - discount + gstAmount) -
+    (subTotal - discount + gstAmount)
+
+  const grandTotal =
+    Math.round(
+      subTotal -
+      discount +
+      gstAmount
+    )
+
+  if (loading) {
+
+    return (
+
+      <View style={styles.loader}>
+
+        <ActivityIndicator
+          size="large"
+          color="#2563EB"
+        />
+
+      </View>
+
     )
 
   }
 
   return (
 
-    <ScrollView
-      style={styles.container}
-      showsVerticalScrollIndicator={false}
-    >
+<ScrollView
+style={styles.container}
+showsVerticalScrollIndicator={false}
+>
 
-      {/* HEADER */}
+{/* GARAGE HEADER */}
 
-      <LinearGradient
-        colors={["#2563EB", "#1D4ED8"]}
-        style={styles.headerCard}
-      >
+<View style={styles.header}>
 
-        <View style={styles.topRow}>
+<View style={styles.logoContainer}>
 
-          <View style={styles.logoBox}>
+<MaterialCommunityIcons
+  name="garage"
+  size={50}
+  color="#2563EB"
+/>
 
-            <FontAwesome5
-              name="tools"
-              size={24}
-              color="#2563EB"
-            />
+</View>
 
-          </View>
+<Text style={styles.garageName}>
+My Garage
+</Text>
 
-          <TouchableOpacity
-            style={styles.shareBtn}
-            onPress={shareOnWhatsapp}
-          >
+<Text style={styles.garageSubtitle}>
+Complete Car & Bike Care
+</Text>
 
-            <Ionicons
-              name="logo-whatsapp"
-              size={22}
-              color="white"
-            />
+<Text style={styles.garageAddress}>
+123 MG Road, Raipur, Chhattisgarh
+</Text>
 
-          </TouchableOpacity>
+<Text style={styles.garagePhone}>
++91 9876543210
+</Text>
 
-        </View>
+<Text style={styles.gst}>
+GSTIN : 22ABCDE1234F1Z5
+</Text>
 
-        <Text style={styles.garageName}>
-          MechanicFlow Garage
-        </Text>
+<View style={styles.invoiceStrip}>
 
-        <Text style={styles.gstText}>
-          GST No: 27ABCDE1234F1Z5
-        </Text>
+<View>
 
-        <View style={styles.invoiceInfoRow}>
+<Text style={styles.invoiceLabel}>
+Invoice No
+</Text>
 
-          <View>
+<Text style={styles.invoiceValue}>
+INV-{job.jobId.slice(0,8).toUpperCase()}
+</Text>
 
-            <Text style={styles.invoiceLabel}>
-              Invoice Number
-            </Text>
+</View>
 
-            <Text style={styles.invoiceValue}>
-              {invoiceNumber}
-            </Text>
+<View>
 
-          </View>
+<Text style={styles.invoiceLabel}>
+Invoice Date
+</Text>
 
-          <View style={{ alignItems: "flex-end" }}>
+<Text style={styles.invoiceValue}>
+{new Date(job.createdAt).toLocaleDateString()}
+</Text>
 
-            <Text style={styles.invoiceLabel}>
-              Payment Status
-            </Text>
+</View>
 
-            <View
-              style={[
-                styles.paidBadge,
-                {
-                  backgroundColor:
-                    statusColors.bg
-                }
-              ]}
-            >
+</View>
 
-              <Text
-                style={[
-                  styles.paidText,
-                  {
-                    color:
-                      statusColors.text
-                  }
-                ]}
-              >
-                {paymentStatus}
-              </Text>
+</View>
 
-            </View>
+{/* CUSTOMER */}
 
-          </View>
+<View style={styles.card}>
 
-        </View>
+<Text style={styles.cardTitle}>
+Customer Details
+</Text>
 
-      </LinearGradient>
+<View style={styles.infoRow}>
 
-      {/* CUSTOMER */}
+<Ionicons
+name="person-outline"
+size={18}
+color="#2563EB"
+/>
 
-      <View style={styles.card}>
+<Text style={styles.infoText}>
+{job.customerName}
+</Text>
 
-        <View style={styles.cardHeader}>
+</View>
 
-          <View style={styles.iconCircle}>
+<View style={styles.infoRow}>
 
-            <Ionicons
-              name="person-outline"
-              size={18}
-              color="#2563EB"
-            />
+<Ionicons
+name="call-outline"
+size={18}
+color="#2563EB"
+/>
 
-          </View>
+<Text style={styles.infoText}>
+{job.phone}
+</Text>
 
-          <Text style={styles.cardTitle}>
-            Customer Details
-          </Text>
+</View>
 
-        </View>
+<View style={styles.infoRow}>
 
-        <Text style={styles.customerName}>
-          {job.customerName || job.customer}
-        </Text>
+<Ionicons
+name="location-outline"
+size={18}
+color="#2563EB"
+/>
 
-        <Text style={styles.cardText}>
-          {job.phone}
-        </Text>
+<Text style={styles.infoText}>
+{job.customerAddress || "-"}
+</Text>
 
-        {job.address && (
+</View>
 
-          <Text style={styles.cardText}>
-            {job.address}
-          </Text>
+</View>
 
-        )}
+{/* VEHICLE */}
 
-      </View>
+<View style={styles.card}>
 
-      {/* VEHICLE */}
+<Text style={styles.cardTitle}>
+Vehicle Details
+</Text>
 
-      <View style={styles.card}>
+<View style={styles.vehicleHeader}>
 
-        <View style={styles.cardHeader}>
+<MaterialCommunityIcons
 
-          <View style={styles.iconCircle}>
+name={
+job.vehicleType === "2 Wheeler"
+?
+"motorbike"
+:
+"car"
+}
 
-            <Ionicons
-              name="car-sport-outline"
-              size={18}
-              color="#2563EB"
-            />
+size={42}
 
-          </View>
+color="#2563EB"
 
-          <Text style={styles.cardTitle}>
-            Vehicle Details
-          </Text>
+/>
 
-        </View>
+<View style={{marginLeft:15}}>
 
-        <View style={styles.vehicleTop}>
+<Text style={styles.vehicleNumber}>
+{job.vehicleNumber}
+</Text>
 
-          <View>
+<Text style={styles.vehicleModel}>
+{job.vehicleBrand} {job.vehicleModel}
+</Text>
 
-            <Text style={styles.vehicleNumber}>
-              {job.vehicleNumber}
-            </Text>
+</View>
 
-            <Text style={styles.cardText}>
-              {job.vehicleBrand}{" "}
-              {job.vehicleModel}
-            </Text>
+</View>
 
-          </View>
+<View style={styles.divider}/>
 
-          <View style={styles.vehicleTypeBadge}>
+<View style={styles.grid}>
 
-            <Text style={styles.vehicleTypeText}>
-              {job.vehicleType}
-            </Text>
+<View style={styles.gridItem}>
 
-          </View>
+<Text style={styles.label}>
+Vehicle Type
+</Text>
 
-        </View>
+<Text style={styles.value}>
+{job.vehicleType}
+</Text>
 
-      </View>
+</View>
 
-      {/* LABOUR */}
+<View style={styles.gridItem}>
 
-      <View style={styles.card}>
+<Text style={styles.label}>
+Odometer
+</Text>
 
-        <View style={styles.servicesTop}>
+<Text style={styles.value}>
+{job.odometer || "-"} KM
+</Text>
 
-          <Text style={styles.cardTitle}>
-            Labour Charges
-          </Text>
+</View>
 
-        </View>
+<View style={styles.gridItem}>
 
-        <FlatList
-          scrollEnabled={false}
-          data={labourItems}
-          keyExtractor={(item: any, index) =>
-            index.toString()
-          }
-          renderItem={({ item }: any) => (
+<Text style={styles.label}>
+Assigned Worker
+</Text>
 
-            <View style={styles.serviceRow}>
+<Text style={styles.value}>
+{job.workerName || "-"}
+</Text>
 
-              <View style={styles.serviceLeft}>
+</View>
 
-                <View style={styles.serviceIcon}>
+<View style={styles.gridItem}>
 
-                  <MaterialIcons
-                    name="engineering"
-                    size={16}
-                    color="#2563EB"
-                  />
+<Text style={styles.label}>
+Priority
+</Text>
 
-                </View>
+<Text style={styles.value}>
+{job.priority || "Normal"}
+</Text>
 
-                <Text style={styles.serviceName}>
-                  {
-                    item.description ||
-                    item.name
-                  }
-                </Text>
+</View>
 
-              </View>
+</View>
 
-              <Text style={styles.servicePrice}>
-                ₹
-                {
-                  item.amount ??
-                  item.actualPrice ??
-                  item.estimatedPrice
-                }
-              </Text>
+</View>
 
-            </View>
+{/* JOB DETAILS */}
 
-          )}
-        />
+<View style={styles.card}>
 
-      </View>
+<Text style={styles.cardTitle}>
+Job Information
+</Text>
 
-      {/* PARTS */}
+<Text style={styles.sectionLabel}>
+Complaint
+</Text>
 
-      {partItems.length > 0 && (
+<Text style={styles.description}>
+{job.complaint || "-"}
+</Text>
 
-        <View style={styles.card}>
+<View style={{height:15}}/>
 
-          <View style={styles.servicesTop}>
+<Text style={styles.sectionLabel}>
+Inspection Notes
+</Text>
 
-            <Text style={styles.cardTitle}>
-              Spare Parts Used
-            </Text>
+<Text style={styles.description}>
+{job.inspectionNotes || "-"}
+</Text>
 
-          </View>
+</View>
 
-          <FlatList
-            scrollEnabled={false}
-            data={partItems}
-            keyExtractor={(item: any, index) =>
-              index.toString()
-            }
-            renderItem={({ item }: any) => (
+<View style={styles.card}>
 
-              <View style={styles.partRow}>
+<Text style={styles.cardTitle}>
+Services Performed
+</Text>
 
-                <View style={{ flex: 1 }}>
+{/* TABLE HEADER */}
 
-                  <Text style={styles.serviceName}>
-                    {item.name}
-                  </Text>
+<View style={styles.tableHeader}>
 
-                  <Text style={styles.partMeta}>
-                    Qty: {item.qty} × ₹{item.price}
-                  </Text>
+<Text style={[styles.tableCell,{flex:3,fontWeight:"700"}]}>
+Service
+</Text>
 
-                </View>
+<Text style={styles.tableCell}>
+Qty
+</Text>
 
-                <Text style={styles.servicePrice}>
-                  ₹
-                  {
-                    item.total ??
-                    (
-                      item.price *
-                      item.qty
-                    )
-                  }
-                </Text>
+<Text style={styles.tableCell}>
+Rate
+</Text>
 
-              </View>
+<Text style={styles.tableCell}>
+Amount
+</Text>
 
-            )}
-          />
+</View>
 
-        </View>
+{
 
-      )}
+job.services.map((service:any,index:number)=>(
 
-      {/* SUMMARY */}
+<View
+key={index}
+style={styles.tableRow}
+>
 
-      <LinearGradient
-        colors={["#111827", "#1F2937"]}
-        style={styles.summaryCard}
-      >
+<Text
+style={[
+styles.tableCell,
+{flex:3}
+]}
+>
 
-        <Text style={styles.summaryTitle}>
-          Payment Summary
-        </Text>
+{service.name}
 
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>
-            Labour Charges
-          </Text>
+</Text>
 
-          <Text style={styles.summaryValue}>
-            ₹{labourTotal}
-          </Text>
-        </View>
+<Text style={styles.tableCell}>
 
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>
-            Spare Parts
-          </Text>
+{service.quantity}
 
-          <Text style={styles.summaryValue}>
-            ₹{partsTotal}
-          </Text>
-        </View>
+</Text>
 
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>
-            GST ({gstPercent}%)
-          </Text>
+<Text style={styles.tableCell}>
 
-          <Text style={styles.summaryValue}>
-            ₹{gst}
-          </Text>
-        </View>
+₹{service.actualPrice}
 
-        <View style={styles.divider} />
+</Text>
 
-        <View style={styles.summaryRow}>
-          <Text style={styles.totalLabel}>
-            Grand Total
-          </Text>
+<Text style={styles.tableCell}>
 
-          <Text style={styles.totalAmount}>
-            ₹{total}
-          </Text>
-        </View>
+₹{service.quantity * service.actualPrice}
 
-        <View style={styles.divider} />
+</Text>
 
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>
-            Paid Amount
-          </Text>
+</View>
 
-          <Text style={styles.paidAmount}>
-            ₹{paidAmount}
-          </Text>
-        </View>
+))
 
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>
-            Balance Due
-          </Text>
+}
 
-          <Text style={styles.balanceAmount}>
-            ₹{balance}
-          </Text>
-        </View>
+</View>
 
-        <View style={styles.paymentModeCard}>
+{/* BILL SUMMARY */}
 
-          <Text style={styles.paymentModeLabel}>
-            Payment Mode
-          </Text>
+<View style={styles.card}>
 
-          <Text style={styles.paymentModeValue}>
-            {paymentMode}
-          </Text>
+<Text style={styles.cardTitle}>
+Bill Summary
+</Text>
 
-        </View>
+<View style={styles.summaryRow}>
 
-      </LinearGradient>
+<Text style={styles.summaryLabel}>
+Parts Total
+</Text>
 
-      {/* NOTE */}
+<Text style={styles.summaryValue}>
+₹{partsTotal}
+</Text>
 
-      <View style={styles.noteCard}>
+</View>
 
-        <Ionicons
-          name="information-circle-outline"
-          size={22}
-          color="#92400E"
-        />
+<View style={styles.summaryRow}>
 
-        <View style={{ flex: 1, marginLeft: 10 }}>
+<Text style={styles.summaryLabel}>
+Labour Charge
+</Text>
 
-          <Text style={styles.noteTitle}>
-            Thank You
-          </Text>
+<Text style={styles.summaryValue}>
+₹{labourCharge}
+</Text>
 
-          <Text style={styles.noteText}>
-            Thank you for choosing
-            MechanicFlow Garage.
-            We appreciate your trust and
-            support.
-          </Text>
+</View>
 
-        </View>
+<View style={styles.summaryRow}>
 
-      </View>
+<Text style={styles.summaryLabel}>
+Subtotal
+</Text>
 
-      {/* BUTTONS */}
+<Text style={styles.summaryValue}>
+₹{subTotal}
+</Text>
 
-      <TouchableOpacity
-        style={styles.downloadBtn}
-        onPress={() => generateInvoice(job)}
-      >
+</View>
 
-        <MaterialIcons
-          name="picture-as-pdf"
-          size={22}
-          color="white"
-        />
+<View style={styles.summaryRow}>
 
-        <Text style={styles.downloadText}>
-          Download PDF Invoice
-        </Text>
+<Text style={styles.summaryLabel}>
+Discount
+</Text>
 
-      </TouchableOpacity>
+<Text style={styles.summaryValue}>
+- ₹{discount}
+</Text>
 
-      <TouchableOpacity
-        style={styles.whatsappBtn}
-        onPress={shareOnWhatsapp}
-      >
+</View>
 
-        <Ionicons
-          name="logo-whatsapp"
-          size={22}
-          color="white"
-        />
+<View style={styles.summaryRow}>
 
-        <Text style={styles.downloadText}>
-          Share on WhatsApp
-        </Text>
+<Text style={styles.summaryLabel}>
+GST ({gstPercent}%)
+</Text>
 
-      </TouchableOpacity>
+<Text style={styles.summaryValue}>
+₹{gstAmount.toFixed(2)}
+</Text>
 
-      <TouchableOpacity
-        style={styles.secondaryBtn}
-        onPress={() => navigation.goBack()}
-      >
+</View>
 
-        <Text style={styles.secondaryText}>
-          Back to Jobs
-        </Text>
+<View style={styles.summaryRow}>
 
-      </TouchableOpacity>
+<Text style={styles.summaryLabel}>
+Round Off
+</Text>
 
-      <View style={{ height: 40 }} />
+<Text style={styles.summaryValue}>
+₹{roundOff.toFixed(2)}
+</Text>
 
-    </ScrollView>
+</View>
 
-  )
+<View style={styles.divider}/>
+
+<View style={styles.summaryRow}>
+
+<Text style={styles.grandLabel}>
+Grand Total
+</Text>
+
+<Text style={styles.grandValue}>
+₹{grandTotal}
+</Text>
+
+</View>
+
+</View>
+
+{/* PAYMENT */}
+
+<View style={styles.card}>
+
+<Text style={styles.cardTitle}>
+Payment Details
+</Text>
+
+<View style={styles.infoRow}>
+
+<Ionicons
+name="wallet-outline"
+size={18}
+color="#2563EB"
+/>
+
+<Text style={styles.infoText}>
+Status : {job.paymentStatus || "Pending"}
+</Text>
+
+</View>
+
+<View style={styles.infoRow}>
+
+<Ionicons
+name="card-outline"
+size={18}
+color="#2563EB"
+/>
+
+<Text style={styles.infoText}>
+Method : {job.paymentMethod || "-"}
+</Text>
+
+</View>
+
+<View style={styles.infoRow}>
+
+<Ionicons
+name="cash-outline"
+size={18}
+color="#2563EB"
+/>
+
+<Text style={styles.infoText}>
+Amount Paid : ₹{job.amountPaid || 0}
+</Text>
+
+</View>
+
+<View style={styles.infoRow}>
+
+<Ionicons
+name="cash"
+size={18}
+color="#DC2626"
+/>
+
+<Text
+style={{
+fontWeight:"700",
+color:"#DC2626",
+marginLeft:10
+}}
+>
+
+Balance :
+₹{grandTotal-(job.amountPaid||0)}
+
+</Text>
+
+</View>
+
+</View>
+
+{/* WARRANTY */}
+
+<View style={styles.card}>
+
+<Text style={styles.cardTitle}>
+Warranty
+</Text>
+
+<Text style={styles.description}>
+
+• Labour warranty : 30 Days
+
+</Text>
+
+<Text style={styles.description}>
+
+• Genuine spare warranty depends on manufacturer.
+
+</Text>
+
+<Text style={styles.description}>
+
+• Warranty void if vehicle is repaired elsewhere.
+
+</Text>
+
+</View>
+
+{/* TERMS */}
+
+<View style={styles.card}>
+
+<Text style={styles.cardTitle}>
+Terms & Conditions
+</Text>
+
+<Text style={styles.description}>
+
+• Goods once sold will not be taken back.
+
+</Text>
+
+<Text style={styles.description}>
+
+• Please verify your vehicle before delivery.
+
+</Text>
+
+<Text style={styles.description}>
+
+• Garage is not responsible for valuables left inside vehicle.
+
+</Text>
+
+<Text style={styles.description}>
+
+• Thank you for choosing our garage.
+
+</Text>
+
+</View>
+
+{/* SIGNATURES */}
+
+<View style={styles.card}>
+
+<View
+style={{
+flexDirection:"row",
+justifyContent:"space-between"
+}}
+>
+
+<View style={{alignItems:"center"}}>
+
+<View style={styles.signatureLine}/>
+
+<Text style={styles.signatureText}>
+Customer Signature
+</Text>
+
+</View>
+
+<View style={{alignItems:"center"}}>
+
+<View style={styles.signatureLine}/>
+
+<Text style={styles.signatureText}>
+Authorized Signatory
+</Text>
+
+</View>
+
+</View>
+
+</View>
+
+{/* ACTION BUTTONS */}
+
+<TouchableOpacity
+
+disabled={job.status !== "completed"}
+
+style={[
+
+styles.primaryButton,
+
+job.status !== "completed" &&
+
+styles.disabledButton
+
+]}
+
+>
+
+<Ionicons
+
+name="document-text-outline"
+
+size={22}
+
+color="white"
+
+/>
+
+<Text style={styles.primaryButtonText}>
+
+Generate PDF Invoice
+
+</Text>
+
+</TouchableOpacity>
+
+<TouchableOpacity
+style={styles.secondaryButton}
+>
+
+<Ionicons
+name="share-social-outline"
+size={22}
+color="#2563EB"
+/>
+
+<Text style={styles.secondaryButtonText}>
+Share Invoice
+</Text>
+
+</TouchableOpacity>
+
+<TouchableOpacity
+style={styles.secondaryButton}
+>
+
+<Ionicons
+name="print-outline"
+size={22}
+color="#2563EB"
+/>
+
+<Text style={styles.secondaryButtonText}>
+Print Invoice
+</Text>
+
+</TouchableOpacity>
+
+<View style={{height:40}}/>
+
+</ScrollView>
+
+)
 
 }
 
 const styles = StyleSheet.create({
 
-  container: {
-    flex: 1,
-    backgroundColor: "#F3F4F6"
-  },
+container:{
+flex:1,
+backgroundColor:"#F3F4F6"
+},
 
-  headerCard: {
-    paddingTop: 65,
-    paddingHorizontal: 22,
-    paddingBottom: 28,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30
-  },
+loader:{
+flex:1,
+justifyContent:"center",
+alignItems:"center"
+},
 
-  topRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center"
-  },
+/* HEADER */
 
-  logoBox: {
-    width: 58,
-    height: 58,
-    borderRadius: 18,
-    backgroundColor: "white",
-    alignItems: "center",
-    justifyContent: "center"
-  },
+header:{
+backgroundColor:"white",
+paddingVertical:28,
+paddingHorizontal:20,
+alignItems:"center",
+marginBottom:16,
+borderBottomLeftRadius:22,
+borderBottomRightRadius:22,
+elevation:2
+},
 
-  shareBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center"
-  },
+logoContainer:{
+width:90,
+height:90,
+borderRadius:45,
+backgroundColor:"#EFF6FF",
+justifyContent:"center",
+alignItems:"center",
+marginBottom:15
+},
 
-  garageName: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "white",
-    marginTop: 24
-  },
+logo:{
+width:65,
+height:65
+},
 
-  gstText: {
-    color: "#DBEAFE",
-    marginTop: 6
-  },
+garageName:{
+fontSize:24,
+fontWeight:"700",
+color:"#111827"
+},
 
-  invoiceInfoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 28
-  },
+garageSubtitle:{
+marginTop:4,
+fontSize:15,
+color:"#374151"
+},
 
-  invoiceLabel: {
-    color: "#BFDBFE",
-    fontSize: 13
-  },
+garageAddress:{
+marginTop:10,
+color:"#6B7280",
+textAlign:"center"
+},
 
-  invoiceValue: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "bold",
-    marginTop: 5
-  },
+garagePhone:{
+marginTop:4,
+color:"#6B7280"
+},
 
-  paidBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 30,
-    marginTop: 6
-  },
+gst:{
+marginTop:6,
+fontWeight:"600",
+color:"#111827"
+},
 
-  paidText: {
-    fontWeight: "bold",
-    fontSize: 12
-  },
+invoiceStrip:{
+marginTop:22,
+paddingTop:18,
+borderTopWidth:1,
+borderColor:"#E5E7EB",
+width:"100%",
+flexDirection:"row",
+justifyContent:"space-between"
+},
 
-  card: {
-    backgroundColor: "white",
-    marginHorizontal: 18,
-    borderRadius: 22,
-    padding: 20,
-    marginTop: 18
-  },
+invoiceLabel:{
+fontSize:12,
+color:"#6B7280"
+},
 
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 18
-  },
+invoiceValue:{
+marginTop:4,
+fontWeight:"700",
+fontSize:15,
+color:"#111827"
+},
 
-  iconCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    backgroundColor: "#EFF6FF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 10
-  },
+/* CARD */
 
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: "bold",
-    color: "#111827"
-  },
+card:{
+backgroundColor:"white",
+marginHorizontal:16,
+marginBottom:16,
+borderRadius:20,
+padding:18,
+elevation:2
+},
 
-  customerName: {
-    fontSize: 19,
-    fontWeight: "bold",
-    color: "#111827"
-  },
+cardTitle:{
+fontSize:18,
+fontWeight:"700",
+marginBottom:16,
+color:"#111827"
+},
 
-  cardText: {
-    color: "#6B7280",
-    marginTop: 6
-  },
+/* COMMON */
 
-  vehicleTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center"
-  },
+infoRow:{
+flexDirection:"row",
+alignItems:"center",
+marginBottom:12
+},
 
-  vehicleNumber: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#111827"
-  },
+infoText:{
+marginLeft:10,
+flex:1,
+fontSize:15,
+color:"#374151"
+},
 
-  vehicleTypeBadge: {
-    backgroundColor: "#DBEAFE",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20
-  },
+divider:{
+height:1,
+backgroundColor:"#E5E7EB",
+marginVertical:18
+},
 
-  vehicleTypeText: {
-    color: "#2563EB",
-    fontWeight: "bold",
-    fontSize: 12
-  },
+/* VEHICLE */
 
-  servicesTop: {
-    marginBottom: 18
-  },
+vehicleHeader:{
+flexDirection:"row",
+alignItems:"center"
+},
 
-  serviceRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6"
-  },
+vehicleNumber:{
+fontSize:20,
+fontWeight:"700",
+color:"#111827"
+},
 
-  partRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6"
-  },
+vehicleModel:{
+marginTop:4,
+color:"#6B7280"
+},
 
-  serviceLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1
-  },
+grid:{
+flexDirection:"row",
+flexWrap:"wrap",
+justifyContent:"space-between"
+},
 
-  serviceIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: "#EFF6FF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12
-  },
+gridItem:{
+width:"48%",
+marginBottom:16
+},
 
-  serviceName: {
-    fontWeight: "600",
-    color: "#111827",
-    flex: 1
-  },
+label:{
+fontSize:12,
+color:"#6B7280",
+marginBottom:6
+},
 
-  partMeta: {
-    color: "#6B7280",
-    marginTop: 5,
-    fontSize: 13
-  },
+value:{
+fontWeight:"600",
+fontSize:15,
+color:"#111827"
+},
 
-  servicePrice: {
-    color: "#16A34A",
-    fontWeight: "bold",
-    fontSize: 15
-  },
+sectionLabel:{
+fontWeight:"700",
+fontSize:15,
+marginBottom:8,
+color:"#111827"
+},
 
-  summaryCard: {
-    marginHorizontal: 18,
-    borderRadius: 24,
-    padding: 22,
-    marginTop: 20
-  },
+description:{
+fontSize:14,
+lineHeight:24,
+color:"#4B5563"
+},
 
-  summaryTitle: {
-    color: "white",
-    fontSize: 19,
-    fontWeight: "bold",
-    marginBottom: 22
-  },
+/* TABLE */
 
-  summaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 16
-  },
+tableHeader:{
+flexDirection:"row",
+paddingBottom:12,
+borderBottomWidth:1,
+borderBottomColor:"#E5E7EB"
+},
 
-  summaryLabel: {
-    color: "#D1D5DB"
-  },
+tableRow:{
+flexDirection:"row",
+paddingVertical:14,
+borderBottomWidth:1,
+borderBottomColor:"#F3F4F6"
+},
 
-  summaryValue: {
-    color: "white",
-    fontWeight: "600"
-  },
+tableCell:{
+flex:1,
+fontSize:13,
+color:"#374151",
+textAlign:"center"
+},
 
-  divider: {
-    borderBottomWidth: 1,
-    borderBottomColor: "#374151",
-    marginBottom: 18
-  },
+/* SUMMARY */
 
-  totalLabel: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "bold"
-  },
+summaryRow:{
+flexDirection:"row",
+justifyContent:"space-between",
+alignItems:"center",
+marginBottom:14
+},
 
-  totalAmount: {
-    color: "#22C55E",
-    fontSize: 30,
-    fontWeight: "bold"
-  },
+summaryLabel:{
+fontSize:15,
+color:"#374151"
+},
 
-  paidAmount: {
-    color: "#60A5FA",
-    fontWeight: "bold"
-  },
+summaryValue:{
+fontSize:15,
+fontWeight:"600",
+color:"#111827"
+},
 
-  balanceAmount: {
-    color: "#FCA5A5",
-    fontWeight: "bold"
-  },
+grandLabel:{
+fontSize:21,
+fontWeight:"700",
+color:"#111827"
+},
 
-  paymentModeCard: {
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 10
-  },
+grandValue:{
+fontSize:28,
+fontWeight:"700",
+color:"#16A34A"
+},
 
-  paymentModeLabel: {
-    color: "#9CA3AF",
-    marginBottom: 6
-  },
+/* SIGNATURE */
 
-  paymentModeValue: {
-    color: "white",
-    fontWeight: "bold",
-    fontSize: 16
-  },
+signatureLine:{
+width:120,
+borderBottomWidth:1.5,
+borderBottomColor:"#9CA3AF",
+marginBottom:8,
+marginTop:40
+},
 
-  noteCard: {
-    backgroundColor: "#FEF3C7",
-    marginHorizontal: 18,
-    borderRadius: 20,
-    padding: 18,
-    marginTop: 20,
-    flexDirection: "row",
-    alignItems: "flex-start"
-  },
+signatureText:{
+fontSize:13,
+color:"#6B7280"
+},
 
-  noteTitle: {
-    fontWeight: "bold",
-    color: "#92400E",
-    marginBottom: 5
-  },
+/* BUTTONS */
 
-  noteText: {
-    color: "#92400E",
-    lineHeight: 22
-  },
+primaryButton:{
+backgroundColor:"#2563EB",
+marginHorizontal:16,
+marginBottom:12,
+paddingVertical:18,
+borderRadius:18,
+alignItems:"center",
+justifyContent:"center",
+flexDirection:"row",
+elevation:2
+},
 
-  downloadBtn: {
-    backgroundColor: "#2563EB",
-    marginHorizontal: 18,
-    marginTop: 24,
-    borderRadius: 20,
-    paddingVertical: 18,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center"
-  },
+primaryButtonText:{
+marginLeft:10,
+color:"white",
+fontWeight:"700",
+fontSize:16
+},
 
-  whatsappBtn: {
-    backgroundColor: "#16A34A",
-    marginHorizontal: 18,
-    marginTop: 14,
-    borderRadius: 20,
-    paddingVertical: 18,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center"
-  },
+secondaryButton:{
+backgroundColor:"white",
+marginHorizontal:16,
+marginBottom:12,
+paddingVertical:18,
+borderRadius:18,
+alignItems:"center",
+justifyContent:"center",
+flexDirection:"row",
+borderWidth:1,
+borderColor:"#E5E7EB"
+},
 
-  downloadText: {
-    color: "white",
-    fontWeight: "bold",
-    fontSize: 16,
-    marginLeft: 10
-  },
+secondaryButtonText:{
+marginLeft:10,
+fontSize:16,
+fontWeight:"700",
+color:"#2563EB"
+},
 
-  secondaryBtn: {
-    backgroundColor: "white",
-    marginHorizontal: 18,
-    marginTop: 14,
-    borderRadius: 20,
-    paddingVertical: 18,
-    alignItems: "center"
-  },
-
-  secondaryText: {
-    color: "#111827",
-    fontWeight: "700"
-  }
+disabledButton:{
+backgroundColor:"#9CA3AF"
+}
 
 })
