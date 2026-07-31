@@ -19,6 +19,13 @@ import { useRoute } from "@react-navigation/native"
 
 import { getJobById } from "../../services/jobService"
 
+import { getGarageProfile } from "../../services/garageService"
+
+import {
+  getGSTSettings,
+  getInvoiceSettings
+} from "../../services/settingsService"
+
 export default function InvoiceScreen() {
 
   const route = useRoute<any>()
@@ -29,19 +36,53 @@ export default function InvoiceScreen() {
 
   const [job, setJob] = useState<any>(null)
 
+  const [garage, setGarage] = useState<any>(null)
+
+  const [gstSettings, setGSTSettings] =
+    useState<any>(null)
+
+  const [invoiceSettings, setInvoiceSettings] =
+    useState<any>(null)
+
   useEffect(() => {
 
-    loadJob()
+    loadAll()
 
   }, [])
 
-  const loadJob = async () => {
+  const loadAll = async () => {
 
     try {
 
-      const response = await getJobById(jobId)
+      const [
 
-      setJob(response.job)
+        jobRes,
+
+        garageRes,
+
+        gst,
+
+        invoice
+
+      ] = await Promise.all([
+
+        getJobById(jobId),
+
+        getGarageProfile(),
+
+        getGSTSettings(),
+
+        getInvoiceSettings()
+
+      ])
+
+      setJob(jobRes.job)
+
+      setGarage(garageRes.garage)
+
+      setGSTSettings(gst)
+
+      setInvoiceSettings(invoice)
 
     }
 
@@ -83,7 +124,13 @@ export default function InvoiceScreen() {
 
   const discount = job?.discount || 0
 
-  const gstPercent = job?.gstPercent || 0
+  const gstPercent =
+
+  gstSettings?.enabled
+
+  ? gstSettings.defaultRate
+
+  : 0
 
   const subTotal = partsTotal + labourCharge
 
@@ -102,7 +149,19 @@ export default function InvoiceScreen() {
       gstAmount
     )
 
-  if (loading) {
+  if (
+
+  loading ||
+
+  !garage ||
+
+  !gstSettings ||
+
+  !invoiceSettings ||
+
+  !job
+
+  ) {
 
     return (
 
@@ -129,36 +188,84 @@ showsVerticalScrollIndicator={false}
 {/* GARAGE HEADER */}
 
 <View style={styles.header}>
+{
 
+invoiceSettings.showGarageLogo && (
 <View style={styles.logoContainer}>
 
-<MaterialCommunityIcons
-  name="garage"
-  size={50}
-  color="#2563EB"
+{
+
+garage.logo ?
+
+<Image
+
+source={{ uri: garage.logo }}
+
+style={styles.logo}
+
 />
 
+:
+
+<MaterialCommunityIcons
+
+name="garage"
+
+size={50}
+
+color="#2563EB"
+
+/>
+
+}
+
 </View>
+)
+}
 
 <Text style={styles.garageName}>
-My Garage
+{garage.garageName}
 </Text>
 
 <Text style={styles.garageSubtitle}>
-Complete Car & Bike Care
+Owner : {garage.ownerName}
 </Text>
 
+{
+
+invoiceSettings.showGarageAddress && (
 <Text style={styles.garageAddress}>
-123 MG Road, Raipur, Chhattisgarh
-</Text>
+{garage.address}
 
-<Text style={styles.garagePhone}>
-+91 9876543210
+{garage.city}, {garage.state}
+
+{garage.pincode}
 </Text>
+)
+
+}
+{
+
+invoiceSettings.showGarageAddress && (
+<Text style={styles.garagePhone}>
+{garage.phone}
+</Text>
+)
+
+}
+
+{
+
+invoiceSettings.showGSTNumber &&
+
+gstSettings.enabled && (
 
 <Text style={styles.gst}>
-GSTIN : 22ABCDE1234F1Z5
+GSTIN : {garage.gstNumber}
 </Text>
+)
+
+}
 
 <View style={styles.invoiceStrip}>
 
@@ -198,6 +305,9 @@ Invoice Date
 Customer Details
 </Text>
 
+{
+
+invoiceSettings.showCustomerAddress && (
 <View style={styles.infoRow}>
 
 <Ionicons
@@ -211,6 +321,9 @@ color="#2563EB"
 </Text>
 
 </View>
+)
+
+}
 
 <View style={styles.infoRow}>
 
@@ -244,6 +357,9 @@ color="#2563EB"
 
 {/* VEHICLE */}
 
+{
+
+invoiceSettings.showVehicleDetails && (
 <View style={styles.card}>
 
 <Text style={styles.cardTitle}>
@@ -337,6 +453,9 @@ Priority
 </View>
 
 </View>
+)
+
+}
 
 {/* JOB DETAILS */}
 
@@ -537,7 +656,9 @@ Grand Total
 </View>
 
 {/* PAYMENT */}
+{
 
+invoiceSettings.showPaymentDetails && (
 <View style={styles.card}>
 
 <Text style={styles.cardTitle}>
@@ -610,6 +731,9 @@ Balance :
 </View>
 
 </View>
+)
+
+}
 
 {/* WARRANTY */}
 
@@ -649,7 +773,7 @@ Terms & Conditions
 
 <Text style={styles.description}>
 
-• Goods once sold will not be taken back.
+{invoiceSettings.terms}
 
 </Text>
 
@@ -672,6 +796,29 @@ Terms & Conditions
 </Text>
 
 </View>
+
+{
+
+invoiceSettings.footerNote && (
+
+<View style={styles.card}>
+
+<Text
+style={{
+textAlign:"center",
+color:"#6B7280"
+}}
+>
+
+{invoiceSettings.footerNote}
+
+</Text>
+
+</View>
+
+)
+
+}
 
 {/* SIGNATURES */}
 
