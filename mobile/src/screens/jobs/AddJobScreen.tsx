@@ -9,6 +9,8 @@ import {
   Alert
 } from "react-native"
 
+import { Picker } from "@react-native-picker/picker"
+
 import {
   useEffect,
   useMemo,
@@ -18,10 +20,6 @@ import {
 import {
   Ionicons
 } from "@expo/vector-icons"
-
-import {
-  Picker
-} from "@react-native-picker/picker"
 
 import {
   createJob
@@ -89,6 +87,55 @@ export default function AddJobScreen({
   const [workerId, setWorkerId] =
     useState("")
 
+  const [workerName, setWorkerName] = useState("")
+  
+  const [showWorkerSuggestions, setShowWorkerSuggestions] = useState(false)
+
+  const [showPaymentSuggestions, setShowPaymentSuggestions] = useState(false)
+
+  const [paymentStatus, setPaymentStatus] =
+      useState("Pending")
+
+  const [paymentMethod, setPaymentMethod] =
+      useState("")
+
+  const paymentMethods = [
+      "Cash",
+      "UPI",
+      "Card",
+      "Bank Transfer"
+  ]
+
+  const searchedPaymentMethods = useMemo(() => {
+
+      if (!paymentMethod.trim())
+          return paymentMethods
+
+      return paymentMethods.filter(method =>
+
+          method
+              .toLowerCase()
+              .includes(paymentMethod.toLowerCase())
+
+      )
+
+  }, [paymentMethod])
+
+  const searchedWorkers = useMemo(() => {
+
+      if (!workerName.trim())
+          return workers
+
+      return workers.filter(worker =>
+
+          (worker.name || "")
+              .toLowerCase()
+              .includes(workerName.toLowerCase())
+
+      )
+
+  }, [workerName, workers])
+
   /* Job */
 
   const [priority, setPriority] =
@@ -109,22 +156,19 @@ export default function AddJobScreen({
   const [inspectionNotes, setInspectionNotes] =
   useState("")
 
-  const [paymentStatus,setPaymentStatus] =
-  useState("Pending")
-
-  const [paymentMethod,setPaymentMethod]=
-  useState("")
-
   /* Services */
 
   const [selectedServices, setSelectedServices] =
     useState<any[]>([])
 
-  const [customServiceName, setCustomServiceName] =
-    useState("")
+  const [serviceSearch, setServiceSearch] = useState("")
 
-  const [customServicePrice, setCustomServicePrice] =
-    useState("")
+  const [serviceName, setServiceName] = useState("")
+  const [servicePrice, setServicePrice] = useState("")
+  const [serviceQty, setServiceQty] = useState("1")
+
+  const [showSuggestions, setShowSuggestions] =
+    useState(false)
 
   useEffect(() => {
 
@@ -159,7 +203,7 @@ export default function AddJobScreen({
 
         setServiceTypes(
 
-          servicesRes.serviceTypes || []
+          servicesRes.services  || []
 
         )
 
@@ -258,52 +302,39 @@ export default function AddJobScreen({
 
     }
 
-  const addCustomService =
-    () => {
+  const addCurrentService = () => {
 
-      if (
-
-        !customServiceName ||
-
-        !customServicePrice
-
-      ) {
-
+    if (!serviceName.trim())
         return
 
-      }
-
-      setSelectedServices(prev => [
+    setSelectedServices(prev => [
 
         ...prev,
 
         {
 
-          serviceId:
-            Date.now().toString(),
+            serviceId: null,
 
-          name:
-            customServiceName,
+            name: serviceName,
 
-          quantity: 1,
+            quantity: Number(serviceQty) || 1,
 
-          estimatedPrice:
-            Number(customServicePrice),
+            estimatedPrice: Number(servicePrice) || 0,
 
-          actualPrice:
-            Number(customServicePrice),
-
-          custom: true
+            actualPrice: Number(servicePrice) || 0
 
         }
 
-      ])
+    ])
 
-      setCustomServiceName("")
+    setServiceName("")
+    setServicePrice("")
+    setServiceQty("1")
+    setShowSuggestions(false)
+    setShowWorkerSuggestions(false)
+    setShowPaymentSuggestions(false)
 
-      setCustomServicePrice("")
-
-    }
+}
 
   const total =
     useMemo(() => {
@@ -326,6 +357,24 @@ export default function AddJobScreen({
 
     }, [selectedServices])
 
+  const searchedServices = useMemo(() => {
+
+      if (!serviceName.trim())
+          return []
+
+      return serviceTypes.filter(service =>
+
+          (service.name || "")
+              .toLowerCase()
+              .includes(serviceName.toLowerCase())
+
+      )
+
+  }, [serviceName, serviceTypes])
+
+  console.log("Typing :", serviceName);
+  console.log("Matches :", searchedServices);
+  
   const onDateChange = (
   event: any,
   selectedDate?: Date
@@ -666,44 +715,88 @@ setVehicleType("4 Wheeler")
 Assign Worker
 </Text>
 
-<View style={styles.pickerContainer}>
+<View style={styles.inputWrapper}>
 
-<Picker
+<TextInput
+    placeholder="Search worker..."
+    style={styles.input}
+    value={workerName}
+    onFocus={() => setShowWorkerSuggestions(true)}
+    onChangeText={(text) => {
 
-selectedValue={workerId}
+        setWorkerName(text)
 
-onValueChange={setWorkerId}
+        setShowWorkerSuggestions(true)
 
->
+        setShowSuggestions(false)
 
-<Picker.Item
+        setShowPaymentSuggestions(false)
 
-label="Select Worker"
-
-value=""
-
+    }}
 />
 
 {
+showWorkerSuggestions && (
 
-workers.map(worker=>(
+<View style={styles.suggestionContainer}>
 
-<Picker.Item
+    <ScrollView
+        style={{ maxHeight: 220 }}
+        nestedScrollEnabled
+    >
 
-key={worker.workerId}
+    {
 
-label={`${worker.name} (${worker.role})`}
+        searchedWorkers.map(worker => (
 
-value={worker.workerId}
+        <TouchableOpacity
 
-/>
+            key={worker.workerId}
 
-))
+            style={styles.workerSuggestion}
 
+            onPress={() => {
+
+                setWorkerId(worker.workerId)
+
+                setWorkerName(worker.name)
+
+                setShowWorkerSuggestions(false)
+
+            }}
+
+        >
+
+            <View>
+
+                <Text style={styles.cardTitle}>
+                    {worker.name}
+                </Text>
+
+                <Text style={styles.cardSubtitle}>
+                    {worker.role}
+                </Text>
+
+            </View>
+
+            <Ionicons
+                name="person-circle"
+                size={26}
+                color="#2563EB"
+            />
+
+        </TouchableOpacity>
+
+        ))
+
+    }
+
+    </ScrollView>
+
+</View>
+
+)
 }
-
-</Picker>
-
 </View>
 
 {/* JOB DETAILS */}
@@ -812,96 +905,131 @@ color: deliveryDate
 {/* SERVICES */}
 
 <Text style={styles.heading}>
-Services
+Add Service
 </Text>
+<View style={styles.inputWrapper}>
+<TextInput
+    placeholder="Service Name"
+    style={styles.input}
+    value={serviceName}
+    onChangeText={(text) => {
 
-{/* AVAILABLE SERVICES */}
+        setServiceName(text)
 
-<View style={styles.card}>
+        setShowSuggestions(true)
 
-  <Text style={styles.sectionTitle}>
-    Select Existing Service
-  </Text>
+        setShowWorkerSuggestions(false)
 
-  {
+        setShowPaymentSuggestions(false)
 
-    serviceTypes.length === 0 ?
+    }}
+/>
 
-      <Text style={styles.emptyText}>
-        No service types available.
-      </Text>
+{
+showSuggestions &&
+searchedServices.length > 0 && (
 
-      :
+<View style={styles.suggestionContainer}>
 
-      serviceTypes.map(service => (
+    {searchedServices.map(service => (
 
-        <TouchableOpacity
-          key={service.serviceTypeId}
-          style={styles.serviceTypeRow}
-          onPress={() => addService(service)}
-        >
+    <TouchableOpacity
 
-          <View style={{ flex: 1 }}>
+        key={service.serviceTypeId}
+
+        style={styles.suggestionItem}
+
+        onPress={() => {
+
+            setServiceName(service.name)
+            setServicePrice(String(service.defaultPrice))
+            setShowSuggestions(false)
+            setShowWorkerSuggestions(false)
+            setShowPaymentSuggestions(false)
+
+        }}
+
+    >
+
+        <View style={{ flex: 1 }}>
 
             <Text style={styles.cardTitle}>
-              {service.name}
+                {service.name}
             </Text>
 
             <Text style={styles.cardSubtitle}>
-              ₹ {service.defaultPrice}
+                {service.category}
             </Text>
 
-          </View>
+        </View>
 
-          <Ionicons
-            name="add-circle"
-            size={26}
-            color="#2563EB"
-          />
+        <Text style={styles.suggestionPrice}>
+            ₹ {service.defaultPrice}
+        </Text>
 
-        </TouchableOpacity>
+    </TouchableOpacity>
 
-      ))
-
-  }
+    ))}
 
 </View>
 
-{/* CUSTOM SERVICE */}
+)
+}
+</View>
 
-<Text style={styles.heading}>
-Custom Service
-</Text>
+<View style={styles.row}>
 
-<TextInput
-  placeholder="Service Name"
-  style={styles.input}
-  value={customServiceName}
-  onChangeText={setCustomServiceName}
-/>
+<View style={{flex:2}}>
 
 <TextInput
-  placeholder="Price"
-  keyboardType="numeric"
-  style={styles.input}
-  value={customServicePrice}
-  onChangeText={setCustomServicePrice}
+
+placeholder="Price"
+
+keyboardType="numeric"
+
+style={styles.smallInput}
+
+value={servicePrice}
+
+onChangeText={setServicePrice}
+
 />
+
+</View>
+
+<View style={{flex:1}}>
+
+<TextInput
+
+placeholder="Qty"
+
+keyboardType="numeric"
+
+style={styles.smallInput}
+
+value={serviceQty}
+
+onChangeText={setServiceQty}
+
+/>
+
+</View>
+
+</View>
 
 <TouchableOpacity
-  style={styles.addServiceBtn}
-  onPress={addCustomService}
+
+style={styles.addServiceBtn}
+
+onPress={addCurrentService}
+
 >
 
-  <Ionicons
-    name="add"
-    size={20}
-    color="white"
-  />
+<Text style={styles.addServiceText}>
 
-  <Text style={styles.addServiceText}>
-    Add Custom Service
-  </Text>
+Add Service
+
+</Text>
 
 </TouchableOpacity>
 
@@ -1044,7 +1172,7 @@ Subtotal
 
 <Text style={styles.totalServicePrice}>
 
-₹ {service.quantity * service.actualPrice}
+₹ {Number(service.quantity) * Number(service.actualPrice)}
 
 </Text>
 
@@ -1134,78 +1262,109 @@ paymentStatus===item
 ))}
 
 </View>
+<View style={styles.inputWrapper}>
+<TextInput
+    placeholder="Select Payment Method"
+    style={styles.input}
+    value={paymentMethod}
+    onFocus={() => setShowPaymentSuggestions(true)}
+    onChangeText={(text) => {
 
-<View style={styles.pickerContainer}>
+        setPaymentMethod(text)
 
-<Picker
-selectedValue={paymentMethod}
-onValueChange={setPaymentMethod}
->
+        setShowPaymentSuggestions(true)
 
-<Picker.Item
-label="Payment Method"
-value=""
+        setShowWorkerSuggestions(false)
+
+        setShowSuggestions(false)
+
+    }}
 />
 
-<Picker.Item
-label="Cash"
-value="Cash"
-/>
+{
+showPaymentSuggestions && (
 
-<Picker.Item
-label="UPI"
-value="UPI"
-/>
+<View style={styles.suggestionContainer}>
 
-<Picker.Item
-label="Card"
-value="Card"
-/>
+    <ScrollView
+        style={{ maxHeight: 220 }}
+        nestedScrollEnabled
+    >
 
-<Picker.Item
-label="Bank Transfer"
-value="Bank Transfer"
-/>
+        {
 
-</Picker>
+        searchedPaymentMethods.map(method => (
+
+            <TouchableOpacity
+
+                key={method}
+
+                style={styles.workerSuggestion}
+
+                onPress={() => {
+
+                    setPaymentMethod(method)
+
+                    setShowPaymentSuggestions(false)
+
+                }}
+
+            >
+
+                <Text style={styles.cardTitle}>
+
+                    {method}
+
+                </Text>
+
+                <Ionicons
+
+                    name="card-outline"
+
+                    size={22}
+
+                    color="#2563EB"
+
+                />
+
+            </TouchableOpacity>
+
+        ))
+
+        }
+
+    </ScrollView>
 
 </View>
-{
 
+)
+}
+</View>
+{
 showDatePicker && (
 
 <DateTimePicker
-
-value={
-
-deliveryDate ||
-
-new Date()
-
-}
-
-mode="time"
-
-display="default"
-
-minimumDate={new Date()}
-
-onChange={(event, selectedDate) => {
-
-setShowDatePicker(false)
-
-if (selectedDate) {
-
-setDeliveryDate(selectedDate)
-
-}
-
-}}
-
+    value={deliveryDate || new Date()}
+    mode="date"
+    minimumDate={new Date()}
+    display="default"
+    onChange={onDateChange}
 />
 
 )
+}
 
+{
+showTimePicker && (
+
+<DateTimePicker
+    value={deliveryDate || new Date()}
+    mode="time"
+    display="default"
+    onChange={onTimeChange}
+/>
+
+)
 }
 <TouchableOpacity
 style={styles.saveBtn}
@@ -1475,6 +1634,71 @@ const styles = StyleSheet.create({
     color: "white",
     fontWeight: "700",
     fontSize: 16
+  },
+
+  suggestionContainer: {
+
+    position: "absolute",
+
+    top: 60,
+
+    left: 0,
+
+    right: 0,
+
+    backgroundColor: "#fff",
+
+    borderRadius: 14,
+
+    borderWidth: 1,
+
+    borderColor: "#E5E7EB",
+
+    maxHeight: 220,
+
+    zIndex: 999,
+
+    elevation: 10,
+
+},
+
+  suggestionItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: "#F3F4F6"
+  },
+
+  suggestionPrice: {
+      fontWeight: "700",
+      color: "#2563EB",
+      fontSize: 15
+  },
+
+  workerSuggestion: {
+
+      flexDirection: "row",
+
+      justifyContent: "space-between",
+
+      alignItems: "center",
+
+      paddingHorizontal: 16,
+
+      paddingVertical: 14,
+
+      borderBottomWidth: 1,
+
+      borderBottomColor: "#F3F4F6"
+
+  },
+
+  inputWrapper: {
+      position: "relative",
+      marginBottom: 14,
   }
 
 })
