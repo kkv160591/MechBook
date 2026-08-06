@@ -3,10 +3,13 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
+  Keyboard,
   ScrollView,
   StyleSheet,
   ActivityIndicator,
-  Alert
+  Alert,
+  Pressable
 } from "react-native"
 
 import { Picker } from "@react-native-picker/picker"
@@ -14,7 +17,8 @@ import { Picker } from "@react-native-picker/picker"
 import {
   useEffect,
   useMemo,
-  useState
+  useState,
+  useRef 
 } from "react"
 
 import {
@@ -38,6 +42,20 @@ import DateTimePicker from "@react-native-community/datetimepicker"
 export default function AddJobScreen({
   navigation
 }: any) {
+
+  const [submitted, setSubmitted] = useState(false);
+
+  const scrollRef = useRef<ScrollView>(null);
+
+  const customerNameRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
+  const vehicleNumberRef = useRef<TextInput>(null);
+  const vehicleModelRef = useRef<TextInput>(null);
+
+  const customerNameY = useRef(0);
+  const phoneY = useRef(0);
+  const vehicleNumberY = useRef(0);
+  const vehicleModelY = useRef(0);
 
   const [loading, setLoading] =
     useState(true)
@@ -105,6 +123,14 @@ export default function AddJobScreen({
       "Card",
       "Bank Transfer"
   ]
+
+  const closeDropdowns = () => {
+      Keyboard.dismiss();
+
+      setShowSuggestions(false);
+      setShowWorkerSuggestions(false);
+      setShowPaymentSuggestions(false);
+  };
 
   const searchedPaymentMethods = useMemo(() => {
 
@@ -330,9 +356,7 @@ export default function AddJobScreen({
     setServiceName("")
     setServicePrice("")
     setServiceQty("1")
-    setShowSuggestions(false)
-    setShowWorkerSuggestions(false)
-    setShowPaymentSuggestions(false)
+    closeDropdowns();
 
 }
 
@@ -423,40 +447,84 @@ const onTimeChange = (
   const saveJob =
 
     async () => {
-      console.log("===== SAVE JOB =====");
-      if (
+      const missingFields = [];
+setSubmitted(true);
+if (!customerName.trim())
+    missingFields.push("Customer Name");
 
-        !customerName ||
+if (!phone.trim())
+    missingFields.push("Phone Number");
 
-        !phone ||
+if (!vehicleNumber.trim())
+    missingFields.push("Vehicle Number");
 
-        !vehicleNumber ||
+if (!vehicleModel.trim())
+    missingFields.push("Vehicle Model");
 
-        !vehicleModel
+if (selectedServices.length === 0)
+    missingFields.push("At least one Service");
 
-      ) {
+if (missingFields.length > 0) {
 
-        Alert.alert(
-          "Validation",
-          "Please fill all required fields."
-        )
+    if (!customerName.trim()) {
 
-        return
+        scrollRef.current?.scrollTo({
+            y: customerNameY.current - 20,
+            animated: true,
+        });
 
-      }
+        setTimeout(() => {
+            customerNameRef.current?.focus();
+        }, 300);
 
-      if (
-        selectedServices.length === 0
-      ) {
+    }
 
-        Alert.alert(
-          "Validation",
-          "Add at least one service."
-        )
+    else if (!phone.trim()) {
 
-        return
+        scrollRef.current?.scrollTo({
+            y: phoneY.current - 20,
+            animated: true,
+        });
 
-      }
+        setTimeout(() => {
+            phoneRef.current?.focus();
+        }, 300);
+
+    }
+
+    else if (!vehicleNumber.trim()) {
+
+        scrollRef.current?.scrollTo({
+            y: vehicleNumberY.current - 20,
+            animated: true,
+        });
+
+        setTimeout(() => {
+            vehicleNumberRef.current?.focus();
+        }, 300);
+
+    }
+
+    else if (!vehicleModel.trim()) {
+
+        scrollRef.current?.scrollTo({
+            y: vehicleModelY.current - 20,
+            animated: true,
+        });
+
+        setTimeout(() => {
+            vehicleModelRef.current?.focus();
+        }, 300);
+
+    }
+
+    Alert.alert(
+        "Missing Required Fields",
+        "• " + missingFields.join("\n• ")
+    );
+
+    return;
+}
 
       try {
 
@@ -569,11 +637,20 @@ const onTimeChange = (
 
 }
 
-  return (
+const RequiredLabel = ({ text }: { text: string }) => (
+    <Text style={styles.label}>
+        {text}
+        <Text style={{ color: "#DC2626" }}> *</Text>
+    </Text>
+);
+
+return (
 
 <ScrollView
-style={styles.container}
-showsVerticalScrollIndicator={false}
+    ref={scrollRef}
+    style={styles.container}
+    keyboardShouldPersistTaps="handled"
+    onScrollBeginDrag={closeDropdowns}
 >
 
 {/* CUSTOMER */}
@@ -582,23 +659,73 @@ showsVerticalScrollIndicator={false}
 Customer Details
 </Text>
 
+<RequiredLabel text="Customer Name" />
+<View
+    onLayout={(e) =>
+        customerNameY.current =
+            e.nativeEvent.layout.y
+    }
+>
 <TextInput
+ref={customerNameRef}
+onFocus={closeDropdowns}
 placeholder="Customer Name"
-style={styles.input}
+style={[
+        styles.input,
+        submitted &&
+        !customerName.trim() &&
+        styles.inputError
+    ]}
 value={customerName}
 onChangeText={setCustomerName}
 />
+{
+submitted &&
+!customerName.trim() && (
+<Text style={styles.errorText}>
+Customer Name is required.
+</Text>
+)
+}
+</View>
 
+<RequiredLabel text="Phone Number" />
+<View
+    onLayout={(e) =>
+        phoneY.current =
+            e.nativeEvent.layout.y
+    }
+>
 <TextInput
+ref={phoneRef}
+onFocus={closeDropdowns}
 placeholder="Phone Number"
 keyboardType="phone-pad"
 maxLength={10}
-style={styles.input}
+style={[
+        styles.input,
+        submitted &&
+        !phone.trim() &&
+        styles.inputError
+    ]}
 value={phone}
 onChangeText={setPhone}
 />
+{
+submitted &&
+!phone.trim() && (
+<Text style={styles.errorText}>
+Phone Number is required.
+</Text>
+)
+}
+</View>
 
+<Text style={styles.label}>
+Customer Address
+</Text>
 <TextInput
+  onFocus={closeDropdowns}
   placeholder="Customer Address (Optional)"
   style={styles.input}
   value={customerAddress}
@@ -611,9 +738,23 @@ onChangeText={setPhone}
 Vehicle Details
 </Text>
 
+<RequiredLabel text="Vehicle Number" />
+<View
+    onLayout={(e) =>
+        vehicleNumberY.current =
+            e.nativeEvent.layout.y
+    }
+>
 <TextInput
+ref={vehicleNumberRef}
+onFocus={closeDropdowns}
 placeholder="Vehicle Number"
-style={styles.input}
+style={[
+        styles.input,
+        submitted &&
+        !vehicleNumber.trim() &&
+        styles.inputError
+    ]}
 value={vehicleNumber}
 onChangeText={(text)=>
   setVehicleNumber(
@@ -621,22 +762,58 @@ onChangeText={(text)=>
   )
 }
 />
-
+{
+submitted &&
+!vehicleNumber.trim() && (
+<Text style={styles.errorText}>
+Vehicle Number is required.
+</Text>
+)
+}
+</View>
 <TextInput
+    onFocus={closeDropdowns}
     placeholder="Vehicle Brand (Honda, Tata...)"
     style={styles.input}
     value={vehicleBrand}
     onChangeText={setVehicleBrand}
 />
 
+<RequiredLabel text="Vehicle Model" />
+<View
+    onLayout={(e) =>
+        vehicleModelY.current =
+            e.nativeEvent.layout.y
+    }
+>
 <TextInput
+ref={vehicleModelRef}
+onFocus={closeDropdowns}
 placeholder="Vehicle Model"
-style={styles.input}
+style={[
+        styles.input,
+        submitted &&
+        !vehicleModel.trim() &&
+        styles.inputError
+    ]}
 value={vehicleModel}
 onChangeText={setVehicleModel}
 />
+{
+submitted &&
+!vehicleModel.trim() && (
+<Text style={styles.errorText}>
+Vehicle Model is required.
+</Text>
+)
+}
+</View>
 
+<Text style={styles.label}>
+Current Odometer
+</Text>
 <TextInput
+onFocus={closeDropdowns}
 placeholder="Current Odometer (KM)"
 keyboardType="numeric"
 maxLength={7}
@@ -645,9 +822,7 @@ value={odometer}
 onChangeText={setOdometer}
 />
 
-<Text style={styles.label}>
-Vehicle Type
-</Text>
+<RequiredLabel text="Vehicle Type" />
 
 <View style={styles.typeRow}>
 
@@ -712,38 +887,43 @@ setVehicleType("4 Wheeler")
 {/* ASSIGN WORKER */}
 
 <Text style={styles.heading}>
+Worker
+</Text>
+<Text style={styles.label}>
 Assign Worker
 </Text>
 
-<View style={styles.inputWrapper}>
+<View
+    style={[
+        styles.inputWrapper,
+        showWorkerSuggestions && { marginBottom: 220 }
+    ]}
+>
 
 <TextInput
     placeholder="Search worker..."
     style={styles.input}
     value={workerName}
-    onFocus={() => setShowWorkerSuggestions(true)}
+    onFocus={() => {
+
+        setShowWorkerSuggestions(true);
+        setShowSuggestions(false);
+        setShowPaymentSuggestions(false);
+
+    }}
     onChangeText={(text) => {
 
         setWorkerName(text)
 
         setShowWorkerSuggestions(true)
 
-        setShowSuggestions(false)
-
-        setShowPaymentSuggestions(false)
-
     }}
 />
 
 {
 showWorkerSuggestions && (
-
 <View style={styles.suggestionContainer}>
 
-    <ScrollView
-        style={{ maxHeight: 220 }}
-        nestedScrollEnabled
-    >
 
     {
 
@@ -791,10 +971,7 @@ showWorkerSuggestions && (
 
     }
 
-    </ScrollView>
-
 </View>
-
 )
 }
 </View>
@@ -905,22 +1082,32 @@ color: deliveryDate
 {/* SERVICES */}
 
 <Text style={styles.heading}>
-Add Service
+Services
 </Text>
-<View style={styles.inputWrapper}>
+
+<RequiredLabel text="Service" />
+<View
+    style={[
+        styles.inputWrapper,
+        showSuggestions && { marginBottom: 220 }
+    ]}
+>
 <TextInput
     placeholder="Service Name"
     style={styles.input}
     value={serviceName}
+    onFocus={() => {
+
+        setShowSuggestions(true);
+        setShowWorkerSuggestions(false);
+        setShowPaymentSuggestions(false);
+
+    }}
     onChangeText={(text) => {
 
         setServiceName(text)
 
         setShowSuggestions(true)
-
-        setShowWorkerSuggestions(false)
-
-        setShowPaymentSuggestions(false)
 
     }}
 />
@@ -928,7 +1115,6 @@ Add Service
 {
 showSuggestions &&
 searchedServices.length > 0 && (
-
 <View style={styles.suggestionContainer}>
 
     {searchedServices.map(service => (
@@ -943,7 +1129,7 @@ searchedServices.length > 0 && (
 
             setServiceName(service.name)
             setServicePrice(String(service.defaultPrice))
-            setShowSuggestions(false)
+            closeDropdowns();
             setShowWorkerSuggestions(false)
             setShowPaymentSuggestions(false)
 
@@ -972,7 +1158,6 @@ searchedServices.length > 0 && (
     ))}
 
 </View>
-
 )
 }
 </View>
@@ -982,6 +1167,8 @@ searchedServices.length > 0 && (
 <View style={{flex:2}}>
 
 <TextInput
+
+onFocus={closeDropdowns}
 
 placeholder="Price"
 
@@ -1000,6 +1187,8 @@ onChangeText={setServicePrice}
 <View style={{flex:1}}>
 
 <TextInput
+
+onFocus={closeDropdowns}
 
 placeholder="Qty"
 
@@ -1045,10 +1234,16 @@ selectedServices.length === 0 ?
 
 <View style={styles.emptyCard}>
 
-<Text style={styles.emptyText}>
-
-No services added yet.
-
+<Text
+style={[
+styles.emptyText,
+submitted && {
+color:"#DC2626",
+fontWeight:"600"
+}
+]}
+>
+At least one service is required.
 </Text>
 
 </View>
@@ -1100,6 +1295,8 @@ Qty
 
 <TextInput
 
+onFocus={closeDropdowns}
+
 style={styles.smallInput}
 
 keyboardType="numeric"
@@ -1133,6 +1330,8 @@ Price
 </Text>
 
 <TextInput
+
+onFocus={closeDropdowns}
 
 style={styles.smallInput}
 
@@ -1209,6 +1408,7 @@ Customer Complaint
 </Text>
 
 <TextInput
+onFocus={closeDropdowns}
 multiline
 placeholder="Describe customer complaint..."
 style={styles.notes}
@@ -1221,6 +1421,7 @@ Inspection Notes
 </Text>
 
 <TextInput
+onFocus={closeDropdowns}
 multiline
 placeholder="Initial inspection..."
 style={styles.notes}
@@ -1262,21 +1463,31 @@ paymentStatus===item
 ))}
 
 </View>
-<View style={styles.inputWrapper}>
+<View
+    style={[
+        styles.inputWrapper,
+        showPaymentSuggestions && { marginBottom: 220 }
+    ]}
+>
+  <Text style={styles.label}>
+Payment Method
+</Text>
 <TextInput
     placeholder="Select Payment Method"
     style={styles.input}
     value={paymentMethod}
-    onFocus={() => setShowPaymentSuggestions(true)}
+    onFocus={() => {
+
+        setShowPaymentSuggestions(true);
+        setShowSuggestions(false);
+        setShowWorkerSuggestions(false);
+
+    }}
     onChangeText={(text) => {
 
         setPaymentMethod(text)
 
         setShowPaymentSuggestions(true)
-
-        setShowWorkerSuggestions(false)
-
-        setShowSuggestions(false)
 
     }}
 />
@@ -1285,11 +1496,6 @@ paymentStatus===item
 showPaymentSuggestions && (
 
 <View style={styles.suggestionContainer}>
-
-    <ScrollView
-        style={{ maxHeight: 220 }}
-        nestedScrollEnabled
-    >
 
         {
 
@@ -1333,10 +1539,7 @@ showPaymentSuggestions && (
 
         }
 
-    </ScrollView>
-
 </View>
-
 )
 }
 </View>
@@ -1637,13 +1840,9 @@ const styles = StyleSheet.create({
   },
 
   suggestionContainer: {
-
     position: "absolute",
-
-    top: 60,
-
+    top: 58,
     left: 0,
-
     right: 0,
 
     backgroundColor: "#fff",
@@ -1651,15 +1850,22 @@ const styles = StyleSheet.create({
     borderRadius: 14,
 
     borderWidth: 1,
-
     borderColor: "#E5E7EB",
 
     maxHeight: 220,
 
-    zIndex: 999,
+    zIndex: 1000,
+    elevation: 20,
 
-    elevation: 10,
+    overflow: "hidden",
 
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: {
+        width: 0,
+        height: 4,
+    },
 },
 
   suggestionItem: {
@@ -1697,8 +1903,22 @@ const styles = StyleSheet.create({
   },
 
   inputWrapper: {
-      position: "relative",
-      marginBottom: 14,
-  }
+    position: "relative",
+    zIndex: 100,
+    marginBottom: 0,
+},
+
+inputError: {
+    borderWidth: 2,
+    borderColor: "#EF4444",
+},
+
+errorText: {
+    color: "#DC2626",
+    fontSize: 13,
+    marginTop: -8,
+    marginBottom: 12,
+    marginLeft: 4,
+},
 
 })
