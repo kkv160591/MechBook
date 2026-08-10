@@ -9,10 +9,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
-  Pressable
 } from "react-native"
-
-import { Picker } from "@react-native-picker/picker"
 
 import {
   useEffect,
@@ -395,9 +392,6 @@ export default function AddJobScreen({
       )
 
   }, [serviceName, serviceTypes])
-
-  console.log("Typing :", serviceName);
-  console.log("Matches :", searchedServices);
   
   const onDateChange = (
   event: any,
@@ -669,7 +663,6 @@ Customer Details
 <TextInput
 ref={customerNameRef}
 onFocus={closeDropdowns}
-placeholder="Customer Name"
 style={[
         styles.input,
         submitted &&
@@ -699,7 +692,6 @@ Customer Name is required.
 <TextInput
 ref={phoneRef}
 onFocus={closeDropdowns}
-placeholder="Phone Number"
 keyboardType="phone-pad"
 maxLength={10}
 style={[
@@ -726,7 +718,6 @@ Customer Address
 </Text>
 <TextInput
   onFocus={closeDropdowns}
-  placeholder="Customer Address (Optional)"
   style={styles.input}
   value={customerAddress}
   onChangeText={setCustomerAddress}
@@ -748,7 +739,6 @@ Vehicle Details
 <TextInput
 ref={vehicleNumberRef}
 onFocus={closeDropdowns}
-placeholder="Vehicle Number"
 style={[
         styles.input,
         submitted &&
@@ -771,9 +761,11 @@ Vehicle Number is required.
 )
 }
 </View>
+<Text style={styles.label}>
+Vehicle Brand
+</Text>
 <TextInput
     onFocus={closeDropdowns}
-    placeholder="Vehicle Brand (Honda, Tata...)"
     style={styles.input}
     value={vehicleBrand}
     onChangeText={setVehicleBrand}
@@ -789,7 +781,6 @@ Vehicle Number is required.
 <TextInput
 ref={vehicleModelRef}
 onFocus={closeDropdowns}
-placeholder="Vehicle Model"
 style={[
         styles.input,
         submitted &&
@@ -814,7 +805,6 @@ Current Odometer
 </Text>
 <TextInput
 onFocus={closeDropdowns}
-placeholder="Current Odometer (KM)"
 keyboardType="numeric"
 maxLength={7}
 style={styles.input}
@@ -901,7 +891,7 @@ Assign Worker
 >
 
 <TextInput
-    placeholder="Search worker..."
+    placeholder="Select Worker"
     style={styles.input}
     value={workerName}
     onFocus={() => {
@@ -1073,7 +1063,7 @@ color: deliveryDate
 
 ? formatDate(deliveryDate)
 
-: "Select Delivery Date"}
+: "Delivery Date"}
 
 </Text>
 
@@ -1093,7 +1083,6 @@ Services
     ]}
 >
 <TextInput
-    placeholder="Service Name"
     style={styles.input}
     value={serviceName}
     onFocus={() => {
@@ -1164,45 +1153,29 @@ searchedServices.length > 0 && (
 
 <View style={styles.row}>
 
-<View style={{flex:2}}>
+    <View style={{ flex: 2 }}>
+        <Text style={styles.label}>Price</Text>
 
-<TextInput
+        <TextInput
+            onFocus={closeDropdowns}
+            keyboardType="numeric"
+            style={styles.input}
+            value={servicePrice}
+            onChangeText={setServicePrice}
+        />
+    </View>
 
-onFocus={closeDropdowns}
+    <View style={{ flex: 1 }}>
+        <Text style={styles.label}>Quantity</Text>
 
-placeholder="Price"
-
-keyboardType="numeric"
-
-style={styles.smallInput}
-
-value={servicePrice}
-
-onChangeText={setServicePrice}
-
-/>
-
-</View>
-
-<View style={{flex:1}}>
-
-<TextInput
-
-onFocus={closeDropdowns}
-
-placeholder="Qty"
-
-keyboardType="numeric"
-
-style={styles.smallInput}
-
-value={serviceQty}
-
-onChangeText={setServiceQty}
-
-/>
-
-</View>
+        <TextInput
+            onFocus={closeDropdowns}
+            keyboardType="numeric"
+            style={styles.input}
+            value={serviceQty}
+            onChangeText={setServiceQty}
+        />
+    </View>
 
 </View>
 
@@ -1410,7 +1383,6 @@ Customer Complaint
 <TextInput
 onFocus={closeDropdowns}
 multiline
-placeholder="Describe customer complaint..."
 style={styles.notes}
 value={complaint}
 onChangeText={setComplaint}
@@ -1423,7 +1395,6 @@ Inspection Notes
 <TextInput
 onFocus={closeDropdowns}
 multiline
-placeholder="Initial inspection..."
 style={styles.notes}
 value={inspectionNotes}
 onChangeText={setInspectionNotes}
@@ -1641,14 +1612,16 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: "white",
     borderRadius: 16,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
     marginBottom: 14
   },
 
   notes: {
     backgroundColor: "white",
     borderRadius: 18,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
     minHeight: 120,
     textAlignVertical: "top"
   },
@@ -1732,7 +1705,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 16,
-    marginBottom: 20
+    marginTop: 12,
+    marginBottom: 20,
   },
 
   addServiceText: {
@@ -1757,8 +1731,8 @@ const styles = StyleSheet.create({
 
   row: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12
+    gap: 12,
+    alignItems: "flex-start",
   },
 
   smallLabel: {
