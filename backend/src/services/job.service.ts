@@ -22,38 +22,53 @@ async (
 
   const jobId = uuid()
 
+  const now = new Date().toISOString()
+
   const item = {
 
     jobId,
 
     garageId,
 
-    customerName: data.customerName,
+    // Customer
+    customerName: data.customerName || "",
+    phone: data.phone || "",
+    customerAddress: data.customerAddress || "",
 
-    phone: data.phone,
+    // Vehicle
+    vehicleNumber: data.vehicleNumber || "",
+    vehicleBrand: data.vehicleBrand || "",
+    vehicleModel: data.vehicleModel || "",
+    vehicleType: data.vehicleType || "2 Wheeler",
+    odometer: data.odometer || "",
 
-    vehicleNumber: data.vehicleNumber,
-
-    vehicleModel: data.vehicleModel,
-
-    vehicleType: data.vehicleType,
-
+    // Job
     status: "pending",
-
     workerId: data.workerId || null,
+    priority: data.priority || "Normal",
+    deliveryDate: data.deliveryDate || "",
 
-    services: data.services || [],
+    // Complaint
+    complaint: data.complaint || "",
 
+    // Inspection
+    inspectionNotes: data.inspectionNotes || "",
+
+    // Payment
+    paymentStatus: data.paymentStatus || "Pending",
+    paymentMethod: data.paymentMethod || "",
+
+    // Notes
     notes: data.notes || "",
 
-    createdAt: new Date().toISOString(),
+    // Services
+    services: data.services || [],
 
-    updatedAt: new Date().toISOString()
-
+    createdAt: now,
+    updatedAt: now
   }
 
   await db.send(
-
     new PutItemCommand({
 
       TableName:
@@ -64,11 +79,9 @@ async (
       })
 
     })
-
   )
 
   return item
-
 }
 
 export const getJobs =

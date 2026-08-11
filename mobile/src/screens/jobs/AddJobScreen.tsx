@@ -278,10 +278,10 @@ export default function AddJobScreen({
           quantity: 1,
 
           estimatedPrice:
-            service.defaultPrice,
+            Number(service.defaultPrice) || 0,
 
-          actualPrice:
-            service.defaultPrice
+          actualPrice: 
+            Number(service.defaultPrice) || 0,
 
         }
 
@@ -344,7 +344,7 @@ export default function AddJobScreen({
 
             estimatedPrice: Number(servicePrice) || 0,
 
-            actualPrice: Number(servicePrice) || 0
+            actualPrice: Number(servicePrice) || 0,
 
         }
 
@@ -358,25 +358,23 @@ export default function AddJobScreen({
 }
 
   const total =
-    useMemo(() => {
+  useMemo(() => {
 
-      return selectedServices.reduce(
+    return selectedServices.reduce(
 
-        (sum, item) =>
+      (sum, item) =>
 
-          sum +
+        sum +
+        (
+          Number(item.estimatedPrice) *
+          Number(item.quantity)
+        ),
 
-          (
-            Number(item.actualPrice) *
+      0
 
-            Number(item.quantity)
-          ),
+    )
 
-        0
-
-      )
-
-    }, [selectedServices])
+  }, [selectedServices])
 
   const searchedServices = useMemo(() => {
 
@@ -883,12 +881,7 @@ Worker
 Assign Worker
 </Text>
 
-<View
-    style={[
-        styles.inputWrapper,
-        showWorkerSuggestions && { marginBottom: 220 }
-    ]}
->
+<View style={styles.inputWrapper}>
 
 <TextInput
     placeholder="Select Worker"
@@ -1076,12 +1069,7 @@ Services
 </Text>
 
 <RequiredLabel text="Service" />
-<View
-    style={[
-        styles.inputWrapper,
-        showSuggestions && { marginBottom: 220 }
-    ]}
->
+<View style={styles.inputWrapper}>
 <TextInput
     style={styles.input}
     value={serviceName}
@@ -1154,16 +1142,21 @@ searchedServices.length > 0 && (
 <View style={styles.row}>
 
     <View style={{ flex: 2 }}>
-        <Text style={styles.label}>Price</Text>
 
-        <TextInput
-            onFocus={closeDropdowns}
-            keyboardType="numeric"
-            style={styles.input}
-            value={servicePrice}
-            onChangeText={setServicePrice}
-        />
-    </View>
+      <Text style={styles.label}>
+          Estimate Price
+      </Text>
+
+      <TextInput
+          onFocus={closeDropdowns}
+          keyboardType="numeric"
+          style={styles.input}
+          value={servicePrice}
+          onChangeText={setServicePrice}
+          placeholder="Enter estimate"
+      />
+
+  </View>
 
     <View style={{ flex: 1 }}>
         <Text style={styles.label}>Quantity</Text>
@@ -1254,81 +1247,51 @@ color="#DC2626"
 
 </View>
 
-<View
-style={styles.row}
->
+<View style={styles.row}>
 
-<View style={{flex:1}}>
+  <View style={{ flex: 1 }}>
 
-<Text style={styles.smallLabel}>
+    <Text style={styles.smallLabel}>
+      Quantity
+    </Text>
 
-Qty
+    <TextInput
+      onFocus={closeDropdowns}
+      style={styles.smallInput}
+      keyboardType="numeric"
+      value={String(service.quantity)}
+      onChangeText={(text) =>
+        updateService(
+          index,
+          "quantity",
+          Number(text) || 1
+        )
+      }
+    />
 
-</Text>
+  </View>
 
-<TextInput
+  <View style={{ flex: 1 }}>
 
-onFocus={closeDropdowns}
+    <Text style={styles.smallLabel}>
+      Estimate Price
+    </Text>
 
-style={styles.smallInput}
+    <TextInput
+      onFocus={closeDropdowns}
+      style={styles.smallInput}
+      keyboardType="numeric"
+      value={String(service.estimatedPrice)}
+      onChangeText={(text) =>
+        updateService(
+          index,
+          "estimatedPrice",
+          Number(text) || 0
+        )
+      }
+    />
 
-keyboardType="numeric"
-
-value={String(service.quantity)}
-
-onChangeText={(text)=>
-
-updateService(
-
-index,
-
-"quantity",
-
-Number(text)||1
-
-)
-
-}
-
-/>
-
-</View>
-
-<View style={{flex:1}}>
-
-<Text style={styles.smallLabel}>
-
-Price
-
-</Text>
-
-<TextInput
-
-onFocus={closeDropdowns}
-
-style={styles.smallInput}
-
-keyboardType="numeric"
-
-value={String(service.actualPrice)}
-
-onChangeText={(text)=>
-
-updateService(
-
-index,
-
-"actualPrice",
-
-Number(text)||0
-
-)
-
-}
-
-/>
-
-</View>
+  </View>
 
 </View>
 
@@ -1344,7 +1307,7 @@ Subtotal
 
 <Text style={styles.totalServicePrice}>
 
-₹ {Number(service.quantity) * Number(service.actualPrice)}
+₹ {Number(service.quantity) * Number(service.estimatedPrice)}
 
 </Text>
 
@@ -1434,12 +1397,7 @@ paymentStatus===item
 ))}
 
 </View>
-<View
-    style={[
-        styles.inputWrapper,
-        showPaymentSuggestions && { marginBottom: 220 }
-    ]}
->
+<View style={styles.inputWrapper}>
   <Text style={styles.label}>
 Payment Method
 </Text>

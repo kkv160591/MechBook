@@ -319,27 +319,33 @@ const searchedPaymentMethods = useMemo(() => {
 
     }
 
-  const total = useMemo(()=>{
+  const total = useMemo(() => {
 
-    return selectedServices.reduce(
+  return selectedServices.reduce(
 
-      (sum,item)=>
+    (sum, item) => {
 
-        sum +
+      const estimated =
+        Number(item.estimatedPrice || 0)
 
-        (
+      const actual =
+        item.actualPrice !== null &&
+        item.actualPrice !== undefined &&
+        item.actualPrice !== ""
+          ? Number(item.actualPrice)
+          : estimated
 
-          Number(item.actualPrice) *
+      return sum +
+        actual *
+        Number(item.quantity || 0)
 
-          Number(item.quantity)
+    },
 
-        ),
+    0
 
-      0
+  )
 
-    )
-
-  },[selectedServices])
+}, [selectedServices])
 
   const searchedServices = useMemo(() => {
   
@@ -375,7 +381,7 @@ const searchedPaymentMethods = useMemo(() => {
 
             estimatedPrice: Number(servicePrice) || 0,
 
-            actualPrice: Number(servicePrice) || 0
+            actualPrice: null
 
         }
 
@@ -814,12 +820,7 @@ onPress={()=>setVehicleType("4 Wheeler")}
 Assign Worker
 </Text>
 
-<View
-    style={[
-        styles.inputWrapper,
-        showWorkerSuggestions && { marginBottom: 220 }
-    ]}
->
+<View style={styles.inputWrapper}>
 
 <TextInput
     placeholder="Select Worker"
@@ -981,12 +982,7 @@ Services
 </Text>
 
 <RequiredLabel text="Service" />
-<View
-    style={[
-        styles.inputWrapper,
-        showSuggestions && { marginBottom: 220 }
-    ]}
->
+<View style={styles.inputWrapper}>
 <TextInput
     style={styles.input}
     value={serviceName}
@@ -1159,81 +1155,71 @@ color="#DC2626"
 
 </View>
 
-<View
-style={styles.row}
->
+<View style={styles.servicePricingRow}>
 
-<View style={{flex:1}}>
+  {/* QTY */}
+  <View style={styles.serviceField}>
+    <Text style={styles.smallLabel}>
+      Qty
+    </Text>
 
-<Text style={styles.smallLabel}>
+    <TextInput
+      onFocus={closeDropdowns}
+      style={styles.smallInput}
+      keyboardType="numeric"
+      value={String(service.quantity ?? 1)}
+      onChangeText={(text) =>
+        updateService(
+          index,
+          "quantity",
+          text === "" ? "" : Number(text)
+        )
+      }
+    />
+  </View>
 
-Qty
+  {/* ESTIMATED - READ ONLY */}
+  <View style={styles.serviceField}>
+    <Text style={styles.smallLabel}>
+      Estimated
+    </Text>
 
-</Text>
+    <View style={styles.readOnlyPrice}>
+      <Text style={styles.readOnlyPriceText}>
+        ₹ {Number(service.estimatedPrice || 0)}
+      </Text>
+    </View>
+  </View>
 
-<TextInput
+  {/* ACTUAL PRICE */}
+  <View style={styles.serviceField}>
+    <Text style={styles.smallLabel}>
+      Actual Price{" "}
+      <Text style={styles.optionalText}>
+        (optional)
+      </Text>
+    </Text>
 
-onFocus={closeDropdowns}
-
-style={styles.smallInput}
-
-keyboardType="numeric"
-
-value={String(service.quantity)}
-
-onChangeText={(text)=>
-
-updateService(
-
-index,
-
-"quantity",
-
-Number(text)||1
-
-)
-
-}
-
-/>
-
-</View>
-
-<View style={{flex:1}}>
-
-<Text style={styles.smallLabel}>
-
-Price
-
-</Text>
-
-<TextInput
-
-onFocus={closeDropdowns}
-
-style={styles.smallInput}
-
-keyboardType="numeric"
-
-value={String(service.actualPrice)}
-
-onChangeText={(text)=>
-
-updateService(
-
-index,
-
-"actualPrice",
-
-Number(text)||0
-
-)
-
-}
-
-/>
-
-</View>
+    <TextInput
+      onFocus={closeDropdowns}
+      style={styles.smallInput}
+      keyboardType="numeric"
+      placeholder="Use estimate"
+      value={
+        service.actualPrice === null ||
+        service.actualPrice === undefined
+          ? ""
+          : String(service.actualPrice)
+      }
+      onChangeText={(text) =>
+        updateService(
+          index,
+          "actualPrice",
+          text === "" ? null : Number(text)
+        )
+      }
+    />
+  </View>
 
 </View>
 
@@ -1249,7 +1235,16 @@ Subtotal
 
 <Text style={styles.totalServicePrice}>
 
-₹ {Number(service.quantity) * Number(service.actualPrice)}
+₹ {
+  Number(service.quantity || 0) *
+  (
+    service.actualPrice !== null &&
+    service.actualPrice !== undefined &&
+    service.actualPrice !== ""
+      ? Number(service.actualPrice)
+      : Number(service.estimatedPrice || 0)
+  )
+}
 
 </Text>
 
@@ -1266,7 +1261,7 @@ Subtotal
 <View style={styles.totalCard}>
 
 <Text style={styles.totalLabel}>
-Estimated Total
+Total Amount
 </Text>
 
 <Text style={styles.totalAmount}>
@@ -1342,12 +1337,7 @@ paymentStatus===item
 
 </View>
 
-<View
-    style={[
-        styles.inputWrapper,
-        showPaymentSuggestions && { marginBottom: 220 }
-    ]}
->
+<View style={styles.inputWrapper}>
   <Text style={styles.label}>
 Payment Method
 </Text>
@@ -1733,11 +1723,15 @@ addServiceBtn: {
   marginBottom: 20,
 },
 
-smallInput:{
-backgroundColor:"#F9FAFB",
-borderRadius:12,
-padding:12,
-textAlign:"center"
+smallInput: {
+  backgroundColor: "#F9FAFB",
+  borderRadius: 12,
+  paddingHorizontal: 10,
+  paddingVertical: 12,
+  textAlign: "center",
+  minHeight: 46,
+  borderWidth: 1,
+  borderColor: "#E5E7EB",
 },
 
 totalRow:{
@@ -1813,6 +1807,38 @@ saveText:{
 color:"white",
 fontSize:16,
 fontWeight:"700"
-}
+},
+
+optionalText: {
+  color: "#9CA3AF",
+  fontWeight: "400"
+},
+
+servicePricingRow: {
+  flexDirection: "row",
+  gap: 10,
+  alignItems: "flex-start",
+},
+
+serviceField: {
+  flex: 1,
+},
+
+readOnlyPrice: {
+  backgroundColor: "#F3F4F6",
+  borderRadius: 12,
+  minHeight: 46,
+  paddingHorizontal: 12,
+  justifyContent: "center",
+  alignItems: "center",
+  borderWidth: 1,
+  borderColor: "#E5E7EB",
+},
+
+readOnlyPriceText: {
+  color: "#374151",
+  fontWeight: "600",
+  fontSize: 14,
+},
 
 })

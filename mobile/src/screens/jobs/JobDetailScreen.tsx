@@ -8,6 +8,10 @@ import {
   ActivityIndicator
 } from "react-native"
 
+import {
+  getWorkers
+} from "../../services/workerService"
+
 import { useEffect, useState } from "react"
 
 import { Picker } from "@react-native-picker/picker"
@@ -34,13 +38,28 @@ export default function JobDetailScreen({
 
   const [job, setJob] = useState<any>(null)
 
+  const [workers, setWorkers] = useState<any[]>([])
+
   const loadJob = async () => {
 
     try {
 
-      const response = await getJobById(jobId)
+      const [
+        jobResponse,
+        workersResponse
+      ] = await Promise.all([
+        getJobById(jobId),
+        getWorkers()
+      ])
 
-      setJob(response.job)
+      const loadedJob =
+        jobResponse.job
+
+      setWorkers(
+        workersResponse.workers || []
+      )
+
+      setJob(loadedJob)
 
     }
 
@@ -62,6 +81,13 @@ export default function JobDetailScreen({
     }
 
   }
+
+  const assignedWorker =
+  workers.find(
+    (worker: any) =>
+      String(worker.workerId) ===
+      String(job.workerId)
+  )
 
   useEffect(() => {
 
@@ -162,18 +188,22 @@ export default function JobDetailScreen({
 
   }
 
-  const total = job.services.reduce(
-
+  const estimatedTotal =
+  (job.services || []).reduce(
     (sum: number, item: any) =>
-
       sum +
-
-      item.actualPrice *
-
-      item.quantity,
-
+      Number(item.estimatedPrice || 0) *
+      Number(item.quantity || 0),
     0
+  )
 
+const actualTotal =
+  (job.services || []).reduce(
+    (sum: number, item: any) =>
+      sum +
+      Number(item.actualPrice || 0) *
+      Number(item.quantity || 0),
+    0
   )
 
   return (
@@ -372,7 +402,7 @@ export default function JobDetailScreen({
           </Text>
 
           <Text style={styles.value}>
-            {job.worker?.name || "-"}
+            {assignedWorker?.name || "-"}
           </Text>
 
         </View>
@@ -434,54 +464,115 @@ export default function JobDetailScreen({
 
       {/* SERVICES */}
 
-      <View style={styles.card}>
+<View style={styles.card}>
 
-        <Text style={styles.sectionTitle}>
-          Services
-        </Text>
+  <Text style={styles.sectionTitle}>
+    Services
+  </Text>
 
-        {job.services.map((service: any, index: number) => (
+  {(job.services || []).map(
+    (service: any, index: number) => {
 
-          <View
-            key={index}
-            style={styles.serviceRow}
-          >
+      const quantity =
+        Number(service.quantity || 0)
 
-            <View style={{ flex: 1 }}>
+      const estimatedPrice =
+        Number(service.estimatedPrice || 0)
 
-              <Text style={styles.serviceName}>
-                {service.name}
-              </Text>
+      const actualPrice =
+        Number(service.actualPrice || 0)
 
-              <Text style={styles.serviceQty}>
-                Qty : {service.quantity}
-              </Text>
+      const estimatedSubtotal =
+        estimatedPrice * quantity
 
-            </View>
+      const actualSubtotal =
+        actualPrice * quantity
 
-            <Text style={styles.servicePrice}>
-              ₹{service.actualPrice * service.quantity}
+      return (
+
+        <View
+          key={index}
+          style={styles.serviceCard}
+        >
+
+          {/* SERVICE NAME */}
+
+          <View style={styles.serviceHeader}>
+
+            <Text style={styles.serviceName}>
+              {service.name}
+            </Text>
+
+            <Text style={styles.serviceQty}>
+              Qty: {quantity}
             </Text>
 
           </View>
 
-        ))}
+          {/* ESTIMATED PRICE */}
 
-      </View>
+          <View style={styles.priceRow}>
+
+            <Text style={styles.priceLabel}>
+              Estimated Price
+            </Text>
+
+            <Text style={styles.estimatedPrice}>
+              ₹{estimatedPrice}
+            </Text>
+
+          </View>
+
+          {/* ACTUAL PRICE */}
+
+          <View style={styles.priceRow}>
+
+            <Text style={styles.priceLabel}>
+              Actual Price
+            </Text>
+
+            <Text style={styles.actualPrice}>
+              ₹{actualPrice}
+            </Text>
+
+          </View>
+
+        </View>
+
+      )
+
+    }
+  )}
+
+</View>
 
       {/* BILL */}
 
-      <View style={styles.totalCard}>
+<View style={styles.totalCard}>
 
-        <Text style={styles.totalLabel}>
-          Estimated Bill
-        </Text>
+  <Text style={styles.totalLabel}>
+    Estimated Bill
+  </Text>
 
-        <Text style={styles.totalAmount}>
-          ₹{total}
-        </Text>
+  <Text style={styles.totalAmount}>
+    ₹{estimatedTotal}
+  </Text>
 
-      </View>
+  <View style={styles.actualTotalDivider} />
+
+  <View style={styles.actualTotalRow}>
+
+    <Text style={styles.actualTotalLabel}>
+      Current Actual Total
+    </Text>
+
+    <Text style={styles.actualTotalAmount}>
+      ₹{actualTotal}
+    </Text>
+
+  </View>
+
+</View>
 
       {/* PAYMENT */}
 
@@ -933,7 +1024,211 @@ const styles = StyleSheet.create({
 
     marginLeft: 8
 
-  }
+  },
+
+  serviceCard: {
+
+  paddingVertical: 14,
+
+  borderBottomWidth: 1,
+
+  borderBottomColor: "#E5E7EB",
+
+  marginBottom: 4
+
+},
+
+serviceHeader: {
+
+  flexDirection: "row",
+
+  justifyContent: "space-between",
+
+  alignItems: "center",
+
+  marginBottom: 12
+
+},
+
+priceRow: {
+
+  flexDirection: "row",
+
+  justifyContent: "space-between",
+
+  alignItems: "center",
+
+  marginBottom: 8
+
+},
+
+priceLabel: {
+
+  color: "#6B7280",
+
+  fontSize: 14
+
+},
+
+estimatedPrice: {
+
+  color: "#2563EB",
+
+  fontWeight: "600",
+
+  fontSize: 15
+
+},
+
+actualPrice: {
+
+  color: "#16A34A",
+
+  fontWeight: "700",
+
+  fontSize: 15
+
+},
+
+subtotalContainer: {
+
+  backgroundColor: "#F9FAFB",
+
+  borderRadius: 10,
+
+  padding: 10,
+
+  marginTop: 6
+
+},
+
+subtotalRow: {
+
+  flexDirection: "row",
+
+  justifyContent: "space-between",
+
+  marginBottom: 5
+
+},
+
+subtotalLabel: {
+
+  color: "#6B7280",
+
+  fontSize: 13
+
+},
+
+subtotalValue: {
+
+  color: "#2563EB",
+
+  fontWeight: "600"
+
+},
+
+actualSubtotalValue: {
+
+  color: "#16A34A",
+
+  fontWeight: "700"
+
+},
+
+actualBillRow: {
+
+  flexDirection: "row",
+
+  justifyContent: "space-between",
+
+  marginTop: 14,
+
+  paddingTop: 14,
+
+  borderTopWidth: 1,
+
+  borderTopColor: "#374151"
+
+},
+
+actualBillLabel: {
+
+  color: "#D1D5DB",
+
+  fontSize: 14
+
+},
+
+actualBillAmount: {
+
+  color: "#86EFAC",
+
+  fontSize: 20,
+
+  fontWeight: "700"
+
+},
+
+priceHeader: {
+
+  flexDirection: "row",
+
+  justifyContent: "space-between",
+
+  marginBottom: 6
+
+},
+
+priceHeaderText: {
+
+  color: "#6B7280",
+
+  fontSize: 12,
+
+  fontWeight: "500"
+
+},
+
+actualTotalDivider: {
+
+  height: 1,
+
+  backgroundColor: "#374151",
+
+  marginTop: 16,
+
+  marginBottom: 14
+
+},
+
+actualTotalRow: {
+
+  flexDirection: "row",
+
+  justifyContent: "space-between",
+
+  alignItems: "center"
+
+},
+
+actualTotalLabel: {
+
+  color: "#D1D5DB",
+
+  fontSize: 14
+
+},
+
+actualTotalAmount: {
+
+  color: "#22C55E",
+
+  fontSize: 20,
+
+  fontWeight: "700"
+
+}
 
 })
 
