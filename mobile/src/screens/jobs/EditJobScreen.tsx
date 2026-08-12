@@ -13,11 +13,13 @@ import {
 import DateTimePicker from "@react-native-community/datetimepicker"
 
 import {
-  useEffect,
+  useCallback,
   useMemo,
   useState,
   useRef
 } from "react"
+
+import { useFocusEffect } from "@react-navigation/native"
 
 import {
   Ionicons
@@ -32,7 +34,8 @@ import {
 } from "../../services/serviceTypesService"
 
 import {
-  updateJob
+  updateJob,
+  getJobById
 } from "../../services/jobService"
 
 export default function EditJobScreen({
@@ -183,27 +186,33 @@ const searchedPaymentMethods = useMemo(() => {
   const [showSuggestions, setShowSuggestions] =
       useState(false)
 
-  useEffect(() => {
+  useFocusEffect(
+    useCallback(() => {
 
-    loadData()
+      loadData()
 
-  }, [])
+    }, [job.jobId])
+  )
 
   const loadData = async () => {
 
     try {
 
+      setLoading(true)
+
       const [
-
         workersRes,
-        servicesRes
-
+        servicesRes,
+        jobRes
       ] = await Promise.all([
 
         getWorkers(),
-        getServiceTypes()
+        getServiceTypes(),
+        getJobById(job.jobId)
 
       ])
+
+      const latestJob = jobRes.job
 
       setWorkers(
         workersRes.workers || []
@@ -213,50 +222,102 @@ const searchedPaymentMethods = useMemo(() => {
         servicesRes.services || []
       )
 
-      /* Prefill */
+      /* Customer */
 
-      setCustomerName(job.customerName || "")
-      setPhone(job.phone || "")
-      setCustomerAddress(job.customerAddress || "")
-
-      setVehicleNumber(job.vehicleNumber || "")
-      setVehicleBrand(job.vehicleBrand || "")
-      setVehicleModel(job.vehicleModel || "")
-      setVehicleType(job.vehicleType || "2 Wheeler")
-
-      setOdometer(String(job.odometer || ""))
-      setComplaint(job.complaint || "")
-
-      setWorkerId(job.workerId || "")
-
-      const existingWorker = (workersRes.workers || []).find(
-        (worker: any) =>
-          String(worker.workerId) ===
-          String(job.workerId)
+      setCustomerName(
+        latestJob.customerName || ""
       )
+
+      setPhone(
+        latestJob.phone || ""
+      )
+
+      setCustomerAddress(
+        latestJob.customerAddress || ""
+      )
+
+      /* Vehicle */
+
+      setVehicleNumber(
+        latestJob.vehicleNumber || ""
+      )
+
+      setVehicleBrand(
+        latestJob.vehicleBrand || ""
+      )
+
+      setVehicleModel(
+        latestJob.vehicleModel || ""
+      )
+
+      setVehicleType(
+        latestJob.vehicleType || "2 Wheeler"
+      )
+
+      setOdometer(
+        String(latestJob.odometer || "")
+      )
+
+      setComplaint(
+        latestJob.complaint || ""
+      )
+
+      /* Worker */
+
+      setWorkerId(
+        latestJob.workerId || ""
+      )
+
+      const existingWorker =
+        (workersRes.workers || []).find(
+          (worker: any) =>
+            String(worker.workerId) ===
+            String(latestJob.workerId)
+        )
 
       setWorkerName(
         existingWorker?.name || ""
       )
-      setPriority(job.priority || "Normal")
+
+      /* Job */
+
+      setPriority(
+        latestJob.priority || "Normal"
+      )
+
       setDeliveryDate(
-        job.deliveryDate
-          ? new Date(job.deliveryDate)
+        latestJob.deliveryDate
+          ? new Date(latestJob.deliveryDate)
           : null
       )
 
-      setInspectionNotes(job.inspectionNotes || "")
+      setInspectionNotes(
+        latestJob.inspectionNotes || ""
+      )
 
-      setPaymentStatus(job.paymentStatus || "Pending")
-      setPaymentMethod(job.paymentMethod || "")
+      /* Payment */
 
-      setNotes(job.notes || "")
+      setPaymentStatus(
+        latestJob.paymentStatus || "Pending"
+      )
 
-      setSelectedServices(job.services || [])
+      setPaymentMethod(
+        latestJob.paymentMethod || ""
+      )
+
+      setNotes(
+        latestJob.notes || ""
+      )
+
+      /* IMPORTANT */
+
+      setSelectedServices(
+        latestJob.services || []
+      )
 
     }
 
-    catch(err){
+    catch (err) {
 
       console.log(err)
 
@@ -267,7 +328,7 @@ const searchedPaymentMethods = useMemo(() => {
 
     }
 
-    finally{
+    finally {
 
       setLoading(false)
 
@@ -1055,7 +1116,7 @@ searchedServices.length > 0 && (
 <View style={styles.row}>
 
     <View style={{ flex: 2 }}>
-        <Text style={styles.label}>Price</Text>
+        <Text style={styles.label}>Estimate Price</Text>
 
         <TextInput
             onFocus={closeDropdowns}

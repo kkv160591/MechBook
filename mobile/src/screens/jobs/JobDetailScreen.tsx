@@ -5,14 +5,20 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Platform
 } from "react-native"
 
 import {
   getWorkers
 } from "../../services/workerService"
 
-import { useEffect, useState } from "react"
+import {
+  useCallback,
+  useState,
+} from "react"
+
+import { useFocusEffect } from "@react-navigation/native"
 
 import { Picker } from "@react-native-picker/picker"
 
@@ -89,11 +95,13 @@ export default function JobDetailScreen({
       String(job.workerId)
   )
 
-  useEffect(() => {
+  useFocusEffect(
+    useCallback(() => {
 
-    loadJob()
+      loadJob()
 
-  }, [])
+    }, [jobId])
+  )
 
   const updateStatus = async (status: string) => {
 
@@ -121,55 +129,96 @@ export default function JobDetailScreen({
 
   }
 
-  const deleteCurrentJob = () => {
+  const deleteCurrentJob = async () => {
 
-    Alert.alert(
+  // WEB
+  if (Platform.OS === "web") {
 
-      "Delete Job",
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this job?"
+    )
 
-      "Are you sure?",
+    if (!confirmed) {
+      return
+    }
 
-      [
+    try {
 
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
+      setLoading(true)
 
-        {
+      await deleteJob(jobId)
 
-          text: "Delete",
+      navigation.goBack()
 
-          style: "destructive",
+    }
 
-          onPress: async () => {
+    catch (err) {
 
-            try {
+      console.log("DELETE JOB ERROR:", err)
 
-              await deleteJob(jobId)
+      setLoading(false)
 
-              navigation.goBack()
+      window.alert(
+        "Unable to delete job."
+      )
 
-            }
+    }
 
-            catch {
+    return
+  }
 
-              Alert.alert(
-                "Error",
-                "Unable to delete job."
-              )
+  // ANDROID / IOS
+  Alert.alert(
 
-            }
+    "Delete Job",
+
+    "Are you sure you want to delete this job?",
+
+    [
+
+      {
+        text: "Cancel",
+        style: "cancel"
+      },
+
+      {
+        text: "Delete",
+        style: "destructive",
+
+        onPress: async () => {
+
+          try {
+
+            setLoading(true)
+
+            await deleteJob(jobId)
+
+            navigation.goBack()
+
+          }
+
+          catch (err) {
+
+            console.log("DELETE JOB ERROR:", err)
+
+            setLoading(false)
+
+            Alert.alert(
+              "Error",
+              "Unable to delete job."
+            )
 
           }
 
         }
 
-      ]
+      }
 
-    )
+    ]
 
-  }
+  )
+
+}
 
   if (loading) {
 
@@ -190,19 +239,46 @@ export default function JobDetailScreen({
 
   const estimatedTotal =
   (job.services || []).reduce(
-    (sum: number, item: any) =>
-      sum +
-      Number(item.estimatedPrice || 0) *
-      Number(item.quantity || 0),
+    (sum: number, item: any) => {
+
+      const quantity =
+        Number(item.quantity || 0)
+
+      const estimatedPrice =
+        Number(item.estimatedPrice || 0)
+
+      return (
+        sum +
+        estimatedPrice * quantity
+      )
+
+    },
     0
   )
 
 const actualTotal =
   (job.services || []).reduce(
-    (sum: number, item: any) =>
-      sum +
-      Number(item.actualPrice || 0) *
-      Number(item.quantity || 0),
+    (sum: number, item: any) => {
+
+      const quantity =
+        Number(item.quantity || 0)
+
+      const estimatedPrice =
+        Number(item.estimatedPrice || 0)
+
+      const actualPrice =
+        item.actualPrice !== null &&
+        item.actualPrice !== undefined &&
+        item.actualPrice !== ""
+          ? Number(item.actualPrice)
+          : estimatedPrice
+
+      return (
+        sum +
+        actualPrice * quantity
+      )
+
+    },
     0
   )
 
@@ -480,7 +556,11 @@ const actualTotal =
         Number(service.estimatedPrice || 0)
 
       const actualPrice =
-        Number(service.actualPrice || 0)
+        service.actualPrice !== null &&
+        service.actualPrice !== undefined &&
+        service.actualPrice !== ""
+          ? Number(service.actualPrice)
+    : estimatedPrice
 
       const estimatedSubtotal =
         estimatedPrice * quantity

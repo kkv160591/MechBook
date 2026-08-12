@@ -10,6 +10,10 @@ import {
 } from "react-native"
 
 import {
+  useState
+} from "react"
+
+import {
   MaterialIcons,
   Ionicons,
   FontAwesome5,
@@ -25,6 +29,8 @@ import {
 
 export default function DashboardScreen() {
 
+  const [menuVisible, setMenuVisible] = useState(false)
+
   const {
     user,
     logout
@@ -32,18 +38,23 @@ export default function DashboardScreen() {
 
   const handleLogout = async () => {
 
+    console.log("Logout button pressed")
+  try {
+
     await logout()
 
-    navigation.reset({
-      index: 0,
-      routes: [
-        {
-          name: "Login"
-        }
-      ]
-    })
+  } catch (error) {
+
+    console.log("Logout error:", error)
+
+    Alert.alert(
+      "Logout Failed",
+      "Unable to logout. Please try again."
+    )
 
   }
+
+}
 
   const navigation: any = useNavigation()
 
@@ -163,28 +174,17 @@ export default function DashboardScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.profileBtn}
+            style={styles.menuButton}
             onPress={() =>
-              navigation.navigate("Settings")
+              setMenuVisible(true)
             }
+            activeOpacity={0.7}
           >
 
             <Ionicons
-              name="settings-outline"
+              name="ellipsis-vertical"
               size={24}
               color="#111827"
-            />
-
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={handleLogout}
-          >
-
-            <Ionicons
-              name="log-out-outline"
-              size={24}
-              color="#DC2626"
             />
 
           </TouchableOpacity>
@@ -192,7 +192,209 @@ export default function DashboardScreen() {
         </View>
 
       </View>
+      {menuVisible && (
 
+  <View style={styles.menuOverlay}>
+
+    <TouchableOpacity
+      style={styles.menuBackdrop}
+      activeOpacity={1}
+      onPress={() =>
+        setMenuVisible(false)
+      }
+    />
+
+    <View style={styles.menuCard}>
+
+      <View style={styles.menuHeader}>
+
+        <View style={styles.menuAvatar}>
+
+          <Ionicons
+            name="person"
+            size={20}
+            color="#2563EB"
+          />
+
+        </View>
+
+        <View style={{ flex: 1 }}>
+
+          <Text style={styles.menuUserName}>
+            {user?.name || "Garage User"}
+          </Text>
+
+          <Text style={styles.menuRole}>
+            {user?.role?.toUpperCase() || "WORKER"}
+          </Text>
+
+        </View>
+
+      </View>
+
+      <View style={styles.menuDivider} />
+
+      <TouchableOpacity
+        style={styles.menuItem}
+        onPress={() => {
+
+          setMenuVisible(false)
+
+          navigation.navigate("Settings")
+
+        }}
+      >
+
+        <View style={styles.menuIcon}>
+
+          <Ionicons
+            name="settings-outline"
+            size={20}
+            color="#2563EB"
+          />
+
+        </View>
+
+        <Text style={styles.menuItemText}>
+          Settings
+        </Text>
+
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color="#9CA3AF"
+        />
+
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.menuItem}
+        onPress={() => {
+
+          setMenuVisible(false)
+
+          navigation.navigate("PlanUsage")
+
+        }}
+      >
+
+        <View style={styles.menuIcon}>
+
+          <Ionicons
+            name="card-outline"
+            size={20}
+            color="#2563EB"
+          />
+
+        </View>
+
+        <Text style={styles.menuItemText}>
+          Subscription & Usage
+        </Text>
+
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color="#9CA3AF"
+        />
+
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.menuItem}
+        onPress={() => {
+
+          setMenuVisible(false)
+
+          navigation.navigate("Workers")
+
+        }}
+      >
+
+        <View style={styles.menuIcon}>
+
+          <Ionicons
+            name="people-outline"
+            size={20}
+            color="#2563EB"
+          />
+
+        </View>
+
+        <Text style={styles.menuItemText}>
+          Workers
+        </Text>
+
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color="#9CA3AF"
+        />
+
+      </TouchableOpacity>
+
+      <View style={styles.menuDivider} />
+
+      <TouchableOpacity
+        style={styles.menuItem}
+        onPress={() => {
+
+          setMenuVisible(false)
+
+          Alert.alert(
+            "Logout",
+            "Are you sure you want to logout?",
+            [
+              {
+                text: "Cancel",
+                style: "cancel"
+              },
+              {
+                text: "Logout",
+                style: "destructive",
+                onPress: handleLogout
+              }
+            ]
+          )
+
+        }}
+      >
+
+        <View
+          style={[
+            styles.menuIcon,
+            {
+              backgroundColor: "#FEF2F2"
+            }
+          ]}
+        >
+
+          <Ionicons
+            name="log-out-outline"
+            size={20}
+            color="#DC2626"
+          />
+
+        </View>
+
+        <Text
+          style={[
+            styles.menuItemText,
+            {
+              color: "#DC2626"
+            }
+          ]}
+        >
+          Logout
+        </Text>
+
+      </TouchableOpacity>
+
+    </View>
+
+  </View>
+
+)}
       {/* STATS */}
 
       <View style={styles.statsContainer}>
@@ -817,6 +1019,112 @@ const styles = StyleSheet.create({
     color: "#2563EB",
     fontWeight: "700",
     fontSize: 13
-  }
+  },
+
+  menuButton: {
+  width: 48,
+  height: 48,
+  borderRadius: 16,
+  backgroundColor: "white",
+  alignItems: "center",
+  justifyContent: "center",
+  marginLeft: 4
+},
+
+menuOverlay: {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  zIndex: 100
+},
+
+menuBackdrop: {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.15)"
+},
+
+menuCard: {
+  position: "absolute",
+  top: 78,
+  right: 18,
+  width: 280,
+  backgroundColor: "white",
+  borderRadius: 18,
+  paddingVertical: 10,
+  elevation: 10,
+  shadowColor: "#000",
+  shadowOffset: {
+    width: 0,
+    height: 5
+  },
+  shadowOpacity: 0.15,
+  shadowRadius: 12
+},
+
+menuHeader: {
+  flexDirection: "row",
+  alignItems: "center",
+  paddingHorizontal: 16,
+  paddingVertical: 12
+},
+
+menuAvatar: {
+  width: 42,
+  height: 42,
+  borderRadius: 21,
+  backgroundColor: "#EFF6FF",
+  alignItems: "center",
+  justifyContent: "center",
+  marginRight: 12
+},
+
+menuUserName: {
+  fontSize: 15,
+  fontWeight: "700",
+  color: "#111827"
+},
+
+menuRole: {
+  fontSize: 11,
+  fontWeight: "700",
+  color: "#2563EB",
+  marginTop: 3
+},
+
+menuDivider: {
+  height: 1,
+  backgroundColor: "#E5E7EB",
+  marginVertical: 6
+},
+
+menuItem: {
+  flexDirection: "row",
+  alignItems: "center",
+  paddingHorizontal: 16,
+  paddingVertical: 12
+},
+
+menuIcon: {
+  width: 36,
+  height: 36,
+  borderRadius: 10,
+  backgroundColor: "#EFF6FF",
+  alignItems: "center",
+  justifyContent: "center",
+  marginRight: 12
+},
+
+menuItemText: {
+  flex: 1,
+  fontSize: 15,
+  fontWeight: "600",
+  color: "#374151"
+}
 
 })

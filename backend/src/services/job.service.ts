@@ -2,7 +2,8 @@ import {
   PutItemCommand,
   ScanCommand,
   GetItemCommand,
-  UpdateItemCommand
+  UpdateItemCommand,
+  DeleteItemCommand
 } from "@aws-sdk/client-dynamodb"
 
 import {
@@ -312,44 +313,20 @@ async (
 
 }
 
-export const deleteJob =
-async (
-  jobId: string
-) => {
+export const deleteJob = async (jobId: string) => {
 
   await db.send(
+    new DeleteItemCommand({
 
-    new UpdateItemCommand({
-
-      TableName:
-        process.env.JOBS_TABLE_NAME,
+      TableName: process.env.JOBS_TABLE_NAME,
 
       Key: {
-
         jobId: {
-
           S: jobId
-
         }
-
-      },
-
-      UpdateExpression:
-
-        "SET deleted = :deleted",
-
-      ExpressionAttributeValues: {
-
-        ":deleted": {
-
-          BOOL: true
-
-        }
-
       }
 
     })
+  );
 
-  )
-
-}
+};

@@ -18,11 +18,31 @@ export default function JobCard({ job }: any) {
 
   const navigation = useNavigation<any>()
 
-  const totalPrice = job.services.reduce(
-    (sum: number, s: any) =>
-      sum + (s.actualPrice ?? s.price ?? s.estimatedPrice ?? 0),
-    0
-  )
+  const services = Array.isArray(job.services)
+  ? job.services
+  : []
+
+const totalPrice = services.reduce(
+  (sum: number, s: any) => {
+
+    const price =
+      s.actualPrice !== null &&
+      s.actualPrice !== undefined &&
+      s.actualPrice !== ""
+        ? Number(s.actualPrice)
+        : Number(
+            s.price ??
+            s.estimatedPrice ??
+            0
+          )
+
+    const quantity =
+      Number(s.quantity || 1)
+
+    return sum + price * quantity
+  },
+  0
+)
 
   const getStatusColor = () => {
 
@@ -131,8 +151,8 @@ export default function JobCard({ job }: any) {
         <View style={styles.serviceBadge}>
 
           <Text style={styles.serviceText}>
-            {job.services.length} Service
-            {job.services.length > 1 ? "s" : ""}
+            {services.length} Service
+            {services.length > 1 ? "s" : ""}
           </Text>
 
         </View>

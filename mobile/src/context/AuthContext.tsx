@@ -40,33 +40,38 @@ export function AuthProvider({ children }: any) {
   }
 
   const login = async (
-    userData: any,
-    token: string
-  ) => {
+  userData: any,
+  token: string
+) => {
+  await AsyncStorage.setItem(
+    "user",
+    JSON.stringify(userData)
+  )
 
-    setUser(userData)
+  await AsyncStorage.setItem(
+    "token",
+    token
+  )
 
-    await AsyncStorage.setItem(
-      "user",
-      JSON.stringify(userData)
-    )
-
-    await AsyncStorage.setItem(
-      "token",
-      token
-    )
-
-  }
+  setUser(userData)
+}
 
   const logout = async () => {
 
+    console.log("logout() called")
+  try {
+    await AsyncStorage.multiRemove([
+      "user",
+      "token"
+    ])
+
     setUser(null)
 
-    await AsyncStorage.removeItem("user")
-
-    await AsyncStorage.removeItem("token")
-
+  } catch (error) {
+    console.log("Logout error:", error)
+    throw error
   }
+}
 
   return (
 

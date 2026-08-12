@@ -6,7 +6,8 @@ import {
   ActivityIndicator,
   Text,
   RefreshControl,
-  TextInput
+  TextInput,
+  Alert
 } from "react-native"
 
 import { Ionicons } from "@expo/vector-icons"
@@ -93,64 +94,63 @@ export default function JobsScreen({
   }
 
   const loadJobs = async () => {
+  try {
+    const response = await getJobs()
 
-    try {
+    const list = Array.isArray(response.jobs)
+      ? response.jobs
+      : []
 
-      const response =
-        await getJobs()
-
-      const list =
-        response.jobs || []
-
-      setJobs(list)
-
-      applyFilters(
-        list,
-        search,
-        statusFilter
-      )
-
-    }
-
-    catch (error) {
-
-      console.log(error)
-
-    }
-
-    finally {
-
-      setLoading(false)
-      setRefreshing(false)
-
-    }
-
+    setJobs(list)
   }
+  catch (error) {
+    console.log(error)
+
+    Alert.alert(
+      "Error",
+      "Unable to load jobs."
+    )
+  }
+  finally {
+    setLoading(false)
+    setRefreshing(false)
+  }
+}
 
   useFocusEffect(
+  useCallback(() => {
 
-    useCallback(() => {
+    let active = true
 
-      setLoading(true)
+    const refresh = async () => {
 
-      loadJobs()
+      if (active) {
+        setLoading(true)
+      }
 
-    }, [])
+      await loadJobs()
 
-  )
+    }
+
+    refresh()
+
+    return () => {
+      active = false
+    }
+
+  }, [])
+)
 
   useEffect(() => {
-
     applyFilters(
       jobs,
       search,
       statusFilter
     )
-
   }, [
+    jobs,
     search,
-    statusFilter,
-    jobs
+    statusFilter
   ])
 
   const onRefresh =
@@ -195,6 +195,8 @@ export default function JobsScreen({
           "all",
           "pending",
           "progress",
+          "waiting_parts",
+          "ready",
           "completed",
           "delivered"
         ].map(status => (
@@ -233,6 +235,10 @@ export default function JobsScreen({
         keyExtractor={(item) =>
           item.jobId
         }
+
+        contentContainerStyle={{
+          paddingBottom: 110,
+        }}
 
         refreshControl={
 
@@ -281,30 +287,20 @@ export default function JobsScreen({
       />
 
       <TouchableOpacity
+  style={styles.fab}
+  activeOpacity={0.8}
+  onPress={() => {
+    console.log("ADD JOB CLICKED");
 
-        style={styles.fab}
-
-        onPress={() =>
-
-          navigation.navigate(
-            "AddJob"
-          )
-
-        }
-
-      >
-
-        <Ionicons
-
-          name="add"
-
-          size={28}
-
-          color="white"
-
-        />
-
-      </TouchableOpacity>
+    navigation.navigate("CreateJob");
+  }}
+>
+  <Ionicons
+    name="add"
+    size={28}
+    color="white"
+  />
+</TouchableOpacity>
 
     </View>
 
@@ -394,28 +390,30 @@ const styles = StyleSheet.create({
   },
 
   fab: {
+  position: "absolute",
+  right: 20,
+  bottom: 30,
 
-    position: "absolute",
+  width: 60,
+  height: 60,
+  borderRadius: 30,
 
-    right: 20,
+  backgroundColor: "#2563EB",
 
-    bottom: 30,
+  justifyContent: "center",
+  alignItems: "center",
 
-    width: 60,
+  zIndex: 9999,
+  elevation: 20,
 
-    height: 60,
-
-    borderRadius: 30,
-
-    backgroundColor: "#2563EB",
-
-    justifyContent: "center",
-
-    alignItems: "center",
-
-    elevation: 5
-
+  shadowColor: "#000",
+  shadowOffset: {
+    width: 0,
+    height: 4,
   },
+  shadowOpacity: 0.25,
+  shadowRadius: 6,
+},
 
   emptyContainer: {
 
