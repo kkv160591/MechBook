@@ -14,6 +14,10 @@ import {
 } from "react"
 
 import {
+  getGarageProfile
+} from "../../services/garageService"
+
+import {
   MaterialIcons,
   Ionicons,
   FontAwesome5,
@@ -36,24 +40,19 @@ export default function DashboardScreen() {
     logout
   } = useAuth()
 
+  const [garage, setGarage] = useState<any>(null)
+  const [garageLoading, setGarageLoading] = useState(true)
+
   const handleLogout = async () => {
 
-    console.log("Logout button pressed")
   try {
-
     await logout()
-
   } catch (error) {
-
-    console.log("Logout error:", error)
-
     Alert.alert(
       "Logout Failed",
       "Unable to logout. Please try again."
     )
-
   }
-
 }
 
   const navigation: any = useNavigation()
@@ -125,6 +124,8 @@ export default function DashboardScreen() {
 
   return (
 
+    <View style={styles.screen}>
+
     <ScrollView
       style={styles.container}
       showsVerticalScrollIndicator={false}
@@ -175,9 +176,9 @@ export default function DashboardScreen() {
 
           <TouchableOpacity
             style={styles.menuButton}
-            onPress={() =>
+            onPress={() => {
               setMenuVisible(true)
-            }
+            }}
             activeOpacity={0.7}
           >
 
@@ -192,209 +193,6 @@ export default function DashboardScreen() {
         </View>
 
       </View>
-      {menuVisible && (
-
-  <View style={styles.menuOverlay}>
-
-    <TouchableOpacity
-      style={styles.menuBackdrop}
-      activeOpacity={1}
-      onPress={() =>
-        setMenuVisible(false)
-      }
-    />
-
-    <View style={styles.menuCard}>
-
-      <View style={styles.menuHeader}>
-
-        <View style={styles.menuAvatar}>
-
-          <Ionicons
-            name="person"
-            size={20}
-            color="#2563EB"
-          />
-
-        </View>
-
-        <View style={{ flex: 1 }}>
-
-          <Text style={styles.menuUserName}>
-            {user?.name || "Garage User"}
-          </Text>
-
-          <Text style={styles.menuRole}>
-            {user?.role?.toUpperCase() || "WORKER"}
-          </Text>
-
-        </View>
-
-      </View>
-
-      <View style={styles.menuDivider} />
-
-      <TouchableOpacity
-        style={styles.menuItem}
-        onPress={() => {
-
-          setMenuVisible(false)
-
-          navigation.navigate("Settings")
-
-        }}
-      >
-
-        <View style={styles.menuIcon}>
-
-          <Ionicons
-            name="settings-outline"
-            size={20}
-            color="#2563EB"
-          />
-
-        </View>
-
-        <Text style={styles.menuItemText}>
-          Settings
-        </Text>
-
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color="#9CA3AF"
-        />
-
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.menuItem}
-        onPress={() => {
-
-          setMenuVisible(false)
-
-          navigation.navigate("PlanUsage")
-
-        }}
-      >
-
-        <View style={styles.menuIcon}>
-
-          <Ionicons
-            name="card-outline"
-            size={20}
-            color="#2563EB"
-          />
-
-        </View>
-
-        <Text style={styles.menuItemText}>
-          Subscription & Usage
-        </Text>
-
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color="#9CA3AF"
-        />
-
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.menuItem}
-        onPress={() => {
-
-          setMenuVisible(false)
-
-          navigation.navigate("Workers")
-
-        }}
-      >
-
-        <View style={styles.menuIcon}>
-
-          <Ionicons
-            name="people-outline"
-            size={20}
-            color="#2563EB"
-          />
-
-        </View>
-
-        <Text style={styles.menuItemText}>
-          Workers
-        </Text>
-
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color="#9CA3AF"
-        />
-
-      </TouchableOpacity>
-
-      <View style={styles.menuDivider} />
-
-      <TouchableOpacity
-        style={styles.menuItem}
-        onPress={() => {
-
-          setMenuVisible(false)
-
-          Alert.alert(
-            "Logout",
-            "Are you sure you want to logout?",
-            [
-              {
-                text: "Cancel",
-                style: "cancel"
-              },
-              {
-                text: "Logout",
-                style: "destructive",
-                onPress: handleLogout
-              }
-            ]
-          )
-
-        }}
-      >
-
-        <View
-          style={[
-            styles.menuIcon,
-            {
-              backgroundColor: "#FEF2F2"
-            }
-          ]}
-        >
-
-          <Ionicons
-            name="log-out-outline"
-            size={20}
-            color="#DC2626"
-          />
-
-        </View>
-
-        <Text
-          style={[
-            styles.menuItemText,
-            {
-              color: "#DC2626"
-            }
-          ]}
-        >
-          Logout
-        </Text>
-
-      </TouchableOpacity>
-
-    </View>
-
-  </View>
-
-)}
       {/* STATS */}
 
       <View style={styles.statsContainer}>
@@ -731,6 +529,248 @@ export default function DashboardScreen() {
 
     </ScrollView>
 
+    {menuVisible && (
+
+  <View style={styles.menuOverlay}>
+
+    <TouchableOpacity
+      style={styles.menuBackdrop}
+      activeOpacity={1}
+      onPress={() =>
+        setMenuVisible(false)
+      }
+    />
+
+    <View style={styles.menuCard}>
+
+      <View style={styles.menuHeader}>
+
+        <View style={styles.menuAvatar}>
+
+          <Ionicons
+            name="person"
+            size={20}
+            color="#2563EB"
+          />
+
+        </View>
+
+        <View style={{ flex: 1 }}>
+
+          <Text style={styles.menuUserName}>
+            {user?.name || "Garage User"}
+          </Text>
+
+          <Text style={styles.menuRole}>
+            {user?.role?.toUpperCase() || "WORKER"}
+          </Text>
+
+        </View>
+
+      </View>
+
+      <View style={styles.menuDivider} />
+
+      <TouchableOpacity
+        style={styles.menuItem}
+        onPress={() => {
+
+          setMenuVisible(false)
+
+          navigation.navigate("Settings")
+
+        }}
+      >
+
+        <View style={styles.menuIcon}>
+
+          <Ionicons
+            name="settings-outline"
+            size={20}
+            color="#2563EB"
+          />
+
+        </View>
+
+        <Text style={styles.menuItemText}>
+          Settings
+        </Text>
+
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color="#9CA3AF"
+        />
+
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.menuItem}
+        onPress={() => {
+
+          setMenuVisible(false)
+
+          navigation.navigate("PlanUsage")
+
+        }}
+      >
+
+        <View style={styles.menuIcon}>
+
+          <Ionicons
+            name="card-outline"
+            size={20}
+            color="#2563EB"
+          />
+
+        </View>
+
+        <Text style={styles.menuItemText}>
+          Subscription & Usage
+        </Text>
+
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color="#9CA3AF"
+        />
+
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.menuItem}
+        onPress={() => {
+
+          setMenuVisible(false)
+
+          navigation.navigate("Workers")
+
+        }}
+      >
+
+        <View style={styles.menuIcon}>
+
+          <Ionicons
+            name="people-outline"
+            size={20}
+            color="#2563EB"
+          />
+
+        </View>
+
+        <Text style={styles.menuItemText}>
+          Workers
+        </Text>
+
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color="#9CA3AF"
+        />
+
+      </TouchableOpacity>
+
+      <View style={styles.menuDivider} />
+
+      {/* <TouchableOpacity
+        style={styles.menuItem}
+        onPress={() => {
+
+          setMenuVisible(false)
+
+          Alert.alert(
+            "Logout",
+            "Are you sure you want to logout?",
+            [
+              {
+                text: "Cancel",
+                style: "cancel"
+              },
+              {
+                text: "Logout",
+                style: "destructive",
+                onPress: handleLogout
+              }
+            ]
+          )
+
+        }}
+      >
+
+        <View
+          style={[
+            styles.menuIcon,
+            {
+              backgroundColor: "#FEF2F2"
+            }
+          ]}
+        >
+
+          <Ionicons
+            name="log-out-outline"
+            size={20}
+            color="#DC2626"
+          />
+
+        </View>
+
+        <Text
+          style={[
+            styles.menuItemText,
+            {
+              color: "#DC2626"
+            }
+          ]}
+        >
+          Logout
+        </Text>
+
+      </TouchableOpacity> */}
+
+      <TouchableOpacity
+  style={styles.menuItem}
+  onPress={async () => {
+    setMenuVisible(false);
+    try {
+      await logout();
+    } catch (error) {
+      Alert.alert(
+        "Logout Failed",
+        "Unable to logout. Please try again."
+      );
+    }
+  }}
+>
+  <View
+    style={[
+      styles.menuIcon,
+      { backgroundColor: "#FEF2F2" }
+    ]}
+  >
+    <Ionicons
+      name="log-out-outline"
+      size={20}
+      color="#DC2626"
+    />
+  </View>
+
+  <Text
+    style={[
+      styles.menuItemText,
+      { color: "#DC2626" }
+    ]}
+  >
+    Logout
+  </Text>
+</TouchableOpacity>
+
+    </View>
+
+  </View>
+
+)}
+
+    </View>
   )
 
 }
@@ -1047,6 +1087,11 @@ menuBackdrop: {
   right: 0,
   bottom: 0,
   backgroundColor: "rgba(0,0,0,0.15)"
+},
+
+screen: {
+  flex: 1,
+  backgroundColor: "#F3F4F6"
 },
 
 menuCard: {
