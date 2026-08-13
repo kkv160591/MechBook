@@ -11,6 +11,64 @@ import { db } from "../config/dynamodb"
 const TABLE =
   process.env.SETTINGS_TABLE_NAME
 
+const PLAN_DEFINITIONS: any = {
+
+  FREE: {
+    planName: "Free",
+    monthlyJobs: 20,
+    workers: 1,
+    monthlyPrice: 0,
+    annualPrice: 0
+  },
+
+  BASIC: {
+    planName: "Basic",
+    monthlyJobs: 100,
+    workers: 3,
+    monthlyPrice: 299,
+    annualPrice: 199
+  },
+
+  GROWTH: {
+    planName: "Growth",
+    monthlyJobs: 250,
+    workers: 6,
+    monthlyPrice: 549,
+    annualPrice: 399
+  },
+
+  CORPORATE: {
+    planName: "Corporate",
+    monthlyJobs: -1,
+    workers: -1,
+    monthlyPrice: 899,
+    annualPrice: 629
+  }
+
+}
+
+const BOOSTERS: any = {
+
+  MINI: {
+    name: "Mini Boost",
+    jobs: 20,
+    price: 49
+  },
+
+  STANDARD: {
+    name: "Standard Boost",
+    jobs: 50,
+    price: 99
+  },
+
+  BIG: {
+    name: "Big Boost",
+    jobs: 150,
+    price: 249
+  }
+
+}
+
 export const getSetting =
 async (
   garageId: string,

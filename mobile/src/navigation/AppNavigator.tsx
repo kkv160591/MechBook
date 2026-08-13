@@ -170,11 +170,6 @@ export default function AppNavigator() {
              ============================ */}
 
           <Stack.Screen
-            name="Settings"
-            component={SettingsScreen}
-          />
-
-          <Stack.Screen
             name="GarageProfile"
             component={GarageProfileScreen}
           />

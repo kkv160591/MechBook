@@ -98,15 +98,3 @@ async () => {
   return response.data
 
 }
-
-export const getPlanDetails =
-async () => {
-
-  const response =
-    await api.get(
-      "/api/settings/plan"
-    )
-
-  return response.data
-
-}

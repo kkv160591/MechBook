@@ -25,6 +25,9 @@ import settingsRoutes
 import jobRoutes 
   from "./routes/job.routes"
 
+import subscriptionRoutes
+  from "./routes/subscription.routes"
+
 const app = express()
 
 app.use(cors())
@@ -81,6 +84,11 @@ app.use(
 app.use(
   "/jobs",
   jobRoutes
+)
+
+app.use(
+  "/api/subscription",
+  subscriptionRoutes
 )
 
 export default app

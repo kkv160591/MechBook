@@ -1,11 +1,20 @@
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs"
-import { MaterialIcons } from "@expo/vector-icons"
-import { useSafeAreaInsets } from "react-native-safe-area-context"
+import {
+  createBottomTabNavigator
+} from "@react-navigation/bottom-tabs"
+
+import {
+  MaterialIcons
+} from "@expo/vector-icons"
+
+import {
+  useSafeAreaInsets
+} from "react-native-safe-area-context"
 
 import DashboardScreen from "../screens/dashboard/DashboardScreen"
 import JobsScreen from "../screens/jobs/JobsScreen"
 import CustomersScreen from "../screens/customers/CustomersScreen"
 import InventoryScreen from "../screens/inventory/InventoryScreen"
+import SettingsScreen from "../screens/settings/SettingsScreen"
 
 import {
   View,
@@ -13,33 +22,13 @@ import {
   StyleSheet
 } from "react-native"
 
-const Tab = createBottomTabNavigator()
-
-function SettingsScreen() {
-
-  return (
-
-    <View style={styles.placeholder}>
-
-      <MaterialIcons
-        name="settings"
-        size={60}
-        color="#9CA3AF"
-      />
-
-      <Text style={styles.placeholderText}>
-        Settings Screen
-      </Text>
-
-    </View>
-
-  )
-
-}
+const Tab =
+  createBottomTabNavigator()
 
 export default function BottomTabs() {
 
-  const insets = useSafeAreaInsets()
+  const insets =
+    useSafeAreaInsets()
 
   return (
 
@@ -49,58 +38,105 @@ export default function BottomTabs() {
 
         headerShown: false,
 
-        tabBarActiveTintColor: "#2563EB",
+        tabBarActiveTintColor:
+          "#2563EB",
 
-        tabBarInactiveTintColor: "#9CA3AF",
+        tabBarInactiveTintColor:
+          "#9CA3AF",
 
         tabBarShowLabel: true,
 
-        tabBarHideOnKeyboard: true,
+        tabBarHideOnKeyboard:
+          true,
 
         tabBarStyle: {
-          height: 60 + insets.bottom,
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
+
+          height:
+            60 + insets.bottom,
+
+          paddingBottom:
+            insets.bottom > 0
+              ? insets.bottom
+              : 10,
+
           paddingTop: 8,
+
           borderTopWidth: 1,
-          borderTopColor: "#E5E7EB",
-          backgroundColor: "#FFFFFF",
+
+          borderTopColor:
+            "#E5E7EB",
+
+          backgroundColor:
+            "#FFFFFF",
+
           elevation: 12
+
         },
 
         tabBarLabelStyle: {
+
           fontSize: 11,
+
           fontWeight: "600",
+
           marginBottom: 2
+
         },
 
         tabBarIconStyle: {
+
           marginTop: 2
+
         },
 
-        tabBarIcon: ({ color, size }) => {
+        tabBarIcon: ({
+          color,
+          size
+        }) => {
 
           let iconName: any
 
           switch (route.name) {
 
             case "Dashboard":
-              iconName = "dashboard"
+
+              iconName =
+                "dashboard"
+
               break
 
             case "Jobs":
-              iconName = "build"
+
+              iconName =
+                "build"
+
               break
 
             case "Customers":
-              iconName = "people"
+
+              iconName =
+                "people"
+
               break
 
             case "Inventory":
-              iconName = "inventory"
+
+              iconName =
+                "inventory"
+
+              break
+
+            case "Settings":
+
+              iconName =
+                "settings"
+
               break
 
             default:
-              iconName = "dashboard"
+
+              iconName =
+                "dashboard"
 
           }
 
@@ -140,26 +176,13 @@ export default function BottomTabs() {
         component={InventoryScreen}
       />
 
+      <Tab.Screen
+        name="Settings"
+        component={SettingsScreen}
+      />
+
     </Tab.Navigator>
 
   )
 
 }
-
-const styles = StyleSheet.create({
-
-  placeholder: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F3F4F6"
-  },
-
-  placeholderText: {
-    marginTop: 16,
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#6B7280"
-  }
-
-})

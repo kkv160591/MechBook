@@ -6,11 +6,12 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert
+  RefreshControl
 } from "react-native"
 
 import {
-  useState
+  useState,
+  useCallback
 } from "react"
 
 import {
@@ -18,14 +19,27 @@ import {
 } from "../../services/garageService"
 
 import {
+  getJobs
+} from "../../services/jobService"
+
+import {
+  getWorkers
+} from "../../services/workerService"
+
+import {
+  getLowStockItems
+} from "../../services/inventoryService"
+
+import {
   MaterialIcons,
   Ionicons,
-  FontAwesome5,
-  Feather
+  FontAwesome5
 } from "@expo/vector-icons"
 
-import { useNavigation } from "@react-navigation/native"
-import { dummyJobs } from "../../data/dummyJobs"
+import {
+  useNavigation,
+  useFocusEffect
+} from "@react-navigation/native"
 
 import {
   useAuth
@@ -33,810 +47,1153 @@ import {
 
 export default function DashboardScreen() {
 
-  const [menuVisible, setMenuVisible] = useState(false)
-
-  const {
-    user,
-    logout
-  } = useAuth()
-
-  const [garage, setGarage] = useState<any>(null)
-  const [garageLoading, setGarageLoading] = useState(true)
-
-  const handleLogout = async () => {
-
-  try {
-    await logout()
-  } catch (error) {
-    Alert.alert(
-      "Logout Failed",
-      "Unable to logout. Please try again."
-    )
-  }
-}
-
   const navigation: any = useNavigation()
 
-  const todayJobs = dummyJobs.length
+  const {
+    user
+  } = useAuth()
 
-  const completedJobs = dummyJobs.filter(
-    j => j.status === "completed"
-  ).length
+  // --------------------------------
+  // STATE
+  // --------------------------------
 
-  const pendingJobs = dummyJobs.filter(
-    j => j.status === "pending"
-  ).length
+  const [garage, setGarage] =
+    useState<any>(null)
 
-  const inProgressJobs = dummyJobs.filter(
-    j => j.status === "progress"
-  ).length
+  const [jobs, setJobs] =
+    useState<any[]>([])
 
-  const totalRevenue = dummyJobs.reduce((sum, job) => {
+  const [workers, setWorkers] =
+    useState<any[]>([])
 
-    const total = job.services.reduce(
-      (s: number, item: any) =>
-        s + (item.actualPrice ?? item.estimatedPrice),
-      0
-    )
+  const [lowStockItems, setLowStockItems] =
+    useState<any[]>([])
 
-    return sum + total
+  const [loading, setLoading] =
+    useState(true)
 
-  }, 0)
+  const [refreshing, setRefreshing] =
+    useState(false)
 
-  const pendingPayments = 2
-  const lowStockItems = 4
+  // --------------------------------
+  // LOAD DASHBOARD DATA
+  // --------------------------------
+
+  const loadDashboardData =
+    async () => {
+
+      try {
+
+        setLoading(true)
+
+        const [
+          garageResponse,
+          jobsResponse,
+          workersResponse,
+          lowStockResponse
+        ] = await Promise.all([
+
+          getGarageProfile(),
+
+          getJobs(),
+
+          getWorkers(),
+
+          getLowStockItems()
+
+        ])
+
+        console.log(
+          "Dashboard Garage:",
+          garageResponse?.garage
+        )
+
+        console.log(
+          "Dashboard Jobs:",
+          jobsResponse
+        )
+
+        console.log(
+          "Dashboard Workers:",
+          workersResponse
+        )
+
+        console.log(
+          "Dashboard Low Stock:",
+          lowStockResponse
+        )
+
+        // ----------------------------
+        // GARAGE
+        // ----------------------------
+
+        setGarage(
+          garageResponse?.garage || null
+        )
+
+        // ----------------------------
+        // JOBS
+        // ----------------------------
+
+        const jobList =
+          Array.isArray(jobsResponse)
+            ? jobsResponse
+            : Array.isArray(jobsResponse?.jobs)
+              ? jobsResponse.jobs
+              : []
+
+        setJobs(jobList)
+
+        // ----------------------------
+        // WORKERS
+        // ----------------------------
+
+        const workerList =
+          Array.isArray(workersResponse)
+            ? workersResponse
+            : Array.isArray(workersResponse?.workers)
+              ? workersResponse.workers
+              : []
+
+        setWorkers(workerList)
+
+        // ----------------------------
+        // LOW STOCK
+        // ----------------------------
+
+        const inventoryList =
+          Array.isArray(lowStockResponse)
+            ? lowStockResponse
+            : Array.isArray(lowStockResponse?.items)
+              ? lowStockResponse.items
+              : []
+
+        setLowStockItems(
+          inventoryList
+        )
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "Failed to load dashboard:",
+          error
+        )
+
+      }
+
+      finally {
+
+        setLoading(false)
+
+      }
+
+    }
+
+  // --------------------------------
+  // REFRESH WHEN SCREEN OPENS
+  // --------------------------------
+
+  useFocusEffect(
+    useCallback(() => {
+
+      loadDashboardData()
+
+    }, [])
+  )
+
+  // --------------------------------
+  // PULL TO REFRESH
+  // --------------------------------
+
+  const onRefresh =
+    async () => {
+
+      try {
+
+        setRefreshing(true)
+
+        await loadDashboardData()
+
+      }
+
+      finally {
+
+        setRefreshing(false)
+
+      }
+
+    }
+
+  // --------------------------------
+  // JOB STATISTICS
+  // --------------------------------
+
+  const totalJobs =
+    jobs.length
+
+  const completedJobs =
+    jobs.filter(
+      job =>
+        job.status === "completed"
+    ).length
+
+  const pendingJobs =
+    jobs.filter(
+      job =>
+        job.status === "pending"
+    ).length
+
+  const inProgressJobs =
+    jobs.filter(
+      job =>
+        job.status === "progress" ||
+        job.status === "in-progress" ||
+        job.status === "inProgress"
+    ).length
+
+  // --------------------------------
+  // DEMO REVENUE
+  // --------------------------------
+  // Keep this temporary until
+  // invoice/revenue API is available.
+
+  const demoRevenue = 48500
+
+  // --------------------------------
+  // DEMO PLAN USAGE
+  // --------------------------------
+  // Keep temporary until plan API
+  // is implemented.
+
   const jobsUsed = 18
-  const jobLimit = 20
 
-  const jobsRemaining =
-    jobLimit - jobsUsed
+  const jobLimit = 20
 
   const usagePercent =
     Math.round(
       (jobsUsed / jobLimit) * 100
     )
 
-  const recentJobs = dummyJobs.slice(0, 4)
+  // --------------------------------
+  // DEMO PAYMENT DATA
+  // --------------------------------
+  // Temporary until invoice/payment
+  // API is implemented.
 
-  const getStatusColor = (status: string) => {
+  const pendingPayments = 2
 
-    if (status === "completed") return "#16A34A"
+  // --------------------------------
+  // RECENT JOBS
+  // --------------------------------
 
-    if (status === "pending") return "#DC2626"
+  const recentJobs =
+    jobs.slice(0, 4)
 
-    if (status === "progress") return "#EA580C"
+  // --------------------------------
+  // STATUS HELPERS
+  // --------------------------------
 
-    return "#2563EB"
+  const getStatusColor =
+    (status: string) => {
 
-  }
+      if (
+        status === "completed"
+      ) {
+        return "#16A34A"
+      }
 
-  const getStatusText = (status: string) => {
+      if (
+        status === "pending"
+      ) {
+        return "#DC2626"
+      }
 
-    if (status === "completed") return "COMPLETED"
+      if (
+        status === "progress" ||
+        status === "in-progress" ||
+        status === "inProgress"
+      ) {
+        return "#EA580C"
+      }
 
-    if (status === "pending") return "PENDING"
+      return "#2563EB"
 
-    if (status === "progress") return "IN PROGRESS"
+    }
 
-    return status.toUpperCase()
+  const getStatusText =
+    (status: string) => {
 
-  }
+      if (
+        status === "completed"
+      ) {
+        return "COMPLETED"
+      }
+
+      if (
+        status === "pending"
+      ) {
+        return "PENDING"
+      }
+
+      if (
+        status === "progress" ||
+        status === "in-progress" ||
+        status === "inProgress"
+      ) {
+        return "IN PROGRESS"
+      }
+
+      return (
+        status?.toUpperCase() ||
+        "UNKNOWN"
+      )
+
+    }
+
+  // --------------------------------
+  // JOB TOTAL
+  // --------------------------------
+
+  const getJobTotal =
+    (job: any) => {
+
+      if (
+        typeof job.totalAmount === "number"
+      ) {
+        return job.totalAmount
+      }
+
+      if (
+        typeof job.total === "number"
+      ) {
+        return job.total
+      }
+
+      if (
+        Array.isArray(job.services)
+      ) {
+
+        return job.services.reduce(
+          (
+            sum: number,
+            service: any
+          ) => {
+
+            return (
+              sum +
+              Number(
+                service.actualPrice ??
+                service.estimatedPrice ??
+                0
+              )
+            )
+
+          },
+          0
+        )
+
+      }
+
+      return 0
+
+    }
+
+  // --------------------------------
+  // RENDER
+  // --------------------------------
 
   return (
 
     <View style={styles.screen}>
 
-    <ScrollView
-      style={styles.container}
-      showsVerticalScrollIndicator={false}
-    >
+      <ScrollView
 
-      {/* HEADER */}
+        style={styles.container}
 
-      <View style={styles.headerRow}>
+        showsVerticalScrollIndicator={false}
 
-        <View>
+        refreshControl={
 
-          <Text style={styles.greeting}>
-            Welcome Back 👋
-          </Text>
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+          />
 
-          <Text style={styles.header}>
-            GarageBook
-          </Text>
+        }
 
-          <Text style={styles.subHeader}>
-            RK Auto Service Center
-          </Text>
+      >
 
-          <Text style={styles.roleText}>
-            {user?.role?.toUpperCase()}
-          </Text>
+        {/* ==========================
+            HEADER
+        ========================== */}
 
-        </View>
+        <View style={styles.headerRow}>
 
-        <View style={styles.headerRight}>
+          <View style={styles.headerInfo}>
+
+            <Text style={styles.greeting}>
+              Welcome Back 👋
+            </Text>
+
+            <Text
+              style={styles.header}
+              numberOfLines={1}
+            >
+
+              {loading
+                ? "Loading..."
+                : garage?.garageName ||
+                  "Garage"}
+
+            </Text>
+
+            <Text
+              style={styles.subHeader}
+              numberOfLines={1}
+            >
+
+              {garage?.city
+
+                ? `${garage.city}${
+                    garage.state
+                      ? `, ${garage.state}`
+                      : ""
+                  }`
+
+                : garage?.address ||
+                  "Garage Dashboard"}
+
+            </Text>
+
+            <Text style={styles.roleText}>
+
+              {user?.role
+                ?.toUpperCase() ||
+                "USER"}
+
+            </Text>
+
+          </View>
 
           <TouchableOpacity
             style={styles.planRing}
             onPress={() =>
-              navigation.navigate("PlanUsage")
+              navigation.navigate(
+                "PlanUsage"
+              )
             }
+            activeOpacity={0.7}
           >
 
-            <Text style={styles.planRingNumber}>
+            <Text
+              style={styles.planRingNumber}
+            >
               {usagePercent}%
             </Text>
 
-            <Text style={styles.planRingLabel}>
+            <Text
+              style={styles.planRingLabel}
+            >
               USED
             </Text>
 
           </TouchableOpacity>
 
+        </View>
+
+
+        {/* ==========================
+            STATS
+        ========================== */}
+
+        <View style={styles.statsContainer}>
+
+          {/* TOTAL JOBS */}
+
+          <View style={styles.card}>
+
+            <View style={styles.iconBox}>
+
+              <MaterialIcons
+                name="build"
+                size={22}
+                color="#2563EB"
+              />
+
+            </View>
+
+            <Text
+              style={styles.cardValue}
+            >
+              {totalJobs}
+            </Text>
+
+            <Text
+              style={styles.cardTitle}
+            >
+              Total Jobs
+            </Text>
+
+          </View>
+
+
+          {/* PENDING */}
+
+          <View style={styles.card}>
+
+            <View
+              style={[
+                styles.iconBox,
+                {
+                  backgroundColor:
+                    "#FEF2F2"
+                }
+              ]}
+            >
+
+              <MaterialIcons
+                name="pending-actions"
+                size={22}
+                color="#DC2626"
+              />
+
+            </View>
+
+            <Text
+              style={styles.cardValue}
+            >
+              {pendingJobs}
+            </Text>
+
+            <Text
+              style={styles.cardTitle}
+            >
+              Pending Jobs
+            </Text>
+
+          </View>
+
+
+          {/* COMPLETED */}
+
+          <View style={styles.card}>
+
+            <View
+              style={[
+                styles.iconBox,
+                {
+                  backgroundColor:
+                    "#ECFDF5"
+                }
+              ]}
+            >
+
+              <MaterialIcons
+                name="check-circle"
+                size={22}
+                color="#16A34A"
+              />
+
+            </View>
+
+            <Text
+              style={styles.cardValue}
+            >
+              {completedJobs}
+            </Text>
+
+            <Text
+              style={styles.cardTitle}
+            >
+              Completed
+            </Text>
+
+          </View>
+
+
+          {/* REVENUE */}
+
+          <View style={styles.card}>
+
+            <View
+              style={[
+                styles.iconBox,
+                {
+                  backgroundColor:
+                    "#EFF6FF"
+                }
+              ]}
+            >
+
+              <MaterialIcons
+                name="payments"
+                size={22}
+                color="#2563EB"
+              />
+
+            </View>
+
+            <Text
+              style={styles.cardValue}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
+              ₹{demoRevenue.toLocaleString("en-IN")}
+            </Text>
+
+            <Text
+              style={styles.cardTitle}
+            >
+              Revenue
+            </Text>
+
+          </View>
+
+        </View>
+
+
+        {/* ==========================
+            QUICK ACTIONS
+        ========================== */}
+
+        <Text style={styles.sectionTitle}>
+          Quick Actions
+        </Text>
+
+        <View style={styles.quickActions}>
+
+          {/* CREATE JOB */}
+
           <TouchableOpacity
-            style={styles.menuButton}
-            onPress={() => {
-              setMenuVisible(true)
-            }}
+            style={styles.actionBtn}
+            onPress={() =>
+              navigation.navigate(
+                "CreateJob"
+              )
+            }
             activeOpacity={0.7}
           >
 
-            <Ionicons
-              name="ellipsis-vertical"
-              size={24}
-              color="#111827"
+            <MaterialIcons
+              name="add-circle"
+              size={30}
+              color="#2563EB"
             />
+
+            <Text style={styles.actionText}>
+              Create Job
+            </Text>
 
           </TouchableOpacity>
 
-        </View>
 
-      </View>
-      {/* STATS */}
-
-      <View style={styles.statsContainer}>
-
-        <View style={styles.card}>
-
-          <View style={styles.iconBox}>
-            <MaterialIcons
-              name="build"
-              size={22}
-              color="#2563EB"
-            />
-          </View>
-
-          <Text style={styles.cardValue}>
-            {todayJobs}
-          </Text>
-
-          <Text style={styles.cardTitle}>
-            Total Jobs
-          </Text>
-
-        </View>
-
-        <View style={styles.card}>
-
-          <View
-            style={[
-              styles.iconBox,
-              { backgroundColor: "#FEF2F2" }
-            ]}
-          >
-            <MaterialIcons
-              name="pending-actions"
-              size={22}
-              color="#DC2626"
-            />
-          </View>
-
-          <Text style={styles.cardValue}>
-            {pendingJobs}
-          </Text>
-
-          <Text style={styles.cardTitle}>
-            Pending Jobs
-          </Text>
-
-        </View>
-
-        <View style={styles.card}>
-
-          <View
-            style={[
-              styles.iconBox,
-              { backgroundColor: "#ECFDF5" }
-            ]}
-          >
-            <MaterialIcons
-              name="check-circle"
-              size={22}
-              color="#16A34A"
-            />
-          </View>
-
-          <Text style={styles.cardValue}>
-            {completedJobs}
-          </Text>
-
-          <Text style={styles.cardTitle}>
-            Completed
-          </Text>
-
-        </View>
-
-        <View style={styles.card}>
-
-          <View
-            style={[
-              styles.iconBox,
-              { backgroundColor: "#EFF6FF" }
-            ]}
-          >
-            <MaterialIcons
-              name="payments"
-              size={22}
-              color="#2563EB"
-            />
-          </View>
-
-          <Text style={styles.cardValue}>
-            ₹{totalRevenue}
-          </Text>
-
-          <Text style={styles.cardTitle}>
-            Revenue
-          </Text>
-
-        </View>
-
-      </View>
-
-      {/* QUICK ACTIONS */}
-
-      <Text style={styles.sectionTitle}>
-        Quick Actions
-      </Text>
-
-      <View style={styles.quickActions}>
-
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() => navigation.navigate("CreateJob")}
-        >
-
-          <MaterialIcons
-            name="add-circle"
-            size={28}
-            color="#2563EB"
-          />
-
-          <Text style={styles.actionText}>
-            Create Job
-          </Text>
-
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionBtn}
-        >
-
-          <FontAwesome5
-            name="file-invoice"
-            size={22}
-            color="#2563EB"
-          />
-
-          <Text style={styles.actionText}>
-            Invoices
-          </Text>
-
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionBtn}
-        >
-
-          <Ionicons
-            name="people"
-            size={24}
-            color="#2563EB"
-          />
-
-          <Text style={styles.actionText}>
-            Customers
-          </Text>
-
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionBtn}
-        >
-
-          <Feather
-            name="package"
-            size={24}
-            color="#2563EB"
-          />
-
-          <Text style={styles.actionText}>
-            Inventory
-          </Text>
-
-        </TouchableOpacity>
-
-      </View>
-
-      {/* BUSINESS ALERTS */}
-
-      <Text style={styles.sectionTitle}>
-        Alerts & Reminders
-      </Text>
-
-      <View style={styles.alertCard}>
-
-        <View style={styles.alertRow}>
-
-          <Ionicons
-            name="warning-outline"
-            size={20}
-            color="#EA580C"
-          />
-
-          <Text style={styles.alertText}>
-            {pendingPayments} pending payments need follow-up
-          </Text>
-
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.alertRow}>
-
-          <Feather
-            name="package"
-            size={18}
-            color="#DC2626"
-          />
-
-          <Text style={styles.alertText}>
-            {lowStockItems} spare parts are low in stock
-          </Text>
-
-        </View>
-
-      </View>
-
-      {/* RECENT JOBS */}
-
-      <View style={styles.sectionRow}>
-
-        <Text style={styles.sectionTitle}>
-          Recent Jobs
-        </Text>
-
-        <TouchableOpacity
-          onPress={() => navigation.navigate("Jobs")}
-        >
-
-          <Text style={styles.viewAll}>
-            View All
-          </Text>
-
-        </TouchableOpacity>
-
-      </View>
-
-      {recentJobs.map((item) => {
-
-        const total = item.services.reduce(
-          (sum: number, s: any) =>
-            sum + (s.actualPrice ?? s.estimatedPrice),
-          0
-        )
-
-        return (
+          {/* INVOICE */}
 
           <TouchableOpacity
-            key={item.id}
-            style={styles.jobCard}
+            style={styles.actionBtn}
             onPress={() =>
-              navigation.navigate("JobDetail", {
-                job: item
-              })
+              navigation.navigate(
+                "Invoice"
+              )
             }
+            activeOpacity={0.7}
           >
 
-            <View style={styles.jobTop}>
+            <FontAwesome5
+              name="file-invoice"
+              size={24}
+              color="#2563EB"
+            />
 
-              <View style={{ flex: 1 }}>
-
-                <View style={styles.vehicleRow}>
-
-                  <View style={styles.vehicleIcon}>
-
-                    <Ionicons
-                      name={
-                        item.vehicleType === "2 Wheeler"
-                          ? "bicycle"
-                          : "car-sport"
-                      }
-                      size={16}
-                      color="#2563EB"
-                    />
-
-                  </View>
-
-                  <View>
-
-                    <Text style={styles.vehicle}>
-                      {item.vehicleNumber}
-                    </Text>
-
-                    <Text style={styles.vehicleModel}>
-                      {item.vehicleModel}
-                    </Text>
-
-                  </View>
-
-                </View>
-
-                <Text style={styles.customer}>
-                  {item.customer}
-                </Text>
-
-              </View>
-
-              <Text style={styles.amount}>
-                ₹{total}
-              </Text>
-
-            </View>
-
-            <View style={styles.jobBottom}>
-
-              <View
-                style={[
-                  styles.statusBadge,
-                  {
-                    backgroundColor:
-                      getStatusColor(item.status)
-                  }
-                ]}
-              >
-
-                <Text style={styles.statusText}>
-                  {getStatusText(item.status)}
-                </Text>
-
-              </View>
-
-              <Text style={styles.servicesText}>
-                {item.services.length} services
-              </Text>
-
-            </View>
+            <Text style={styles.actionText}>
+              Invoices
+            </Text>
 
           </TouchableOpacity>
 
-        )
+        </View>
 
-      })}
 
-      <View style={{ height: 100 }} />
+        {/* ==========================
+            BUSINESS OVERVIEW
+        ========================== */}
 
-    </ScrollView>
+        <Text style={styles.sectionTitle}>
+          Business Overview
+        </Text>
 
-    {menuVisible && (
+        <View style={styles.overviewCard}>
 
-  <View style={styles.menuOverlay}>
+          {/* WORKERS */}
 
-    <TouchableOpacity
-      style={styles.menuBackdrop}
-      activeOpacity={1}
-      onPress={() =>
-        setMenuVisible(false)
-      }
-    />
+          <View style={styles.overviewRow}>
 
-    <View style={styles.menuCard}>
+            <View
+              style={styles.overviewIcon}
+            >
 
-      <View style={styles.menuHeader}>
+              <Ionicons
+                name="people-outline"
+                size={20}
+                color="#2563EB"
+              />
 
-        <View style={styles.menuAvatar}>
+            </View>
 
-          <Ionicons
-            name="person"
-            size={20}
-            color="#2563EB"
-          />
+            <View style={styles.overviewText}>
+
+              <Text
+                style={styles.overviewTitle}
+              >
+                Workers
+              </Text>
+
+              <Text
+                style={styles.overviewSubtitle}
+              >
+                Active staff available
+              </Text>
+
+            </View>
+
+            <Text
+              style={styles.overviewValue}
+            >
+              {workers.length}
+            </Text>
+
+          </View>
+
+
+          <View style={styles.divider} />
+
+
+          {/* IN PROGRESS */}
+
+          <View style={styles.overviewRow}>
+
+            <View
+              style={styles.overviewIcon}
+            >
+
+              <MaterialIcons
+                name="build-circle"
+                size={20}
+                color="#EA580C"
+              />
+
+            </View>
+
+            <View style={styles.overviewText}>
+
+              <Text
+                style={styles.overviewTitle}
+              >
+                In Progress
+              </Text>
+
+              <Text
+                style={styles.overviewSubtitle}
+              >
+                Jobs currently being serviced
+              </Text>
+
+            </View>
+
+            <Text
+              style={styles.overviewValue}
+            >
+              {inProgressJobs}
+            </Text>
+
+          </View>
+
+
+          <View style={styles.divider} />
+
+
+          {/* LOW STOCK */}
+
+          <View style={styles.overviewRow}>
+
+            <View
+              style={[
+                styles.overviewIcon,
+                {
+                  backgroundColor:
+                    "#FEF2F2"
+                }
+              ]}
+            >
+
+              <Ionicons
+                name="warning-outline"
+                size={20}
+                color="#DC2626"
+              />
+
+            </View>
+
+            <View style={styles.overviewText}>
+
+              <Text
+                style={styles.overviewTitle}
+              >
+                Low Stock
+              </Text>
+
+              <Text
+                style={styles.overviewSubtitle}
+              >
+                Spare parts need attention
+              </Text>
+
+            </View>
+
+            <Text
+              style={[
+                styles.overviewValue,
+                {
+                  color:
+                    lowStockItems.length > 0
+                      ? "#DC2626"
+                      : "#16A34A"
+                }
+              ]}
+            >
+              {lowStockItems.length}
+            </Text>
+
+          </View>
+
+
+          <View style={styles.divider} />
+
+
+          {/* PAYMENTS */}
+
+          <View style={styles.overviewRow}>
+
+            <View
+              style={[
+                styles.overviewIcon,
+                {
+                  backgroundColor:
+                    "#FFF7ED"
+                }
+              ]}
+            >
+
+              <MaterialIcons
+                name="payments"
+                size={20}
+                color="#EA580C"
+              />
+
+            </View>
+
+            <View style={styles.overviewText}>
+
+              <Text
+                style={styles.overviewTitle}
+              >
+                Pending Payments
+              </Text>
+
+              <Text
+                style={styles.overviewSubtitle}
+              >
+                Demo data for now
+              </Text>
+
+            </View>
+
+            <Text
+              style={[
+                styles.overviewValue,
+                {
+                  color: "#EA580C"
+                }
+              ]}
+            >
+              {pendingPayments}
+            </Text>
+
+          </View>
 
         </View>
 
-        <View style={{ flex: 1 }}>
 
-          <Text style={styles.menuUserName}>
-            {user?.name || "Garage User"}
+        {/* ==========================
+            RECENT JOBS
+        ========================== */}
+
+        <View style={styles.sectionRow}>
+
+          <Text style={styles.sectionTitle}>
+            Recent Jobs
           </Text>
 
-          <Text style={styles.menuRole}>
-            {user?.role?.toUpperCase() || "WORKER"}
-          </Text>
+          <TouchableOpacity
+            onPress={() =>
+              navigation.navigate("Jobs")
+            }
+          >
+
+            <Text style={styles.viewAll}>
+              View All
+            </Text>
+
+          </TouchableOpacity>
 
         </View>
 
-      </View>
 
-      <View style={styles.menuDivider} />
+        {recentJobs.length === 0 ? (
 
-      <TouchableOpacity
-        style={styles.menuItem}
-        onPress={() => {
+          <View style={styles.emptyCard}>
 
-          setMenuVisible(false)
+            <MaterialIcons
+              name="assignment"
+              size={36}
+              color="#9CA3AF"
+            />
 
-          navigation.navigate("Settings")
+            <Text
+              style={styles.emptyTitle}
+            >
+              No jobs yet
+            </Text>
 
-        }}
-      >
+            <Text
+              style={styles.emptyText}
+            >
+              Create your first job to see
+              it here.
+            </Text>
 
-        <View style={styles.menuIcon}>
-
-          <Ionicons
-            name="settings-outline"
-            size={20}
-            color="#2563EB"
-          />
-
-        </View>
-
-        <Text style={styles.menuItemText}>
-          Settings
-        </Text>
-
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color="#9CA3AF"
-        />
-
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.menuItem}
-        onPress={() => {
-
-          setMenuVisible(false)
-
-          navigation.navigate("PlanUsage")
-
-        }}
-      >
-
-        <View style={styles.menuIcon}>
-
-          <Ionicons
-            name="card-outline"
-            size={20}
-            color="#2563EB"
-          />
-
-        </View>
-
-        <Text style={styles.menuItemText}>
-          Subscription & Usage
-        </Text>
-
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color="#9CA3AF"
-        />
-
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.menuItem}
-        onPress={() => {
-
-          setMenuVisible(false)
-
-          navigation.navigate("Workers")
-
-        }}
-      >
-
-        <View style={styles.menuIcon}>
-
-          <Ionicons
-            name="people-outline"
-            size={20}
-            color="#2563EB"
-          />
-
-        </View>
-
-        <Text style={styles.menuItemText}>
-          Workers
-        </Text>
-
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color="#9CA3AF"
-        />
-
-      </TouchableOpacity>
-
-      <View style={styles.menuDivider} />
-
-      {/* <TouchableOpacity
-        style={styles.menuItem}
-        onPress={() => {
-
-          setMenuVisible(false)
-
-          Alert.alert(
-            "Logout",
-            "Are you sure you want to logout?",
-            [
-              {
-                text: "Cancel",
-                style: "cancel"
-              },
-              {
-                text: "Logout",
-                style: "destructive",
-                onPress: handleLogout
+            <TouchableOpacity
+              style={styles.emptyButton}
+              onPress={() =>
+                navigation.navigate(
+                  "CreateJob"
+                )
               }
-            ]
+            >
+
+              <Text
+                style={styles.emptyButtonText}
+              >
+                Create Job
+              </Text>
+
+            </TouchableOpacity>
+
+          </View>
+
+        ) : (
+
+          recentJobs.map(
+            (item: any) => {
+
+              const total =
+                getJobTotal(item)
+
+              return (
+
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.jobCard}
+                  onPress={() =>
+                    navigation.navigate(
+                      "JobDetail",
+                      {
+                        job: item
+                      }
+                    )
+                  }
+                  activeOpacity={0.7}
+                >
+
+                  <View
+                    style={styles.jobTop}
+                  >
+
+                    <View
+                      style={{
+                        flex: 1
+                      }}
+                    >
+
+                      <View
+                        style={
+                          styles.vehicleRow
+                        }
+                      >
+
+                        <View
+                          style={
+                            styles.vehicleIcon
+                          }
+                        >
+
+                          <Ionicons
+                            name={
+                              item.vehicleType ===
+                              "2 Wheeler"
+                                ? "bicycle"
+                                : "car-sport"
+                            }
+                            size={16}
+                            color="#2563EB"
+                          />
+
+                        </View>
+
+                        <View
+                          style={{
+                            flex: 1
+                          }}
+                        >
+
+                          <Text
+                            style={
+                              styles.vehicle
+                            }
+                            numberOfLines={1}
+                          >
+                            {
+                              item.vehicleNumber ||
+                              item.vehicle?.number ||
+                              "Vehicle"
+                            }
+                          </Text>
+
+                          <Text
+                            style={
+                              styles.vehicleModel
+                            }
+                            numberOfLines={1}
+                          >
+                            {
+                              item.vehicleModel ||
+                              item.vehicle?.model ||
+                              "Vehicle details"
+                            }
+                          </Text>
+
+                        </View>
+
+                      </View>
+
+                      <Text
+                        style={styles.customer}
+                        numberOfLines={1}
+                      >
+                        {
+                          item.customerName ||
+                          item.customer?.name ||
+                          item.customer ||
+                          "Customer"
+                        }
+                      </Text>
+
+                    </View>
+
+                    <Text
+                      style={styles.amount}
+                    >
+                      ₹
+                      {Number(total)
+                        .toLocaleString(
+                          "en-IN"
+                        )}
+                    </Text>
+
+                  </View>
+
+
+                  <View
+                    style={styles.jobBottom}
+                  >
+
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        {
+                          backgroundColor:
+                            getStatusColor(
+                              item.status
+                            )
+                        }
+                      ]}
+                    >
+
+                      <Text
+                        style={
+                          styles.statusText
+                        }
+                      >
+                        {
+                          getStatusText(
+                            item.status
+                          )
+                        }
+                      </Text>
+
+                    </View>
+
+                    <Text
+                      style={
+                        styles.servicesText
+                      }
+                    >
+                      {
+                        Array.isArray(
+                          item.services
+                        )
+                          ? `${item.services.length} services`
+                          : "Service"
+                      }
+                    </Text>
+
+                  </View>
+
+                </TouchableOpacity>
+
+              )
+
+            }
           )
 
-        }}
-      >
+        )}
+
 
         <View
-          style={[
-            styles.menuIcon,
-            {
-              backgroundColor: "#FEF2F2"
-            }
-          ]}
-        >
+          style={{
+            height: 100
+          }}
+        />
 
-          <Ionicons
-            name="log-out-outline"
-            size={20}
-            color="#DC2626"
-          />
-
-        </View>
-
-        <Text
-          style={[
-            styles.menuItemText,
-            {
-              color: "#DC2626"
-            }
-          ]}
-        >
-          Logout
-        </Text>
-
-      </TouchableOpacity> */}
-
-      <TouchableOpacity
-  style={styles.menuItem}
-  onPress={async () => {
-    setMenuVisible(false);
-    try {
-      await logout();
-    } catch (error) {
-      Alert.alert(
-        "Logout Failed",
-        "Unable to logout. Please try again."
-      );
-    }
-  }}
->
-  <View
-    style={[
-      styles.menuIcon,
-      { backgroundColor: "#FEF2F2" }
-    ]}
-  >
-    <Ionicons
-      name="log-out-outline"
-      size={20}
-      color="#DC2626"
-    />
-  </View>
-
-  <Text
-    style={[
-      styles.menuItemText,
-      { color: "#DC2626" }
-    ]}
-  >
-    Logout
-  </Text>
-</TouchableOpacity>
+      </ScrollView>
 
     </View>
 
-  </View>
-
-)}
-
-    </View>
   )
 
 }
 
+// ==================================
+// STYLES
+// ==================================
+
 const styles = StyleSheet.create({
 
-  headerRight: {
-    flexDirection: "row",
-    alignItems: "center"
-  },
-
-  planRing: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    borderWidth: 3,
-    borderColor: "#2563EB",
-    backgroundColor: "#EFF6FF",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 10
-  },
-
-  planRingNumber: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#2563EB"
-  },
-
-  planRingLabel: {
-    fontSize: 9,
-    color: "#6B7280",
-    fontWeight: "600"
-  },
-
-  usageCard: {
-    backgroundColor: "white",
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 22,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center"
-  },
-
-  usageTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#111827"
-  },
-
-  usageText: {
-    color: "#6B7280",
-    marginTop: 4
-  },
-
-  usageBadge: {
-    backgroundColor: "#EFF6FF",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20
-  },
-
-  usageBadgeText: {
-    color: "#2563EB",
-    fontWeight: "700"
+  screen: {
+    flex: 1,
+    backgroundColor: "#F3F4F6"
   },
 
   container: {
@@ -851,6 +1208,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 22
+  },
+
+  headerInfo: {
+    flex: 1,
+    paddingRight: 12
   },
 
   greeting: {
@@ -870,13 +1232,34 @@ const styles = StyleSheet.create({
     marginTop: 3
   },
 
-  profileBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: "white",
-    alignItems: "center",
-    justifyContent: "center"
+  roleText: {
+    marginTop: 6,
+    color: "#2563EB",
+    fontWeight: "700",
+    fontSize: 13
+  },
+
+  planRing: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    borderWidth: 3,
+    borderColor: "#2563EB",
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center"
+  },
+
+  planRingNumber: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#2563EB"
+  },
+
+  planRingLabel: {
+    fontSize: 9,
+    color: "#6B7280",
+    fontWeight: "600"
   },
 
   statsContainer: {
@@ -925,7 +1308,6 @@ const styles = StyleSheet.create({
 
   quickActions: {
     flexDirection: "row",
-    flexWrap: "wrap",
     justifyContent: "space-between",
     marginBottom: 12
   },
@@ -935,8 +1317,7 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderRadius: 18,
     paddingVertical: 22,
-    alignItems: "center",
-    marginBottom: 14
+    alignItems: "center"
   },
 
   actionText: {
@@ -945,28 +1326,54 @@ const styles = StyleSheet.create({
     color: "#374151"
   },
 
-  alertCard: {
+  overviewCard: {
     backgroundColor: "white",
     borderRadius: 18,
-    padding: 18,
-    marginBottom: 12
+    paddingHorizontal: 16,
+    marginBottom: 18
   },
 
-  alertRow: {
+  overviewRow: {
     flexDirection: "row",
-    alignItems: "center"
+    alignItems: "center",
+    paddingVertical: 14
   },
 
-  alertText: {
-    marginLeft: 10,
-    color: "#374151",
-    fontWeight: "500"
+  overviewIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#EFF6FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12
+  },
+
+  overviewText: {
+    flex: 1
+  },
+
+  overviewTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#111827"
+  },
+
+  overviewSubtitle: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 3
+  },
+
+  overviewValue: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#111827"
   },
 
   divider: {
     height: 1,
-    backgroundColor: "#E5E7EB",
-    marginVertical: 14
+    backgroundColor: "#E5E7EB"
   },
 
   sectionRow: {
@@ -1027,7 +1434,8 @@ const styles = StyleSheet.create({
   amount: {
     fontWeight: "bold",
     color: "#16A34A",
-    fontSize: 18
+    fontSize: 17,
+    marginLeft: 8
   },
 
   jobBottom: {
@@ -1054,122 +1462,39 @@ const styles = StyleSheet.create({
     fontWeight: "500"
   },
 
-  roleText: {
-    marginTop: 6,
-    color: "#2563EB",
+  emptyCard: {
+    backgroundColor: "white",
+    borderRadius: 20,
+    padding: 28,
+    alignItems: "center",
+    marginBottom: 20
+  },
+
+  emptyTitle: {
+    fontSize: 17,
     fontWeight: "700",
-    fontSize: 13
+    color: "#111827",
+    marginTop: 10
   },
 
-  menuButton: {
-  width: 48,
-  height: 48,
-  borderRadius: 16,
-  backgroundColor: "white",
-  alignItems: "center",
-  justifyContent: "center",
-  marginLeft: 4
-},
-
-menuOverlay: {
-  position: "absolute",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  zIndex: 100
-},
-
-menuBackdrop: {
-  position: "absolute",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  backgroundColor: "rgba(0,0,0,0.15)"
-},
-
-screen: {
-  flex: 1,
-  backgroundColor: "#F3F4F6"
-},
-
-menuCard: {
-  position: "absolute",
-  top: 78,
-  right: 18,
-  width: 280,
-  backgroundColor: "white",
-  borderRadius: 18,
-  paddingVertical: 10,
-  elevation: 10,
-  shadowColor: "#000",
-  shadowOffset: {
-    width: 0,
-    height: 5
+  emptyText: {
+    fontSize: 13,
+    color: "#6B7280",
+    textAlign: "center",
+    marginTop: 5,
+    marginBottom: 16
   },
-  shadowOpacity: 0.15,
-  shadowRadius: 12
-},
 
-menuHeader: {
-  flexDirection: "row",
-  alignItems: "center",
-  paddingHorizontal: 16,
-  paddingVertical: 12
-},
+  emptyButton: {
+    backgroundColor: "#2563EB",
+    paddingHorizontal: 20,
+    paddingVertical: 11,
+    borderRadius: 12
+  },
 
-menuAvatar: {
-  width: 42,
-  height: 42,
-  borderRadius: 21,
-  backgroundColor: "#EFF6FF",
-  alignItems: "center",
-  justifyContent: "center",
-  marginRight: 12
-},
-
-menuUserName: {
-  fontSize: 15,
-  fontWeight: "700",
-  color: "#111827"
-},
-
-menuRole: {
-  fontSize: 11,
-  fontWeight: "700",
-  color: "#2563EB",
-  marginTop: 3
-},
-
-menuDivider: {
-  height: 1,
-  backgroundColor: "#E5E7EB",
-  marginVertical: 6
-},
-
-menuItem: {
-  flexDirection: "row",
-  alignItems: "center",
-  paddingHorizontal: 16,
-  paddingVertical: 12
-},
-
-menuIcon: {
-  width: 36,
-  height: 36,
-  borderRadius: 10,
-  backgroundColor: "#EFF6FF",
-  alignItems: "center",
-  justifyContent: "center",
-  marginRight: 12
-},
-
-menuItemText: {
-  flex: 1,
-  fontSize: 15,
-  fontWeight: "600",
-  color: "#374151"
-}
+  emptyButtonText: {
+    color: "white",
+    fontWeight: "700"
+  }
 
 })
