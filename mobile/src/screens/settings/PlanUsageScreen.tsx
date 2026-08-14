@@ -1,50 +1,40 @@
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState
+} from "react"
+
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert
+  Alert,
+  ActivityIndicator
 } from "react-native"
 
-import {
-  useEffect,
-  useState
-} from "react"
+import { MaterialIcons } from "@expo/vector-icons"
+
+import RazorpayCheckout from "react-native-razorpay"
 
 import {
-  MaterialIcons
-} from "@expo/vector-icons"
-
-import {
+  verifySubscriptionPayment,
+  RazorpayOrderPayload,
   getPlanUsage,
   changePlan,
-  buyBooster
+  buyBooster,
+  BillingCycle,
+  PlanUsageResponse
 } from "../../services/subscriptionService"
 
-
-type BillingCycle =
-  | "monthly"
-  | "annual"
 
 type PlanKey =
   | "free"
   | "basic"
   | "growth"
   | "corporate"
-
-
-type PlanUsage = {
-  planName?: string
-  planCode?: string
-  billingCycle?: string
-
-  jobsUsed?: number
-  jobsLimit?: number | string
-
-  renewalDate?: string
-  daysRemaining?: number
-}
 
 
 type Plan = {
@@ -72,11 +62,21 @@ type Booster = {
 /*
  * PLAN CONFIGURATION
  *
- * Keep this here for now.
+ * monthly = monthly billing price
  *
- * Later, if you want the backend/DynamoDB
- * to control pricing and features, move this
- * into your settings/plans configuration.
+ * annual = monthly-equivalent price when
+ * the customer chooses annual billing.
+ *
+ * The actual annual charge is calculated as:
+ *
+ * annual * 12
+ *
+ * Example:
+ *
+ * Basic:
+ * Monthly = ₹299/month
+ * Annual equivalent = ₹199/month
+ * Annual charge = ₹199 × 12 = ₹2,388/year
  */
 
 const PLANS: Record<PlanKey, Plan> = {
@@ -214,13 +214,11 @@ const FEATURES = [
     corporate: "✓"
   }
 
-]
+] as const
 
 
 /*
  * BOOSTERS
- *
- * The "code" is what your backend receives.
  */
 
 const BOOSTERS: Booster[] = [
@@ -255,13 +253,97 @@ const BOOSTERS: Booster[] = [
 ]
 
 
+/*
+ * DEVELOPMENT FALLBACK
+ */
+
+const DEVELOPMENT_FALLBACK: PlanUsageResponse = {
+
+  planName: "Free",
+
+  planCode: "free",
+
+  billingCycle: "monthly",
+
+  jobsUsed: 18,
+
+  jobsLimit: 20,
+
+  renewalDate: "31 Aug 2026",
+
+  daysRemaining: 18
+
+}
+
+
+/*
+ * NORMALIZE PLAN KEY
+ */
+
+const normalizePlanKey = (
+  value?: string | null
+): PlanKey => {
+
+  const normalized =
+    String(value ?? "")
+      .toLowerCase()
+      .trim()
+
+  if (
+    normalized === "free" ||
+    normalized === "basic" ||
+    normalized === "growth" ||
+    normalized === "corporate"
+  ) {
+    return normalized
+  }
+
+  return "free"
+}
+
+
+/*
+ * NORMALIZE BILLING CYCLE
+ */
+
+const normalizeBillingCycle = (
+  value?: string | null
+): BillingCycle | null => {
+
+  const normalized =
+    String(value ?? "")
+      .toLowerCase()
+      .trim()
+
+  if (normalized === "monthly") {
+    return "monthly"
+  }
+
+  if (
+    normalized === "annual" ||
+    normalized === "yearly"
+  ) {
+    return "annual"
+  }
+
+  return null
+}
+
+
+/*
+ * SCREEN
+ */
+
 export default function PlanUsageScreen() {
 
   const [plan, setPlan] =
-    useState<PlanUsage | null>(null)
+    useState<PlanUsageResponse | null>(null)
 
   const [loading, setLoading] =
     useState(true)
+
+  const [refreshing, setRefreshing] =
+    useState(false)
 
   const [changingPlan, setChangingPlan] =
     useState(false)
@@ -275,393 +357,169 @@ export default function PlanUsageScreen() {
   const [showFeatures, setShowFeatures] =
     useState(false)
 
+  const [loadError, setLoadError] =
+    useState(false)
+
 
   /*
    * LOAD CURRENT PLAN
    */
 
-  useEffect(() => {
+  const loadPlan = useCallback(
+    async (
+      isRefresh = false
+    ) => {
 
-    loadPlan()
+      try {
 
-  }, [])
+        if (isRefresh) {
+          setRefreshing(true)
+        } else {
+          setLoading(true)
+        }
 
+        setLoadError(false)
 
-  const loadPlan = async () => {
+        const data =
+          await getPlanUsage()
 
-    try {
+        console.log(
+          "Subscription:",
+          data
+        )
 
-      setLoading(true)
-
-      const data =
-        await getPlanUsage()
-
-      console.log(
-        "Subscription:",
-        data
-      )
-
-      setPlan(data)
-
-      /*
-       * If backend already provides billingCycle,
-       * synchronize the UI with it.
-       */
-
-      if (
-        data?.billingCycle
-      ) {
+        setPlan(data)
 
         const backendCycle =
-          data.billingCycle.toLowerCase()
-
-        if (
-          backendCycle === "monthly" ||
-          backendCycle === "annual"
-        ) {
-
-          setBillingCycle(
-            backendCycle as BillingCycle
+          normalizeBillingCycle(
+            data?.billingCycle
           )
 
+        if (backendCycle) {
+          setBillingCycle(
+            backendCycle
+          )
         }
 
       }
 
-    }
+      catch (error) {
 
-    catch (error) {
+        console.log(
+          "Failed to load subscription:",
+          error
+        )
 
-      console.log(
-        "Failed to load subscription:",
-        error
-      )
+        setLoadError(true)
 
-      /*
-       * DEVELOPMENT FALLBACK
-       *
-       * This allows the screen to remain usable
-       * while your backend subscription endpoint
-       * is still being developed.
-       */
+        setPlan(
+          DEVELOPMENT_FALLBACK
+        )
 
-      setPlan({
+      }
 
-        planName: "Free",
-        planCode: "free",
+      finally {
 
-        jobsUsed: 18,
-        jobsLimit: 20,
+        setLoading(false)
+        setRefreshing(false)
 
-        renewalDate: "31 Aug 2026",
-        daysRemaining: 18
+      }
 
-      })
+    },
+    []
+  )
 
-    }
 
-    finally {
+  useEffect(() => {
 
-      setLoading(false)
+    loadPlan()
 
-    }
-
-  }
-
-
-  /*
-   * CHANGE PLAN
-   *
-   * For development your backend can temporarily
-   * return success without real payment.
-   *
-   * Later the same endpoint can be connected
-   * to Razorpay/another gateway.
-   */
-
-  const handleUpgrade = async (
-    selectedPlan: Plan
-  ) => {
-
-    const selectedPlanKey =
-      selectedPlan.key
-
-    const currentPlanKey =
-      (
-        plan?.planCode ||
-        plan?.planName ||
-        "free"
-      )
-        .toLowerCase()
-        .trim() as PlanKey
-
-
-    if (
-      selectedPlanKey ===
-      currentPlanKey
-    ) {
-
-      return
-
-    }
-
-
-    const actionText =
-      selectedPlanKey === "free"
-        ? "Switch to Free"
-        : `Upgrade to ${selectedPlan.name}`
-
-
-    Alert.alert(
-      actionText,
-      `Continue with ${selectedPlan.name} plan at ₹${
-        billingCycle === "monthly"
-          ? selectedPlan.monthly
-          : selectedPlan.annual
-      }/${billingCycle === "monthly" ? "month" : "month"}?`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
-
-        {
-          text: "Continue",
-
-          onPress: async () => {
-
-            try {
-
-              setChangingPlan(true)
-
-              const result =
-                await changePlan(
-                  selectedPlanKey,
-                  billingCycle === "monthly"
-                    ? "MONTHLY"
-                    : "ANNUAL"
-                )
-
-
-              console.log(
-                "Change plan result:",
-                result
-              )
-
-
-              /*
-               * DEVELOPMENT PAYMENT SUCCESS
-               *
-               * At this stage we assume that
-               * a successful API response means
-               * payment/change was successful.
-               */
-
-              Alert.alert(
-                "Success",
-                `${selectedPlan.name} plan activated successfully.`,
-                [
-                  {
-                    text: "OK",
-                    onPress: () => {
-                      loadPlan()
-                    }
-                  }
-                ]
-              )
-
-            }
-
-            catch (error) {
-
-              console.log(
-                "Change plan failed:",
-                error
-              )
-
-              Alert.alert(
-                "Unable to change plan",
-                "Something went wrong while changing your subscription. Please try again."
-              )
-
-            }
-
-            finally {
-
-              setChangingPlan(false)
-
-            }
-
-          }
-
-        }
-
-      ]
-    )
-
-  }
-
-
-  /*
-   * BUY BOOSTER
-   */
-
-  const handleBooster = (
-    booster: Booster
-  ) => {
-
-    Alert.alert(
-      booster.title,
-      `Add ${booster.jobs} jobs for ₹${booster.price}?`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
-
-        {
-          text: "Continue",
-
-          onPress: async () => {
-
-            try {
-
-              setBuyingBooster(true)
-
-              const result =
-                await buyBooster(
-                  booster.code
-                )
-
-
-              console.log(
-                "Booster result:",
-                result
-              )
-
-
-              /*
-               * DEVELOPMENT PAYMENT SUCCESS
-               */
-
-              Alert.alert(
-                "Success",
-                `${booster.jobs} additional jobs have been added to your account.`,
-                [
-                  {
-                    text: "OK",
-                    onPress: () => {
-                      loadPlan()
-                    }
-                  }
-                ]
-              )
-
-            }
-
-            catch (error) {
-
-              console.log(
-                "Booster purchase failed:",
-                error
-              )
-
-              Alert.alert(
-                "Unable to purchase booster",
-                "Something went wrong while purchasing the booster. Please try again."
-              )
-
-            }
-
-            finally {
-
-              setBuyingBooster(false)
-
-            }
-
-          }
-
-        }
-
-      ]
-    )
-
-  }
-
-
-  /*
-   * LOADING
-   */
-
-  if (loading) {
-
-    return (
-
-      <View style={styles.loadingContainer}>
-
-        <MaterialIcons
-          name="workspace-premium"
-          size={40}
-          color="#2563EB"
-        />
-
-        <Text style={styles.loadingText}>
-          Loading subscription...
-        </Text>
-
-      </View>
-
-    )
-
-  }
+  }, [loadPlan])
 
 
   /*
    * CURRENT PLAN
    */
 
-  const currentPlanName =
-    plan?.planName || "Free"
-
-
   const currentPlanKey =
-    (
-      plan?.planCode ||
-      currentPlanName ||
-      "free"
+    useMemo(
+      () => {
+
+        return normalizePlanKey(
+          plan?.planCode ||
+          plan?.planName
+        )
+
+      },
+      [
+        plan?.planCode,
+        plan?.planName
+      ]
     )
-      .toLowerCase()
-      .trim() as PlanKey
 
 
-  const safeCurrentPlanKey =
+  const currentPlan =
     PLANS[currentPlanKey]
-      ? currentPlanKey
-      : "free"
 
+
+  const currentPlanName =
+    plan?.planName ||
+    currentPlan.name
+
+
+  /*
+   * CURRENT BILLING CYCLE
+   */
+
+  const currentBillingCycle =
+    normalizeBillingCycle(
+      plan?.billingCycle
+    ) ||
+    billingCycle
+
+
+  /*
+   * USAGE
+   */
 
   const jobsUsed =
-    Number(
-      plan?.jobsUsed ?? 0
+    Math.max(
+      Number(
+        plan?.jobsUsed ?? 0
+      ),
+      0
     )
 
 
   const jobsLimit =
-    plan?.jobsLimit === "Unlimited"
+    String(
+      plan?.jobsLimit ?? currentPlan.jobs
+    )
+      .toLowerCase() ===
+      "unlimited"
+
       ? "Unlimited"
-      : Number(
-          plan?.jobsLimit ?? 20
+
+      : Math.max(
+          Number(
+            plan?.jobsLimit ??
+            currentPlan.jobs
+          ),
+          0
         )
 
 
   const usagePercentage =
     jobsLimit === "Unlimited"
+
       ? 0
+
       : Math.min(
           Math.round(
-            (jobsUsed /
-              Number(jobsLimit)) *
-              100
+            (
+              jobsUsed /
+              Number(jobsLimit)
+            ) * 100
           ),
           100
         )
@@ -669,10 +527,12 @@ export default function PlanUsageScreen() {
 
   const jobsRemaining =
     jobsLimit === "Unlimited"
+
       ? "Unlimited"
+
       : Math.max(
           Number(jobsLimit) -
-            jobsUsed,
+          jobsUsed,
           0
         )
 
@@ -689,6 +549,576 @@ export default function PlanUsageScreen() {
 
 
   /*
+   * BILLING PRICE HELPERS
+   *
+   * Annual price is the ACTUAL amount charged
+   * for the full year.
+   */
+
+  const getMonthlyPrice = (
+    selectedPlan: Plan
+  ) => {
+
+    return selectedPlan.monthly
+
+  }
+
+
+  const getAnnualMonthlyEquivalent = (
+    selectedPlan: Plan
+  ) => {
+
+    return selectedPlan.annual
+
+  }
+
+
+  const getAnnualPrice = (
+    selectedPlan: Plan
+  ) => {
+
+    return selectedPlan.annual * 12
+
+  }
+
+
+  const getSelectedPrice = (
+    selectedPlan: Plan
+  ) => {
+
+    return billingCycle === "monthly"
+      ? selectedPlan.monthly
+      : getAnnualPrice(selectedPlan)
+
+  }
+
+
+  /*
+   * CHANGE BILLING CYCLE
+   */
+
+  const handleBillingCycleChange = (
+    cycle: BillingCycle
+  ) => {
+
+    if (
+      changingPlan ||
+      buyingBooster
+    ) {
+      return
+    }
+
+    setBillingCycle(
+      cycle
+    )
+
+  }
+
+
+  /*
+   * RAZORPAY TEST CHECKOUT
+   *
+   * IMPORTANT:
+   *
+   * payment.keyId MUST be a Razorpay TEST MODE key
+   * returned by the development backend.
+   *
+   * Do NOT put the live Razorpay key here.
+   */
+
+  const openRazorpayCheckout = async (
+    payment: RazorpayOrderPayload
+  ) => {
+
+    const options = {
+
+      key: payment.keyId,
+
+      amount: payment.amount,
+
+      currency: payment.currency,
+
+      name: "MechBook",
+
+      description:
+        payment.planCode
+          ? `${payment.planCode} subscription`
+          : "Subscription payment",
+
+      order_id:
+        payment.orderId,
+
+      prefill: {
+        name: "",
+        email: "",
+        contact: ""
+      },
+
+      theme: {
+        color: "#2563EB"
+      }
+
+    }
+
+    console.log(
+      "Opening Razorpay TEST checkout:",
+      {
+        orderId: payment.orderId,
+        currency: payment.currency,
+        amount: payment.amount
+      }
+    )
+
+    const result =
+      await RazorpayCheckout.open(
+        options
+      )
+
+    return result
+
+  }
+
+
+  /*
+   * CHANGE PLAN
+   */
+
+  const handleUpgrade = (
+    selectedPlan: Plan
+  ) => {
+
+    if (
+      changingPlan ||
+      buyingBooster
+    ) {
+      return
+    }
+
+    if (
+      selectedPlan.key ===
+      currentPlanKey
+    ) {
+      return
+    }
+
+
+    const monthlyPrice =
+      getMonthlyPrice(
+        selectedPlan
+      )
+
+
+    const annualMonthlyEquivalent =
+      getAnnualMonthlyEquivalent(
+        selectedPlan
+      )
+
+
+    const annualPrice =
+      getAnnualPrice(
+        selectedPlan
+      )
+
+
+    let confirmationText = ""
+
+
+    if (
+      selectedPlan.key ===
+      "free"
+    ) {
+
+      confirmationText =
+        "Your account will be moved to the Free plan."
+
+    }
+
+    else if (
+      billingCycle ===
+      "monthly"
+    ) {
+
+      confirmationText =
+        `Continue with ${selectedPlan.name} at ₹${monthlyPrice}/month?`
+
+    }
+
+    else {
+
+      confirmationText =
+        `Continue with ${selectedPlan.name} for ₹${annualPrice}/year (₹${annualMonthlyEquivalent}/month equivalent)?`
+
+    }
+
+
+    Alert.alert(
+
+      selectedPlan.key === "free"
+        ? "Switch to Free"
+        : `Upgrade to ${selectedPlan.name}`,
+
+      confirmationText,
+
+      [
+
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+
+        {
+          text: "Continue",
+
+          onPress: async () => {
+
+            try {
+
+              setChangingPlan(true)
+
+              /*
+               * Backend creates the Razorpay TEST order.
+               */
+
+              const result =
+                await changePlan(
+                  selectedPlan.key,
+                  billingCycle
+                )
+
+
+              /*
+               * FREE PLAN
+               */
+
+              if (
+                !result.paymentRequired
+              ) {
+
+                await loadPlan()
+
+                Alert.alert(
+                  "Plan updated",
+                  `${selectedPlan.name} plan is now active.`
+                )
+
+                return
+
+              }
+
+
+              /*
+               * PAID PLAN
+               */
+
+              if (
+                !result.payment
+              ) {
+
+                throw new Error(
+                  "Payment order was not created."
+                )
+
+              }
+
+
+              /*
+               * Open Razorpay TEST Checkout.
+               */
+
+              const paymentResult =
+                await openRazorpayCheckout(
+                  result.payment
+                )
+
+
+              /*
+               * Verify payment on backend.
+               */
+
+              await verifySubscriptionPayment({
+
+                razorpayPaymentId:
+                  paymentResult.razorpay_payment_id,
+
+                razorpayOrderId:
+                  paymentResult.razorpay_order_id,
+
+                razorpaySignature:
+                  paymentResult.razorpay_signature
+
+              })
+
+
+              /*
+               * Only after backend verification
+               * reload the actual subscription.
+               */
+
+              await loadPlan()
+
+
+              Alert.alert(
+                "Payment successful",
+                `${selectedPlan.name} plan is now active.`
+              )
+
+            }
+
+            catch (error: any) {
+
+              console.log(
+                "Plan payment failed:",
+                error
+              )
+
+
+              if (
+                error?.code ===
+                "PAYMENT_CANCELLED"
+              ) {
+
+                Alert.alert(
+                  "Payment cancelled",
+                  "Your plan was not changed."
+                )
+
+              }
+
+              else {
+
+                Alert.alert(
+                  "Payment unsuccessful",
+                  error?.message ||
+                  "We could not complete your payment. Please try again."
+                )
+
+              }
+
+            }
+
+            finally {
+
+              setChangingPlan(false)
+
+            }
+
+          }
+
+        }
+
+      ]
+
+    )
+
+  }
+
+
+  /*
+   * BUY BOOSTER
+   */
+
+  const handleBooster = (
+    booster: Booster
+  ) => {
+
+    if (
+      buyingBooster ||
+      changingPlan
+    ) {
+      return
+    }
+
+
+    Alert.alert(
+
+      booster.title,
+
+      `Add ${booster.jobs} jobs for ₹${booster.price}?`,
+
+      [
+
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+
+        {
+          text: "Continue",
+
+          onPress: async () => {
+
+            try {
+
+              setBuyingBooster(true)
+
+              /*
+               * Backend creates Razorpay TEST order.
+               */
+
+              const result =
+                await buyBooster(
+                  booster.code
+                )
+
+
+              if (
+                !result.paymentRequired
+              ) {
+
+                await loadPlan()
+
+                Alert.alert(
+                  "Booster added",
+                  `${booster.jobs} additional jobs have been added.`
+                )
+
+                return
+
+              }
+
+
+              if (
+                !result.payment
+              ) {
+
+                throw new Error(
+                  "Payment order was not created."
+                )
+
+              }
+
+
+              /*
+               * Open Razorpay TEST Checkout.
+               */
+
+              const paymentResult =
+                await openRazorpayCheckout(
+                  result.payment
+                )
+
+
+              /*
+               * Verify on backend.
+               */
+
+              await verifySubscriptionPayment({
+
+                razorpayPaymentId:
+                  paymentResult.razorpay_payment_id,
+
+                razorpayOrderId:
+                  paymentResult.razorpay_order_id,
+
+                razorpaySignature:
+                  paymentResult.razorpay_signature
+
+              })
+
+
+              await loadPlan()
+
+
+              Alert.alert(
+                "Payment successful",
+                `${booster.jobs} additional jobs have been added.`
+              )
+
+            }
+
+            catch (error: any) {
+
+              console.log(
+                "Booster payment failed:",
+                error
+              )
+
+
+              if (
+                error?.code ===
+                "PAYMENT_CANCELLED"
+              ) {
+
+                Alert.alert(
+                  "Payment cancelled",
+                  "The booster was not added."
+                )
+
+              }
+
+              else {
+
+                Alert.alert(
+                  "Payment unsuccessful",
+                  error?.message ||
+                  "We could not complete the booster purchase."
+                )
+
+              }
+
+            }
+
+            finally {
+
+              setBuyingBooster(false)
+
+            }
+
+          }
+
+        }
+
+      ]
+
+    )
+
+  }
+
+
+  /*
+   * LOADING
+   */
+
+  if (loading) {
+
+    return (
+
+      <View
+        style={
+          styles.loadingContainer
+        }
+      >
+
+        <MaterialIcons
+          name="workspace-premium"
+          size={40}
+          color="#2563EB"
+        />
+
+        <ActivityIndicator
+          size="small"
+          color="#2563EB"
+          style={{
+            marginTop: 14
+          }}
+        />
+
+        <Text
+          style={
+            styles.loadingText
+          }
+        >
+          Loading subscription...
+        </Text>
+
+      </View>
+
+    )
+
+  }
+
+
+  /*
    * RENDER
    */
 
@@ -697,30 +1127,79 @@ export default function PlanUsageScreen() {
     <ScrollView
       style={styles.container}
       showsVerticalScrollIndicator={false}
+      contentContainerStyle={
+        styles.contentContainer
+      }
     >
 
-      {/* PAGE HEADER */}
+      {/* HEADER */}
 
-      <View style={styles.pageHeader}>
+      <View
+        style={styles.pageHeader}
+      >
 
-        <Text style={styles.pageTitle}>
-          Plan & Usage
-        </Text>
+        <View>
 
-        <Text style={styles.pageSubtitle}>
-          Manage your subscription and monthly job usage
-        </Text>
+          <Text
+            style={styles.pageTitle}
+          >
+            Plan & Usage
+          </Text>
+
+          <Text
+            style={styles.pageSubtitle}
+          >
+            Manage your subscription, billing and job usage
+          </Text>
+
+        </View>
+
+
+        {loadError && (
+
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() =>
+              loadPlan(true)
+            }
+            disabled={refreshing}
+          >
+
+            <MaterialIcons
+              name="refresh"
+              size={18}
+              color="#2563EB"
+            />
+
+            <Text
+              style={styles.retryText}
+            >
+              {refreshing
+                ? "Refreshing..."
+                : "Retry"}
+            </Text>
+
+          </TouchableOpacity>
+
+        )}
 
       </View>
 
 
-      {/* CURRENT PLAN */}
+      {/* CURRENT PLAN + USAGE
+          MERGED INTO ONE SECTION */}
 
-      <View style={styles.currentPlanCard}>
+      <View
+        style={styles.currentPlanCard}
+      >
 
-        <View style={styles.currentPlanTop}>
+        <View
+          style={styles.currentPlanTop}
+        >
 
-          <View style={styles.currentPlanIcon}>
+          <View
+            style={styles.currentPlanIcon}
+          >
 
             <MaterialIcons
               name="workspace-premium"
@@ -731,24 +1210,36 @@ export default function PlanUsageScreen() {
           </View>
 
 
-          <View style={styles.currentPlanInfo}>
+          <View
+            style={styles.currentPlanInfo}
+          >
 
-            <Text style={styles.currentPlanLabel}>
+            <Text
+              style={styles.currentPlanLabel}
+            >
               CURRENT PLAN
             </Text>
 
-            <Text style={styles.currentPlanName}>
+            <Text
+              style={styles.currentPlanName}
+            >
               {currentPlanName}
             </Text>
 
           </View>
 
 
-          <View style={styles.activeBadge}>
+          <View
+            style={styles.activeBadge}
+          >
 
-            <View style={styles.activeDot} />
+            <View
+              style={styles.activeDot}
+            />
 
-            <Text style={styles.activeText}>
+            <Text
+              style={styles.activeText}
+            >
               ACTIVE
             </Text>
 
@@ -757,46 +1248,78 @@ export default function PlanUsageScreen() {
         </View>
 
 
-        <View style={styles.planDivider} />
+        <View
+          style={styles.planDivider}
+        />
 
 
-        <View style={styles.planDetailsRow}>
+        {/* BILLING INFORMATION */}
 
-          <View>
+        <View
+          style={styles.planDetailsRow}
+        >
 
-            <Text style={styles.detailLabel}>
-              Monthly price
+          <View
+            style={styles.detailColumn}
+          >
+
+            <Text
+              style={styles.detailLabel}
+            >
+              Billing
             </Text>
 
-            <Text style={styles.detailValue}>
-              ₹
-              {
-                PLANS[
-                  safeCurrentPlanKey
-                ]?.monthly ?? 0
-              }
-              /mo
+            <Text
+              style={styles.detailValue}
+            >
+              {currentPlan.monthly === 0
+                ? "Free"
+                : currentBillingCycle === "annual"
+                ? `₹${currentPlan.annual}/mo`
+                : `₹${currentPlan.monthly}/mo`}
             </Text>
+
+            {currentPlan.monthly > 0 &&
+              currentBillingCycle === "annual" && (
+
+                <Text
+                  style={styles.detailSubValue}
+                >
+                  ₹{getAnnualPrice(currentPlan)}/year
+                </Text>
+
+              )}
 
           </View>
 
 
-          <View>
+          <View
+            style={styles.detailColumn}
+          >
 
-            <Text style={styles.detailLabel}>
+            <Text
+              style={styles.detailLabel}
+            >
               Renewal
             </Text>
 
-            <Text style={styles.detailValue}>
-              {plan?.renewalDate || "—"}
+            <Text
+              style={styles.detailValue}
+            >
+              {plan?.renewalDate ||
+                "—"}
             </Text>
 
           </View>
 
 
-          <View>
+          <View
+            style={styles.detailColumn}
+          >
 
-            <Text style={styles.detailLabel}>
+            <Text
+              style={styles.detailLabel}
+            >
               Days left
             </Text>
 
@@ -809,47 +1332,65 @@ export default function PlanUsageScreen() {
                       plan?.daysRemaining ??
                       0
                     ) <= 7
-                      ? "#DC2626"
-                      : "#16A34A"
+                      ? "#FCA5A5"
+                      : "#34D399"
                 }
               ]}
             >
-              {plan?.daysRemaining ?? "—"}
+              {plan?.daysRemaining ??
+                "—"}
             </Text>
 
           </View>
 
         </View>
 
-      </View>
+
+        <View
+          style={styles.planDividerSmall}
+        />
 
 
-      {/* USAGE */}
+        {/* USAGE */}
 
-      <View style={styles.usageCard}>
+        <View
+          style={styles.usageHeader}
+        >
 
-        <View style={styles.sectionHeaderRow}>
+          <View
+            style={{
+              flex: 1
+            }}
+          >
 
-          <View>
-
-            <Text style={styles.sectionTitle}>
+            <Text
+              style={styles.usageTitle}
+            >
               Jobs this month
             </Text>
 
-            <Text style={styles.sectionSubtitle}>
+            <Text
+              style={styles.usageSubtitle}
+            >
               Your monthly job card allowance
             </Text>
 
           </View>
 
 
-          <View style={styles.usageNumberBox}>
+          <View
+            style={styles.usageNumberBox}
+          >
 
-            <Text style={styles.usageNumber}>
+            <Text
+              style={styles.usageNumberDark}
+            >
               {jobsUsed}
             </Text>
 
-            <Text style={styles.usageLimit}>
+            <Text
+              style={styles.usageLimitDark}
+            >
               / {jobsLimit}
             </Text>
 
@@ -862,7 +1403,11 @@ export default function PlanUsageScreen() {
 
           <>
 
-            <View style={styles.progressBackground}>
+            <View
+              style={
+                styles.progressBackgroundDark
+              }
+            >
 
               <View
                 style={[
@@ -873,10 +1418,10 @@ export default function PlanUsageScreen() {
 
                     backgroundColor:
                       isLimitReached
-                        ? "#DC2626"
+                        ? "#EF4444"
                         : isNearLimit
                         ? "#F59E0B"
-                        : "#2563EB"
+                        : "#60A5FA"
                   }
                 ]}
               />
@@ -884,18 +1429,24 @@ export default function PlanUsageScreen() {
             </View>
 
 
-            <View style={styles.usageFooter}>
+            <View
+              style={styles.usageFooter}
+            >
 
-              <Text style={styles.usagePercentage}>
+              <Text
+                style={
+                  styles.usagePercentageDark
+                }
+              >
                 {usagePercentage}% used
               </Text>
 
 
               <Text
                 style={[
-                  styles.remainingText,
+                  styles.remainingTextDark,
                   isLimitReached &&
-                    styles.remainingDanger
+                    styles.remainingDangerDark
                 ]}
               >
                 {isLimitReached
@@ -912,15 +1463,19 @@ export default function PlanUsageScreen() {
 
         {jobsLimit === "Unlimited" && (
 
-          <View style={styles.unlimitedBox}>
+          <View
+            style={styles.unlimitedBox}
+          >
 
             <MaterialIcons
               name="all-inclusive"
               size={20}
-              color="#16A34A"
+              color="#34D399"
             />
 
-            <Text style={styles.unlimitedText}>
+            <Text
+              style={styles.unlimitedText}
+            >
               Unlimited jobs included in your plan
             </Text>
 
@@ -931,34 +1486,43 @@ export default function PlanUsageScreen() {
       </View>
 
 
-      {/* BILLING TOGGLE */}
+      {/* BILLING / PLAN SELECTION */}
 
-      <View style={styles.billingSection}>
+      <View
+        style={styles.billingSection}
+      >
 
-        <View>
+        <Text
+          style={styles.sectionTitle}
+        >
+          Choose your plan
+        </Text>
 
-          <Text style={styles.sectionTitle}>
-            Choose your plan
-          </Text>
-
-          <Text style={styles.sectionSubtitle}>
-            Upgrade whenever your garage grows
-          </Text>
-
-        </View>
+        <Text
+          style={styles.sectionSubtitle}
+        >
+          Upgrade whenever your garage grows
+        </Text>
 
 
-        <View style={styles.billingToggle}>
+        <View
+          style={styles.billingToggle}
+        >
 
           <TouchableOpacity
-            disabled={changingPlan}
+            disabled={
+              changingPlan ||
+              buyingBooster
+            }
             style={[
               styles.billingButton,
               billingCycle === "monthly" &&
                 styles.billingButtonActive
             ]}
             onPress={() =>
-              setBillingCycle("monthly")
+              handleBillingCycleChange(
+                "monthly"
+              )
             }
           >
 
@@ -976,14 +1540,19 @@ export default function PlanUsageScreen() {
 
 
           <TouchableOpacity
-            disabled={changingPlan}
+            disabled={
+              changingPlan ||
+              buyingBooster
+            }
             style={[
               styles.billingButton,
               billingCycle === "annual" &&
                 styles.billingButtonActive
             ]}
             onPress={() =>
-              setBillingCycle("annual")
+              handleBillingCycleChange(
+                "annual"
+              )
             }
           >
 
@@ -997,9 +1566,13 @@ export default function PlanUsageScreen() {
               Annual
             </Text>
 
-            <View style={styles.saveBadge}>
+            <View
+              style={styles.saveBadge}
+            >
 
-              <Text style={styles.saveBadgeText}>
+              <Text
+                style={styles.saveBadgeText}
+              >
                 SAVE
               </Text>
 
@@ -1019,13 +1592,23 @@ export default function PlanUsageScreen() {
 
           const isCurrent =
             item.key ===
-            safeCurrentPlanKey
+            currentPlanKey
 
 
-          const price =
-            billingCycle === "monthly"
-              ? item.monthly
-              : item.annual
+          const monthlyPrice =
+            item.monthly
+
+
+          const annualMonthlyEquivalent =
+            item.annual
+
+
+          const annualPrice =
+            getAnnualPrice(item)
+
+
+          const selectedPrice =
+            getSelectedPrice(item)
 
 
           return (
@@ -1043,9 +1626,15 @@ export default function PlanUsageScreen() {
 
               {item.popular && (
 
-                <View style={styles.popularBadge}>
+                <View
+                  style={styles.popularBadge}
+                >
 
-                  <Text style={styles.popularBadgeText}>
+                  <Text
+                    style={
+                      styles.popularBadgeText
+                    }
+                  >
                     MOST POPULAR
                   </Text>
 
@@ -1054,15 +1643,29 @@ export default function PlanUsageScreen() {
               )}
 
 
-              <View style={styles.planOptionHeader}>
+              <View
+                style={styles.planOptionHeader}
+              >
 
-                <View>
+                <View
+                  style={{
+                    flex: 1
+                  }}
+                >
 
-                  <Text style={styles.planOptionName}>
+                  <Text
+                    style={
+                      styles.planOptionName
+                    }
+                  >
                     {item.name}
                   </Text>
 
-                  <Text style={styles.planDescription}>
+                  <Text
+                    style={
+                      styles.planDescription
+                    }
+                  >
                     {item.description}
                   </Text>
 
@@ -1071,7 +1674,9 @@ export default function PlanUsageScreen() {
 
                 {isCurrent && (
 
-                  <View style={styles.selectedBadge}>
+                  <View
+                    style={styles.selectedBadge}
+                  >
 
                     <MaterialIcons
                       name="check-circle"
@@ -1079,7 +1684,9 @@ export default function PlanUsageScreen() {
                       color="#16A34A"
                     />
 
-                    <Text style={styles.selectedText}>
+                    <Text
+                      style={styles.selectedText}
+                    >
                       Current
                     </Text>
 
@@ -1090,36 +1697,128 @@ export default function PlanUsageScreen() {
               </View>
 
 
-              <View style={styles.priceRow}>
+              {/* PRICE */}
 
-                <Text style={styles.currency}>
-                  ₹
-                </Text>
+              {item.key === "free" ? (
 
-                <Text style={styles.price}>
-                  {price}
-                </Text>
+                <View
+                  style={styles.priceBlock}
+                >
 
-                <Text style={styles.pricePeriod}>
-                  /month
-                </Text>
+                  <Text
+                    style={styles.freePrice}
+                  >
+                    Free
+                  </Text>
 
-              </View>
+                </View>
+
+              ) : billingCycle === "monthly" ? (
+
+                <View
+                  style={styles.priceBlock}
+                >
+
+                  <View
+                    style={styles.priceRow}
+                  >
+
+                    <Text
+                      style={styles.currency}
+                    >
+                      ₹
+                    </Text>
+
+                    <Text
+                      style={styles.price}
+                    >
+                      {monthlyPrice}
+                    </Text>
+
+                    <Text
+                      style={styles.pricePeriod}
+                    >
+                      /month
+                    </Text>
+
+                  </View>
+
+                </View>
+
+              ) : (
+
+                <View
+                  style={styles.priceBlock}
+                >
+
+                  {/* Monthly equivalent */}
+
+                  <View
+                    style={styles.priceRow}
+                  >
+
+                    <Text
+                      style={styles.currency}
+                    >
+                      ₹
+                    </Text>
+
+                    <Text
+                      style={styles.price}
+                    >
+                      {annualMonthlyEquivalent}
+                    </Text>
+
+                    <Text
+                      style={styles.pricePeriod}
+                    >
+                      /month
+                    </Text>
+
+                  </View>
 
 
-              {billingCycle === "annual" &&
-                price > 0 && (
+                  {/* ACTUAL ANNUAL CHARGE */}
 
-                <Text style={styles.annualNote}>
-                  Billed annually
-                </Text>
+                  <View
+                    style={styles.annualTotalRow}
+                  >
+
+                    <Text
+                      style={styles.annualTotalLabel}
+                    >
+                      Billed annually:
+                    </Text>
+
+                    <Text
+                      style={styles.annualTotalPrice}
+                    >
+                      ₹{annualPrice}/year
+                    </Text>
+
+                  </View>
+
+
+                  <Text
+                    style={styles.annualNote}
+                  >
+                    Annual billing · ₹{annualMonthlyEquivalent}/month equivalent
+                  </Text>
+
+                </View>
 
               )}
 
 
-              <View style={styles.planSummary}>
+              <View
+                style={styles.planSummary}
+              >
 
-                <View style={styles.planSummaryItem}>
+                <View
+                  style={
+                    styles.planSummaryItem
+                  }
+                >
 
                   <MaterialIcons
                     name="work-outline"
@@ -1127,14 +1826,20 @@ export default function PlanUsageScreen() {
                     color="#2563EB"
                   />
 
-                  <Text style={styles.summaryText}>
+                  <Text
+                    style={styles.summaryText}
+                  >
                     {item.jobs} jobs
                   </Text>
 
                 </View>
 
 
-                <View style={styles.planSummaryItem}>
+                <View
+                  style={
+                    styles.planSummaryItem
+                  }
+                >
 
                   <MaterialIcons
                     name="people-outline"
@@ -1142,7 +1847,9 @@ export default function PlanUsageScreen() {
                     color="#2563EB"
                   />
 
-                  <Text style={styles.summaryText}>
+                  <Text
+                    style={styles.summaryText}
+                  >
                     {item.workers} workers
                   </Text>
 
@@ -1154,12 +1861,18 @@ export default function PlanUsageScreen() {
               {!isCurrent && (
 
                 <TouchableOpacity
-                  disabled={changingPlan}
+                  disabled={
+                    changingPlan ||
+                    buyingBooster
+                  }
                   style={[
                     styles.planButton,
                     item.popular &&
                       styles.planButtonPopular,
-                    changingPlan &&
+                    (
+                      changingPlan ||
+                      buyingBooster
+                    ) &&
                       styles.disabledButton
                   ]}
                   onPress={() =>
@@ -1178,7 +1891,9 @@ export default function PlanUsageScreen() {
                       ? "Processing..."
                       : item.key === "free"
                       ? "Switch to Free"
-                      : "Upgrade to " + item.name}
+                      : billingCycle === "annual"
+                      ? `Upgrade · ₹${annualPrice}/year`
+                      : `Upgrade to ${item.name}`}
                   </Text>
 
                   {!changingPlan && (
@@ -1207,18 +1922,20 @@ export default function PlanUsageScreen() {
       )}
 
 
-      {/* FEATURE COMPARISON */}
+      {/* FEATURES */}
 
       <TouchableOpacity
         style={styles.featureToggle}
         onPress={() =>
           setShowFeatures(
-            !showFeatures
+            value => !value
           )
         }
       >
 
-        <View style={styles.featureToggleLeft}>
+        <View
+          style={styles.featureToggleLeft}
+        >
 
           <MaterialIcons
             name="compare"
@@ -1228,12 +1945,20 @@ export default function PlanUsageScreen() {
 
           <View>
 
-            <Text style={styles.featureToggleTitle}>
+            <Text
+              style={
+                styles.featureToggleTitle
+              }
+            >
               Compare all features
             </Text>
 
-            <Text style={styles.featureToggleSubtitle}>
-              See what is included in each plan
+            <Text
+              style={
+                styles.featureToggleSubtitle
+              }
+            >
+              Features included in your current plan
             </Text>
 
           </View>
@@ -1256,7 +1981,28 @@ export default function PlanUsageScreen() {
 
       {showFeatures && (
 
-        <View style={styles.featureCard}>
+        <View
+          style={styles.featureCard}
+        >
+
+          <View
+            style={styles.featurePlanHeader}
+          >
+
+            <Text
+              style={styles.featurePlanHeaderTitle}
+            >
+              {currentPlan.name}
+            </Text>
+
+            <Text
+              style={styles.featurePlanHeaderText}
+            >
+              Current plan
+            </Text>
+
+          </View>
+
 
           {FEATURES.map(
             (feature, index) => (
@@ -1270,13 +2016,17 @@ export default function PlanUsageScreen() {
                 ]}
               >
 
-                <Text style={styles.featureName}>
+                <Text
+                  style={styles.featureName}
+                >
                   {feature.name}
                 </Text>
 
-                <Text style={styles.featureValue}>
+                <Text
+                  style={styles.featureValue}
+                >
                   {feature[
-                    safeCurrentPlanKey
+                    currentPlanKey
                   ] as string}
                 </Text>
 
@@ -1292,20 +2042,28 @@ export default function PlanUsageScreen() {
 
       {/* BOOSTERS */}
 
-      <View style={styles.boosterSectionHeader}>
+      <View
+        style={styles.boosterSectionHeader}
+      >
 
-        <Text style={styles.sectionTitle}>
+        <Text
+          style={styles.sectionTitle}
+        >
           Need extra jobs?
         </Text>
 
-        <Text style={styles.sectionSubtitle}>
+        <Text
+          style={styles.sectionSubtitle}
+        >
           One-time job top-ups
         </Text>
 
       </View>
 
 
-      <View style={styles.boosterInfo}>
+      <View
+        style={styles.boosterInfo}
+      >
 
         <MaterialIcons
           name="info-outline"
@@ -1313,9 +2071,10 @@ export default function PlanUsageScreen() {
           color="#2563EB"
         />
 
-        <Text style={styles.boosterInfoText}>
-          Booster jobs are valid only for the current
-          billing month and do not carry over.
+        <Text
+          style={styles.boosterInfoText}
+        >
+          Booster jobs are valid only for the current billing month and do not carry over.
         </Text>
 
       </View>
@@ -1329,7 +2088,9 @@ export default function PlanUsageScreen() {
             style={styles.boosterCard}
           >
 
-            <View style={styles.boosterIcon}>
+            <View
+              style={styles.boosterIcon}
+            >
 
               <MaterialIcons
                 name="add-task"
@@ -1340,39 +2101,59 @@ export default function PlanUsageScreen() {
             </View>
 
 
-            <View style={styles.boosterInfoColumn}>
+            <View
+              style={styles.boosterInfoColumn}
+            >
 
-              <Text style={styles.boosterTitle}>
+              <Text
+                style={styles.boosterTitle}
+              >
                 {booster.title}
               </Text>
 
-              <Text style={styles.boosterJobs}>
+              <Text
+                style={styles.boosterJobs}
+              >
                 +{booster.jobs} jobs
               </Text>
 
-              <Text style={styles.boosterBestFor}>
+              <Text
+                style={styles.boosterBestFor}
+              >
                 Best for: {booster.bestFor}
               </Text>
 
             </View>
 
 
-            <View style={styles.boosterRight}>
+            <View
+              style={styles.boosterRight}
+            >
 
-              <Text style={styles.boosterPrice}>
+              <Text
+                style={styles.boosterPrice}
+              >
                 ₹{booster.price}
               </Text>
 
-              <Text style={styles.boosterCost}>
+              <Text
+                style={styles.boosterCost}
+              >
                 {booster.cost}
               </Text>
 
 
               <TouchableOpacity
-                disabled={buyingBooster}
+                disabled={
+                  buyingBooster ||
+                  changingPlan
+                }
                 style={[
                   styles.boosterBuyButton,
-                  buyingBooster &&
+                  (
+                    buyingBooster ||
+                    changingPlan
+                  ) &&
                     styles.disabledButton
                 ]}
                 onPress={() =>
@@ -1380,7 +2161,11 @@ export default function PlanUsageScreen() {
                 }
               >
 
-                <Text style={styles.boosterBuyText}>
+                <Text
+                  style={
+                    styles.boosterBuyText
+                  }
+                >
                   {buyingBooster
                     ? "..."
                     : "Buy"}
@@ -1396,9 +2181,11 @@ export default function PlanUsageScreen() {
       )}
 
 
-      {/* DEVELOPMENT PAYMENT NOTICE */}
+      {/* DEVELOPMENT / TEST PAYMENT NOTICE */}
 
-      <View style={styles.developmentNotice}>
+      <View
+        style={styles.developmentNotice}
+      >
 
         <MaterialIcons
           name="science"
@@ -1406,10 +2193,12 @@ export default function PlanUsageScreen() {
           color="#2563EB"
         />
 
-        <Text style={styles.developmentNoticeText}>
-          Development mode: subscription purchases are
-          currently treated as successful without a real
-          payment gateway.
+        <Text
+          style={
+            styles.developmentNoticeText
+          }
+        >
+          Development mode: Razorpay payments use TEST MODE. No live payment credentials should be used while developing.
         </Text>
 
       </View>
@@ -1417,7 +2206,9 @@ export default function PlanUsageScreen() {
 
       {/* FOOTER */}
 
-      <View style={styles.footer}>
+      <View
+        style={styles.footer}
+      >
 
         <MaterialIcons
           name="lock-outline"
@@ -1425,14 +2216,20 @@ export default function PlanUsageScreen() {
           color="#9CA3AF"
         />
 
-        <Text style={styles.footerText}>
-          Payment gateway will be connected later.
+        <Text
+          style={styles.footerText}
+        >
+          Payments are processed through Razorpay TEST MODE during development.
         </Text>
 
       </View>
 
 
-      <View style={{ height: 50 }} />
+      <View
+        style={{
+          height: 50
+        }}
+      />
 
     </ScrollView>
 
@@ -1441,11 +2238,18 @@ export default function PlanUsageScreen() {
 }
 
 
+/*
+ * STYLES
+ */
+
 const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#F3F4F6"
+  },
+
+  contentContainer: {
     padding: 16
   },
 
@@ -1462,7 +2266,10 @@ const styles = StyleSheet.create({
   },
 
   pageHeader: {
-    marginBottom: 18
+    marginBottom: 18,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between"
   },
 
   pageTitle: {
@@ -1474,14 +2281,36 @@ const styles = StyleSheet.create({
   pageSubtitle: {
     color: "#6B7280",
     marginTop: 5,
-    lineHeight: 20
+    lineHeight: 20,
+    maxWidth: 300
   },
+
+  retryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10
+  },
+
+  retryText: {
+    marginLeft: 4,
+    color: "#2563EB",
+    fontSize: 11,
+    fontWeight: "700"
+  },
+
+
+  /*
+   * MERGED CURRENT PLAN + USAGE CARD
+   */
 
   currentPlanCard: {
     backgroundColor: "#111827",
     borderRadius: 24,
     padding: 20,
-    marginBottom: 18
+    marginBottom: 24
   },
 
   currentPlanTop: {
@@ -1546,9 +2375,19 @@ const styles = StyleSheet.create({
     marginVertical: 18
   },
 
+  planDividerSmall: {
+    height: 1,
+    backgroundColor: "#374151",
+    marginVertical: 17
+  },
+
   planDetailsRow: {
     flexDirection: "row",
     justifyContent: "space-between"
+  },
+
+  detailColumn: {
+    flex: 1
   },
 
   detailLabel: {
@@ -1563,28 +2402,28 @@ const styles = StyleSheet.create({
     fontWeight: "700"
   },
 
-  usageCard: {
-    backgroundColor: "white",
-    borderRadius: 22,
-    padding: 19,
-    marginBottom: 24
+  detailSubValue: {
+    color: "#34D399",
+    fontSize: 10,
+    fontWeight: "600",
+    marginTop: 3
   },
 
-  sectionHeaderRow: {
+  usageHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between"
   },
 
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#111827"
+  usageTitle: {
+    color: "white",
+    fontSize: 17,
+    fontWeight: "800"
   },
 
-  sectionSubtitle: {
-    color: "#6B7280",
-    fontSize: 12,
+  usageSubtitle: {
+    color: "#9CA3AF",
+    fontSize: 11,
     marginTop: 4
   },
 
@@ -1593,21 +2432,21 @@ const styles = StyleSheet.create({
     alignItems: "baseline"
   },
 
-  usageNumber: {
+  usageNumberDark: {
     fontSize: 25,
     fontWeight: "800",
-    color: "#111827"
+    color: "white"
   },
 
-  usageLimit: {
-    color: "#6B7280",
+  usageLimitDark: {
+    color: "#9CA3AF",
     fontSize: 13,
     marginLeft: 2
   },
 
-  progressBackground: {
+  progressBackgroundDark: {
     height: 11,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#374151",
     borderRadius: 20,
     overflow: "hidden",
     marginTop: 18
@@ -1624,25 +2463,25 @@ const styles = StyleSheet.create({
     marginTop: 9
   },
 
-  usagePercentage: {
-    color: "#6B7280",
+  usagePercentageDark: {
+    color: "#9CA3AF",
     fontSize: 12,
     fontWeight: "600"
   },
 
-  remainingText: {
-    color: "#16A34A",
+  remainingTextDark: {
+    color: "#34D399",
     fontSize: 12,
     fontWeight: "700"
   },
 
-  remainingDanger: {
-    color: "#DC2626"
+  remainingDangerDark: {
+    color: "#FCA5A5"
   },
 
   unlimitedBox: {
     marginTop: 17,
-    backgroundColor: "#ECFDF5",
+    backgroundColor: "#064E3B",
     borderRadius: 12,
     padding: 12,
     flexDirection: "row",
@@ -1651,10 +2490,15 @@ const styles = StyleSheet.create({
 
   unlimitedText: {
     marginLeft: 8,
-    color: "#166534",
+    color: "#A7F3D0",
     fontWeight: "600",
     fontSize: 13
   },
+
+
+  /*
+   * BILLING
+   */
 
   billingSection: {
     marginBottom: 14
@@ -1713,6 +2557,11 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   },
 
+
+  /*
+   * PLAN OPTIONS
+   */
+
   planOption: {
     backgroundColor: "white",
     borderRadius: 22,
@@ -1765,7 +2614,7 @@ const styles = StyleSheet.create({
   },
 
   selectedBadge: {
-    marginLeft: "auto",
+    marginLeft: 10,
     flexDirection: "row",
     alignItems: "center"
   },
@@ -1777,10 +2626,19 @@ const styles = StyleSheet.create({
     marginLeft: 4
   },
 
+  priceBlock: {
+    marginTop: 17
+  },
+
   priceRow: {
     flexDirection: "row",
-    alignItems: "baseline",
-    marginTop: 17
+    alignItems: "baseline"
+  },
+
+  freePrice: {
+    fontSize: 30,
+    fontWeight: "800",
+    color: "#111827"
   },
 
   currency: {
@@ -1802,11 +2660,35 @@ const styles = StyleSheet.create({
     marginLeft: 4
   },
 
+  /*
+   * NEW:
+   * Actual annual amount
+   */
+
+  annualTotalRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 5
+  },
+
+  annualTotalLabel: {
+    color: "#374151",
+    fontSize: 11,
+    fontWeight: "600"
+  },
+
+  annualTotalPrice: {
+    color: "#16A34A",
+    fontSize: 14,
+    fontWeight: "800",
+    marginLeft: 5
+  },
+
   annualNote: {
     color: "#16A34A",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "600",
-    marginTop: 2
+    marginTop: 4
   },
 
   planSummary: {
@@ -1859,6 +2741,11 @@ const styles = StyleSheet.create({
     opacity: 0.6
   },
 
+
+  /*
+   * FEATURES
+   */
+
   featureToggle: {
     backgroundColor: "white",
     borderRadius: 18,
@@ -1895,6 +2782,24 @@ const styles = StyleSheet.create({
     marginBottom: 22
   },
 
+  featurePlanHeader: {
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6"
+  },
+
+  featurePlanHeaderTitle: {
+    color: "#111827",
+    fontSize: 15,
+    fontWeight: "800"
+  },
+
+  featurePlanHeaderText: {
+    color: "#6B7280",
+    fontSize: 10,
+    marginTop: 2
+  },
+
   featureRow: {
     minHeight: 51,
     flexDirection: "row",
@@ -1920,6 +2825,11 @@ const styles = StyleSheet.create({
     textAlign: "right",
     marginLeft: 15
   },
+
+
+  /*
+   * BOOSTERS
+   */
 
   boosterSectionHeader: {
     marginTop: 4,
@@ -2015,6 +2925,11 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   },
 
+
+  /*
+   * DEVELOPMENT / TEST MODE
+   */
+
   developmentNotice: {
     backgroundColor: "#EFF6FF",
     borderRadius: 13,
@@ -2043,6 +2958,18 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
     fontSize: 10,
     marginLeft: 5
+  },
+
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#111827"
+  },
+
+  sectionSubtitle: {
+    color: "#6B7280",
+    fontSize: 12,
+    marginTop: 4
   }
 
 })

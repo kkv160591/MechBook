@@ -32,6 +32,30 @@ const app = express()
 
 app.use(cors())
 
+/*
+|--------------------------------------------------------------------------
+| RAZORPAY WEBHOOK RAW BODY
+|--------------------------------------------------------------------------
+|
+| MUST COME BEFORE express.json()
+|
+*/
+
+app.use(
+  "/api/subscription/payment/webhook",
+  express.raw({
+    type:
+      "application/json"
+  })
+)
+
+
+/*
+|--------------------------------------------------------------------------
+| NORMAL JSON REQUESTS
+|--------------------------------------------------------------------------
+*/
+
 app.use(express.json())
 
 app.get(
