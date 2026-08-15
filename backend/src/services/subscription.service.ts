@@ -293,122 +293,6 @@ async (
 
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| CHANGE PLAN
-|--------------------------------------------------------------------------
-*/
-
-export const changePlan =
-async (
-  garageId: string,
-  planCode: string,
-  billingCycle: "MONTHLY" | "ANNUAL"
-) => {
-
-  const plan =
-    Object.values(PLANS)
-      .find(
-        item =>
-          item.code === planCode
-      )
-
-  if (!plan) {
-
-    throw new Error(
-      "Invalid plan"
-    )
-
-  }
-
-  const now =
-    new Date()
-
-  const renewalDate =
-    new Date(now)
-
-  if (
-    billingCycle === "ANNUAL"
-  ) {
-
-    renewalDate.setFullYear(
-      renewalDate.getFullYear() + 1
-    )
-
-  } else {
-
-    renewalDate.setMonth(
-      renewalDate.getMonth() + 1
-    )
-
-  }
-
-  const jobsUsed = 0
-
-  const jobLimit =
-    plan.jobsPerMonth
-
-  const response =
-    await db.send(
-      new PutItemCommand({
-
-        TableName: TABLE,
-
-        Item: {
-
-          garageId: {
-            S: garageId
-          },
-
-          planCode: {
-            S: plan.code
-          },
-
-          planName: {
-            S: plan.name
-          },
-
-          billingCycle: {
-            S: billingCycle
-          },
-
-          status: {
-            S: "ACTIVE"
-          },
-
-          jobsUsed: {
-            N: jobsUsed.toString()
-          },
-
-          jobLimit: {
-            N: jobLimit.toString()
-          },
-
-          boosterJobs: {
-            N: "0"
-          },
-
-          renewalDate: {
-            S: renewalDate.toISOString()
-          },
-
-          updatedAt: {
-            S: now.toISOString()
-          }
-
-        }
-
-      })
-    )
-
-  return getSubscription(
-    garageId
-  )
-
-}
-
-
 /*
 |--------------------------------------------------------------------------
 | ADD BOOSTER
@@ -688,11 +572,36 @@ async (
   billingCycle: "MONTHLY" | "ANNUAL"
 ) => {
 
+  const normalizedPlanCode =
+    String(planCode || "")
+      .trim()
+      .toUpperCase()
+
+
+  const normalizedBillingCycle =
+    String(billingCycle || "")
+      .trim()
+      .toUpperCase()
+
+
+  if (
+    normalizedBillingCycle !== "MONTHLY" &&
+    normalizedBillingCycle !== "ANNUAL"
+  ) {
+
+    throw new Error(
+      "Invalid billing cycle"
+    )
+
+  }
+
+
   const plan =
     Object.values(PLANS)
       .find(
         item =>
-          item.code === planCode
+          item.code ===
+          normalizedPlanCode
       )
 
 
@@ -717,9 +626,21 @@ async (
 
 
   const amount =
-    billingCycle === "MONTHLY"
+    normalizedBillingCycle === "MONTHLY"
       ? plan.monthlyPrice
       : plan.annualPricePerMonth * 12
+
+
+  if (
+    !Number.isFinite(amount) ||
+    amount <= 0
+  ) {
+
+    throw new Error(
+      "Invalid payment amount"
+    )
+
+  }
 
 
   const receipt =
@@ -738,10 +659,10 @@ async (
         garageId,
 
         planCode:
-
           plan.code,
 
-        billingCycle
+        billingCycle:
+          normalizedBillingCycle
 
       }
 
@@ -751,11 +672,6 @@ async (
   const now =
     new Date()
 
-
-  /*
-   * Store pending payment information
-   * in the existing subscription item.
-   */
 
   await db.send(
     new UpdateItemCommand({
@@ -793,7 +709,7 @@ async (
         },
 
         ":billingCycle": {
-          S: billingCycle
+          S: normalizedBillingCycle
         },
 
         ":amount": {
@@ -816,6 +732,10 @@ async (
 
   return {
 
+  paymentRequired: true,
+
+  payment: {
+
     orderId:
       order.id,
 
@@ -831,9 +751,12 @@ async (
     planCode:
       plan.code,
 
-    billingCycle
+    billingCycle:
+      normalizedBillingCycle
 
   }
+
+}
 
 }
 

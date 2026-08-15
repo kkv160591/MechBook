@@ -70,25 +70,6 @@ router.post(
   subscriptionController.razorpayWebhook
 )
 
-
-/*
-|--------------------------------------------------------------------------
-| CHANGE PLAN
-|--------------------------------------------------------------------------
-|
-| TEMPORARY DEVELOPMENT ENDPOINT
-|
-| Do NOT expose this endpoint to the frontend once
-| Razorpay payment flow is enabled.
-|
-*/
-
-router.post(
-  "/change-plan",
-  subscriptionController.changePlan
-)
-
-
 /*
 |--------------------------------------------------------------------------
 | BUY BOOSTER

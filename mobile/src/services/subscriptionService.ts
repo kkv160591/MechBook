@@ -1,8 +1,5 @@
 import api from "./api"
 
-import RazorpayCheckout from "react-native-razorpay"
-
-
 /*
  * BILLING
  */
@@ -188,6 +185,48 @@ async (): Promise<PlanUsageResponse> => {
 
 }
 
+export const createSubscriptionPaymentOrder =
+async (
+  planCode: string,
+  billingCycle: BillingCycle
+): Promise<RazorpayOrderPayload> => {
+
+  try {
+
+    const response =
+      await api.post(
+        "/api/subscription/payment/order",
+        {
+          planCode:
+            planCode.toUpperCase(),
+
+          billingCycle:
+            toApiBillingCycle(
+              billingCycle
+            )
+        }
+      )
+
+
+    return response.data
+
+  }
+
+  catch (error) {
+
+    console.log(
+      "createSubscriptionPaymentOrder failed:",
+      error
+    )
+
+    throw normalizeError(
+      error
+    )
+
+  }
+
+}
+
 
 /*
  * CHANGE PLAN
@@ -213,7 +252,7 @@ async (
 
     const response =
       await api.post(
-        "/api/subscription/change-plan",
+        "/api/subscription/payment/order",
         {
           planCode,
           billingCycle:
@@ -285,9 +324,16 @@ async (
 }
 
 export type VerifyPaymentRequest = {
-  razorpayPaymentId: string
-  razorpayOrderId: string
-  razorpaySignature: string
+
+  razorpayPaymentId:
+    string
+
+  razorpayOrderId:
+    string
+
+  razorpaySignature:
+    string
+
 }
 
 export type VerifyPaymentResponse = {
@@ -310,9 +356,24 @@ async (
 
     const response =
       await api.post(
+
         "/api/subscription/payment/verify",
-        payload
+
+        {
+
+          razorpay_payment_id:
+            payload.razorpayPaymentId,
+
+          razorpay_order_id:
+            payload.razorpayOrderId,
+
+          razorpay_signature:
+            payload.razorpaySignature
+
+        }
+
       )
+
 
     return response.data
 
@@ -325,7 +386,9 @@ async (
       error
     )
 
-    throw normalizeError(error)
+    throw normalizeError(
+      error
+    )
 
   }
 

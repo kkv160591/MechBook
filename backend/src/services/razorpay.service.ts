@@ -19,9 +19,7 @@ async (
 ) => {
 
   if (
-    !Number.isFinite(
-      amountInRupees
-    ) ||
+    !Number.isFinite(amountInRupees) ||
     amountInRupees <= 0
   ) {
 
@@ -38,23 +36,19 @@ async (
     )
 
 
-  const order =
-    await razorpay.orders.create({
+  return razorpay.orders.create({
 
-      amount:
-        amountInPaise,
+    amount:
+      amountInPaise,
 
-      currency:
-        "INR",
+    currency:
+      "INR",
 
-      receipt,
+    receipt,
 
-      notes
+    notes
 
-    })
-
-
-  return order
+  })
 
 }
 
@@ -63,6 +57,16 @@ async (
 |--------------------------------------------------------------------------
 | VERIFY CHECKOUT PAYMENT
 |--------------------------------------------------------------------------
+|
+| Razorpay:
+|
+| HMAC_SHA256(
+|   razorpay_order_id + "|" + razorpay_payment_id,
+|   RAZORPAY_KEY_SECRET
+| )
+|
+| This MUST happen on the server.
+|
 */
 
 export const verifyPaymentSignature =
@@ -70,10 +74,11 @@ export const verifyPaymentSignature =
   orderId: string,
   paymentId: string,
   signature: string
-) => {
+): boolean => {
 
   const secret =
     process.env.RAZORPAY_KEY_SECRET
+
 
   if (!secret) {
 
@@ -83,8 +88,21 @@ export const verifyPaymentSignature =
 
   }
 
+
+  if (
+    !orderId ||
+    !paymentId ||
+    !signature
+  ) {
+
+    return false
+
+  }
+
+
   const body =
     `${orderId}|${paymentId}`
+
 
   const expectedSignature =
     crypto
@@ -95,30 +113,34 @@ export const verifyPaymentSignature =
       .update(body)
       .digest("hex")
 
-  const expected =
+
+  const expectedBuffer =
     Buffer.from(
       expectedSignature,
       "hex"
     )
 
-  const received =
+
+  const receivedBuffer =
     Buffer.from(
       signature,
       "hex"
     )
 
+
   if (
-    expected.length !==
-    received.length
+    expectedBuffer.length !==
+    receivedBuffer.length
   ) {
 
     return false
 
   }
 
+
   return crypto.timingSafeEqual(
-    expected,
-    received
+    expectedBuffer,
+    receivedBuffer
   )
 
 }
@@ -132,9 +154,9 @@ export const verifyPaymentSignature =
 
 export const verifyWebhookSignature =
 (
-  rawBody: string,
+  rawBody: string | Buffer,
   signature: string
-) => {
+): boolean => {
 
   const secret =
     process.env.RAZORPAY_WEBHOOK_SECRET
@@ -149,6 +171,13 @@ export const verifyWebhookSignature =
   }
 
 
+  if (!signature) {
+
+    return false
+
+  }
+
+
   const expectedSignature =
     crypto
       .createHmac(
@@ -159,9 +188,33 @@ export const verifyWebhookSignature =
       .digest("hex")
 
 
-  return (
-    expectedSignature ===
-    signature
+  const expectedBuffer =
+    Buffer.from(
+      expectedSignature,
+      "hex"
+    )
+
+
+  const receivedBuffer =
+    Buffer.from(
+      signature,
+      "hex"
+    )
+
+
+  if (
+    expectedBuffer.length !==
+    receivedBuffer.length
+  ) {
+
+    return false
+
+  }
+
+
+  return crypto.timingSafeEqual(
+    expectedBuffer,
+    receivedBuffer
   )
 
 }

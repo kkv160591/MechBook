@@ -69,58 +69,6 @@ async (
 
 /*
 |--------------------------------------------------------------------------
-| CHANGE PLAN
-|--------------------------------------------------------------------------
-*/
-
-export const changePlan =
-async (
-  req: Request,
-  res: Response
-) => {
-
-  try {
-
-    const {
-      planCode,
-      billingCycle
-    } = req.body
-
-    const data =
-      await subscriptionService
-        .changePlan(
-          garageId,
-          planCode,
-          billingCycle
-        )
-
-    res.json(
-      data
-    )
-
-  } catch (error) {
-
-    console.error(
-      "Change plan error:",
-      error
-    )
-
-    res.status(400).json({
-
-      message:
-        error instanceof Error
-          ? error.message
-          : "Unable to change plan"
-
-    })
-
-  }
-
-}
-
-
-/*
-|--------------------------------------------------------------------------
 | BUY BOOSTER
 |--------------------------------------------------------------------------
 */
@@ -281,6 +229,9 @@ async (
     return res.json({
 
       success: true,
+
+      message:
+        "Payment verified successfully",
 
       subscription:
         data
