@@ -13,17 +13,59 @@ import {
 
 /*
 |--------------------------------------------------------------------------
-| TEMPORARY GARAGE ID
+| AUTHENTICATED GARAGE ID
 |--------------------------------------------------------------------------
 |
-| Later replace this with:
+| Normal subscription APIs use the garageId stored inside
+| the authenticated user's JWT.
 |
-| req.user.garageId
+| Example JWT payload:
+|
+| {
+|   garageId: "550e8400-e29b-41d4-a716-446655440000",
+|   role: "owner"
+| }
+|
+| verifyToken middleware must run before these controllers.
 |
 */
 
-const garageId =
-  "garage-1"
+const getAuthenticatedGarageId = (
+  req: Request
+): string => {
+
+  const user =
+    (req as any)?.user
+
+
+  if (!user) {
+
+    throw new Error(
+      "Authentication required"
+    )
+
+  }
+
+
+  const garageId =
+    user.garageId
+
+
+  if (
+    !garageId ||
+    typeof garageId !== "string"
+  ) {
+
+    throw new Error(
+      "Authenticated user is not associated with a garage"
+    )
+
+  }
+
+
+  return garageId
+
+}
 
 
 /*
@@ -40,13 +82,28 @@ async (
 
   try {
 
+    const garageId =
+      getAuthenticatedGarageId(
+        req
+      )
+
+
+    console.log(
+      "GET PLAN USAGE",
+      {
+        garageId
+      }
+    )
+
+
     const data =
       await subscriptionService
         .getPlanInformation(
           garageId
         )
 
-    res.json(
+
+    return res.json(
       data
     )
 
@@ -57,9 +114,38 @@ async (
       error
     )
 
-    res.status(500).json({
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to load subscription"
+
+
+    if (
+      message ===
+      "Authentication required" ||
+      message ===
+      "Authenticated user is not associated with a garage"
+    ) {
+
+      return res.status(401).json({
+
+        success: false,
+
+        message
+
+      })
+
+    }
+
+
+    return res.status(500).json({
+
+      success: false,
+
       message:
         "Unable to load subscription"
+
     })
 
   }
@@ -81,9 +167,42 @@ async (
 
   try {
 
-    const {
-      boosterCode
-    } = req.body
+    const garageId =
+      getAuthenticatedGarageId(
+        req
+      )
+
+
+    const boosterCode =
+      String(
+        req.body?.boosterCode || ""
+      )
+        .trim()
+        .toUpperCase()
+
+
+    if (!boosterCode) {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message:
+          "Booster code is required"
+
+      })
+
+    }
+
+
+    console.log(
+      "BUY BOOSTER",
+      {
+        garageId,
+        boosterCode
+      }
+    )
+
 
     const data =
       await subscriptionService
@@ -92,9 +211,15 @@ async (
           boosterCode
         )
 
-    res.json(
-      data
-    )
+
+    return res.json({
+
+      success: true,
+
+      subscription:
+        data
+
+    })
 
   } catch (error) {
 
@@ -103,18 +228,43 @@ async (
       error
     )
 
-    res.status(400).json({
 
-      message:
-        error instanceof Error
-          ? error.message
-          : "Unable to add booster"
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to add booster"
+
+
+    if (
+      message ===
+      "Authentication required" ||
+      message ===
+      "Authenticated user is not associated with a garage"
+    ) {
+
+      return res.status(401).json({
+
+        success: false,
+
+        message
+
+      })
+
+    }
+
+
+    return res.status(400).json({
+
+      success: false,
+
+      message
 
     })
 
   }
 
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -130,10 +280,60 @@ async (
 
   try {
 
-    const {
+    const garageId =
+      getAuthenticatedGarageId(
+        req
+      )
+
+
+    const planCode =
+      String(
+        req.body?.planCode || ""
+      )
+        .trim()
+        .toUpperCase()
+
+
+    const billingCycle =
+      String(
+        req.body?.billingCycle || ""
+      )
+        .trim()
+        .toUpperCase()
+
+
+    if (
+      !planCode ||
+      !billingCycle
+    ) {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message:
+          "Plan code and billing cycle are required"
+
+      })
+
+    }
+
+
+    console.log(
+      "CREATE SUBSCRIPTION PAYMENT ORDER",
+      {
+        garageId,
+        planCode,
+        billingCycle
+      }
+    )
+
+    console.log("CREATE PAYMENT ORDER REQUEST", {
+      user: (req as any).user,
+      garageId,
       planCode,
       billingCycle
-    } = req.body
+    })
 
 
     const data =
@@ -144,12 +344,14 @@ async (
 
           planCode,
 
-          billingCycle
+          billingCycle as
+            "MONTHLY" |
+            "ANNUAL"
 
         )
 
 
-    res.json(
+    return res.json(
       data
     )
 
@@ -161,18 +363,42 @@ async (
     )
 
 
-    res.status(400).json({
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to create payment order"
 
-      message:
-        error instanceof Error
-          ? error.message
-          : "Unable to create payment order"
+
+    if (
+      message ===
+      "Authentication required" ||
+      message ===
+      "Authenticated user is not associated with a garage"
+    ) {
+
+      return res.status(401).json({
+
+        success: false,
+
+        message
+
+      })
+
+    }
+
+
+    return res.status(400).json({
+
+      success: false,
+
+      message
 
     })
 
   }
 
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -187,6 +413,12 @@ async (
 ) => {
 
   try {
+
+    const garageId =
+      getAuthenticatedGarageId(
+        req
+      )
+
 
     const {
       razorpay_order_id,
@@ -203,12 +435,28 @@ async (
 
       return res.status(400).json({
 
+        success: false,
+
         message:
           "Missing payment verification details"
 
       })
 
     }
+
+
+    console.log(
+      "VERIFY SUBSCRIPTION PAYMENT",
+      {
+        garageId,
+
+        razorpayOrderId:
+          razorpay_order_id,
+
+        razorpayPaymentId:
+          razorpay_payment_id
+      }
+    )
 
 
     const data =
@@ -246,14 +494,35 @@ async (
     )
 
 
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Payment verification failed"
+
+
+    if (
+      message ===
+      "Authentication required" ||
+      message ===
+      "Authenticated user is not associated with a garage"
+    ) {
+
+      return res.status(401).json({
+
+        success: false,
+
+        message
+
+      })
+
+    }
+
+
     return res.status(400).json({
 
       success: false,
 
-      message:
-        error instanceof Error
-          ? error.message
-          : "Payment verification failed"
+      message
 
     })
 
@@ -261,13 +530,24 @@ async (
 
 }
 
+
 /*
 |--------------------------------------------------------------------------
 | RAZORPAY WEBHOOK
 |--------------------------------------------------------------------------
 |
-| TEST MODE ONLY
+| IMPORTANT:
 |
+| Razorpay webhook requests do NOT contain your JWT.
+|
+| Therefore:
+|
+|     req.user.garageId ❌
+|
+| The garageId must instead come from payment/order
+| metadata created when the Razorpay order was created.
+|
+|--------------------------------------------------------------------------
 */
 
 export const razorpayWebhook =
@@ -290,6 +570,8 @@ async (
     ) {
 
       return res.status(403).json({
+
+        success: false,
 
         message:
           "Razorpay webhook is disabled outside TEST mode"
@@ -318,6 +600,8 @@ async (
 
       return res.status(400).json({
 
+        success: false,
+
         message:
           "Webhook raw body is required"
 
@@ -332,6 +616,12 @@ async (
       )
 
 
+    /*
+     * ---------------------------------------------------------------
+     * WEBHOOK SIGNATURE
+     * ---------------------------------------------------------------
+     */
+
     const signature =
       req.headers[
         "x-razorpay-signature"
@@ -341,6 +631,8 @@ async (
     if (!signature) {
 
       return res.status(400).json({
+
+        success: false,
 
         message:
           "Missing Razorpay webhook signature"
@@ -372,6 +664,8 @@ async (
 
       return res.status(400).json({
 
+        success: false,
+
         message:
           "Invalid webhook signature"
 
@@ -382,14 +676,31 @@ async (
 
     /*
      * ---------------------------------------------------------------
-     * PARSE ONLY AFTER SIGNATURE VERIFICATION
+     * PARSE AFTER SIGNATURE VERIFICATION
      * ---------------------------------------------------------------
      */
 
-    const event =
-      JSON.parse(
-        rawBody
-      )
+    let event: any
+
+    try {
+
+      event =
+        JSON.parse(
+          rawBody
+        )
+
+    } catch {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message:
+          "Invalid webhook JSON"
+
+      })
+
+    }
 
 
     console.log(
@@ -400,7 +711,7 @@ async (
 
     /*
      * ---------------------------------------------------------------
-     * RAZORPAY EVENT ID
+     * EVENT ID
      * ---------------------------------------------------------------
      */
 
@@ -438,6 +749,8 @@ async (
 
         return res.status(400).json({
 
+          success: false,
+
           message:
             "Invalid payment.captured payload"
 
@@ -463,10 +776,13 @@ async (
       if (
         !orderId ||
         !paymentId ||
-        !amount
+        !Number.isFinite(amount) ||
+        amount <= 0
       ) {
 
         return res.status(400).json({
+
+          success: false,
 
           message:
             "Incomplete payment payload"
@@ -478,19 +794,66 @@ async (
 
       /*
        * -------------------------------------------------------------
-       * TEMPORARY GARAGE ID
+       * REAL GARAGE ID
        * -------------------------------------------------------------
        *
-       * Later:
+       * createPlanPaymentOrder() creates the Razorpay order
+       * with notes containing:
        *
-       * const garageId = ...
+       * garageId
+       * planCode
+       * billingCycle
        *
-       * from your payment/order metadata.
+       * Razorpay normally makes these notes available on the
+       * payment entity.
        *
        */
 
       const garageId =
-        "garage-1"
+        payment?.notes?.garageId
+
+
+      if (
+        !garageId ||
+        typeof garageId !== "string"
+      ) {
+
+        console.error(
+          "Captured payment has no garageId",
+          {
+            orderId,
+            paymentId,
+            notes:
+              payment?.notes
+          }
+        )
+
+
+        /*
+         * Do not write a payment against an unknown garage.
+         */
+
+        return res.status(400).json({
+
+          success: false,
+
+          message:
+            "Payment does not contain garage information"
+
+        })
+
+      }
+
+
+      console.log(
+        "Processing captured payment:",
+        {
+          garageId,
+          orderId,
+          paymentId,
+          amount
+        }
+      )
 
 
       await subscriptionService
@@ -509,8 +872,7 @@ async (
 
       return res.status(200).json({
 
-        success:
-          true,
+        success: true,
 
         message:
           "Payment captured webhook processed",
@@ -544,6 +906,8 @@ async (
 
         return res.status(400).json({
 
+          success: false,
+
           message:
             "Invalid payment.failed payload"
 
@@ -567,6 +931,8 @@ async (
 
         return res.status(400).json({
 
+          success: false,
+
           message:
             "Incomplete payment.failed payload"
 
@@ -576,20 +942,69 @@ async (
 
 
       const garageId =
-        "garage-1"
+        payment?.notes?.garageId
+
+
+      if (
+        !garageId ||
+        typeof garageId !== "string"
+      ) {
+
+        console.error(
+          "Failed payment has no garageId",
+          {
+            orderId,
+            paymentId,
+            notes:
+              payment?.notes
+          }
+        )
+
+
+        /*
+         * Acknowledge the webhook.
+         *
+         * Never write a failed payment against
+         * an unknown garage.
+         */
+
+        return res.status(200).json({
+
+          success: true,
+
+          message:
+            "Payment failed webhook acknowledged; garage information unavailable",
+
+          eventId
+
+        })
+
+      }
+
+
+      console.log(
+        "Processing failed payment:",
+        {
+          garageId,
+          orderId,
+          paymentId
+        }
+      )
 
 
       await subscriptionService
         .processRazorpayPaymentFailed(
+
           garageId,
+
           payment
+
         )
 
 
       return res.status(200).json({
 
-        success:
-          true,
+        success: true,
 
         message:
           "Payment failed webhook processed",
@@ -605,9 +1020,6 @@ async (
      * ---------------------------------------------------------------
      * OTHER EVENTS
      * ---------------------------------------------------------------
-     *
-     * During development we simply acknowledge them.
-     *
      */
 
     console.log(
@@ -618,8 +1030,7 @@ async (
 
     return res.status(200).json({
 
-      success:
-        true,
+      success: true,
 
       message:
         "Webhook received",
@@ -638,8 +1049,7 @@ async (
 
     return res.status(500).json({
 
-      success:
-        false,
+      success: false,
 
       message:
         "Webhook processing failed"

@@ -5,6 +5,10 @@ import {
 import * as subscriptionController
 from "../controllers/subscription.controller"
 
+import {
+  verifyToken
+} from "../middleware/auth.middleware"
+
 
 const router =
   Router()
@@ -14,10 +18,22 @@ const router =
 |--------------------------------------------------------------------------
 | PLAN & USAGE
 |--------------------------------------------------------------------------
+|
+| Requires authenticated user.
+|
+| verifyToken decodes the JWT and attaches:
+|
+| req.user = {
+|   garageId,
+|   role,
+|   ...
+| }
+|
 */
 
 router.get(
   "/",
+  verifyToken,
   subscriptionController.getPlanUsage
 )
 
@@ -27,12 +43,17 @@ router.get(
 | CREATE PAYMENT ORDER
 |--------------------------------------------------------------------------
 |
-| TEST MODE ONLY
+| Requires authenticated user.
+|
+| The controller gets the real garageId from:
+|
+| req.user.garageId
 |
 */
 
 router.post(
   "/payment/order",
+  verifyToken,
   subscriptionController.createPaymentOrder
 )
 
@@ -42,12 +63,13 @@ router.post(
 | VERIFY PAYMENT
 |--------------------------------------------------------------------------
 |
-| TEST MODE ONLY
+| Requires authenticated user.
 |
 */
 
 router.post(
   "/payment/verify",
+  verifyToken,
   subscriptionController.verifyPayment
 )
 
@@ -57,11 +79,15 @@ router.post(
 | RAZORPAY WEBHOOK
 |--------------------------------------------------------------------------
 |
-| TEST MODE ONLY
+| DO NOT use verifyToken here.
+|
+| Razorpay does not send your application's JWT.
+|
+| This route authenticates the webhook using the
+| Razorpay webhook signature instead.
 |
 | IMPORTANT:
-| The application must provide the RAW request body
-| to this route.
+| The server must provide the RAW request body.
 |
 */
 
@@ -70,21 +96,19 @@ router.post(
   subscriptionController.razorpayWebhook
 )
 
+
 /*
 |--------------------------------------------------------------------------
 | BUY BOOSTER
 |--------------------------------------------------------------------------
 |
-| TEMPORARY DEVELOPMENT ENDPOINT
-|
-| This will later be replaced by:
-|
-| /payment/booster-order
+| Requires authenticated user.
 |
 */
 
 router.post(
   "/booster",
+  verifyToken,
   subscriptionController.buyBooster
 )
 

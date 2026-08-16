@@ -477,6 +477,29 @@ async (
       garageId
     )
 
+    console.log(
+    "GET PLAN INFORMATION",
+    {
+      garageId,
+      table: TABLE,
+      subscription
+    }
+  )
+
+  console.log(
+  "SUBSCRIPTIONS_TABLE_NAME:",
+  process.env.SUBSCRIPTIONS_TABLE_NAME
+)
+
+console.log(
+  "AWS_REGION:",
+  process.env.AWS_REGION
+)
+
+console.log(
+  "RAZORPAY_MODE:",
+  process.env.RAZORPAY_MODE
+)
   const plan =
     Object.values(PLANS)
       .find(
@@ -584,6 +607,12 @@ async (
       .toUpperCase()
 
 
+  console.log("CREATE PLAN PAYMENT ORDER SERVICE", {
+    garageId,
+    planCode,
+    billingCycle
+  })
+
   if (
     normalizedBillingCycle !== "MONTHLY" &&
     normalizedBillingCycle !== "ANNUAL"
@@ -669,6 +698,17 @@ async (
     )
 
 
+  console.log("RAZORPAY ORDER CREATED", {
+    orderId: order.id,
+    amount: order.amount,
+    currency: order.currency,
+    notes: {
+      garageId,
+      planCode: plan.code,
+      billingCycle: normalizedBillingCycle
+    }
+  })
+  
   const now =
     new Date()
 
@@ -898,7 +938,7 @@ async (
           planCode = :planCode,
           planName = :planName,
           billingCycle = :billingCycle,
-          status = :status,
+          #status = :status,
           jobsUsed = :jobsUsed,
           jobLimit = :jobLimit,
           boosterJobs = :boosterJobs,
@@ -913,6 +953,10 @@ async (
           pendingBillingCycle,
           pendingAmount
         `,
+
+      ExpressionAttributeNames: {
+        "#status": "status"
+      },
 
       ExpressionAttributeValues: {
 
@@ -1176,7 +1220,7 @@ async (
           planCode = :planCode,
           planName = :planName,
           billingCycle = :billingCycle,
-          status = :status,
+          #status = :status,
           jobsUsed = :jobsUsed,
           jobLimit = :jobLimit,
           boosterJobs = :boosterJobs,
@@ -1191,6 +1235,10 @@ async (
           pendingBillingCycle,
           pendingAmount
         `,
+
+      ExpressionAttributeNames: {
+        "#status": "status"
+      },
 
       ExpressionAttributeValues: {
 

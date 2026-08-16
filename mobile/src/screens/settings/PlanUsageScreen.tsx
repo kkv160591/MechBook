@@ -12,7 +12,8 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Platform
 } from "react-native"
 
 import { MaterialIcons } from "@expo/vector-icons"
@@ -23,7 +24,6 @@ import {
 
 import {
   verifySubscriptionPayment,
-  RazorpayOrderPayload,
   getPlanUsage,
   changePlan,
   buyBooster,
@@ -259,24 +259,6 @@ const BOOSTERS: Booster[] = [
  * DEVELOPMENT FALLBACK
  */
 
-const DEVELOPMENT_FALLBACK: PlanUsageResponse = {
-
-  planName: "Free",
-
-  planCode: "free",
-
-  billingCycle: "monthly",
-
-  jobsUsed: 18,
-
-  jobsLimit: 20,
-
-  renewalDate: "31 Aug 2026",
-
-  daysRemaining: 18
-
-}
-
 
 /*
  * NORMALIZE PLAN KEY
@@ -386,9 +368,17 @@ export default function PlanUsageScreen() {
           await getPlanUsage()
 
         console.log(
-          "Subscription:",
+          "========== SUBSCRIPTION GET ==========",
           data
         )
+
+        console.log("garageId:", data?.garageId)
+        console.log("planCode:", data?.planCode)
+        console.log("planName:", data?.planName)
+        console.log("billingCycle:", data?.billingCycle)
+        console.log("jobsUsed:", data?.jobsUsed)
+        console.log("jobsLimit:", data?.jobsLimit)
+        console.log("=======================================")
 
         setPlan(data)
 
@@ -414,9 +404,7 @@ export default function PlanUsageScreen() {
 
         setLoadError(true)
 
-        setPlan(
-          DEVELOPMENT_FALLBACK
-        )
+        setPlan(null)
 
       }
 
@@ -638,7 +626,7 @@ export default function PlanUsageScreen() {
 ) => {
 
   console.log(
-    "UPGRADE BUTTON CLICKED:",
+    "UPGRADE BUTTON CLICKED",
     selectedPlan.key,
     selectedPlan.name
   )
@@ -659,201 +647,387 @@ export default function PlanUsageScreen() {
     buyingBooster
   ) {
     console.log(
-      "Upgrade blocked: another operation is running."
+      "Upgrade blocked because another operation is running"
     )
+
     return
   }
 
   if (
-    selectedPlan.key === currentPlanKey
+    selectedPlan.key ===
+    currentPlanKey
   ) {
     console.log(
-      "Upgrade blocked: already on this plan."
+      "Upgrade blocked because selected plan is current plan"
     )
+
     return
   }
 
+
   const monthlyPrice =
-    getMonthlyPrice(selectedPlan)
+    getMonthlyPrice(
+      selectedPlan
+    )
 
   const annualMonthlyEquivalent =
-    getAnnualMonthlyEquivalent(selectedPlan)
+    getAnnualMonthlyEquivalent(
+      selectedPlan
+    )
 
   const annualPrice =
-    getAnnualPrice(selectedPlan)
-
-  console.log(
-    "SELECTED PLAN:",
-    {
-      planCode: selectedPlan.key,
-      planName: selectedPlan.name,
-      billingCycle,
-      monthlyPrice,
-      annualMonthlyEquivalent,
-      annualPrice
-    }
-  )
-
-  try {
-
-    setChangingPlan(true)
-
-    console.log(
-      "CALLING changePlan..."
+    getAnnualPrice(
+      selectedPlan
     )
 
-    const result =
-      await changePlan(
-        selectedPlan.key,
-        billingCycle
-      )
 
-    console.log(
-      "changePlan RESPONSE:",
-      result
-    )
+  const confirmationMessage =
+    selectedPlan.key === "free"
 
-    console.log(
-      "paymentRequired:",
-      result?.paymentRequired
-    )
+      ? "Your account will be moved to the Free plan."
 
-    console.log(
-      "payment:",
-      result?.payment
-    )
+      : billingCycle === "monthly"
 
-    /*
-     * FREE PLAN
-     */
+      ? `Continue with ${selectedPlan.name} at ₹${monthlyPrice}/month?`
 
-    if (
-      !result?.paymentRequired
-    ) {
+      : `Continue with ${selectedPlan.name} for ₹${annualPrice}/year (₹${annualMonthlyEquivalent}/month equivalent)?`
+
+
+  /*
+   * ---------------------------------------------------------------
+   * ACTUAL PAYMENT / PLAN CHANGE FLOW
+   * ---------------------------------------------------------------
+   */
+
+  const continueUpgrade =
+    async () => {
 
       console.log(
-        "No payment required."
+        "UPGRADE CONTINUE PRESSED"
       )
 
-      await loadPlan()
+      try {
 
-      Alert.alert(
-        "Plan updated",
-        `${selectedPlan.name} plan is now active.`
+        setChangingPlan(true)
+
+
+        console.log(
+          "CALLING changePlan:",
+          selectedPlan.key,
+          billingCycle
+        )
+
+
+        /*
+         * Backend creates the subscription/payment order.
+         */
+
+        const result =
+          await changePlan(
+            selectedPlan.key,
+            billingCycle
+          )
+
+
+        console.log(
+          "changePlan RESPONSE:",
+          result
+        )
+
+        console.log(
+          "paymentRequired:",
+          result?.paymentRequired
+        )
+
+        console.log(
+          "payment:",
+          result?.payment
+        )
+
+
+        /*
+         * -----------------------------------------------------------
+         * FREE PLAN
+         * -----------------------------------------------------------
+         */
+
+        if (
+          !result?.paymentRequired
+        ) {
+
+          console.log(
+            "No payment required. Reloading plan."
+          )
+
+
+          await loadPlan()
+
+
+          Alert.alert(
+            "Plan updated",
+            `${selectedPlan.name} plan is now active.`
+          )
+
+
+          return
+
+        }
+
+
+        /*
+         * -----------------------------------------------------------
+         * PAID PLAN
+         * -----------------------------------------------------------
+         */
+
+        if (
+          !result?.payment
+        ) {
+
+          throw new Error(
+            "Payment order was not created by the server."
+          )
+
+        }
+
+
+        console.log(
+          "OPENING RAZORPAY CHECKOUT:",
+          result.payment
+        )
+
+
+        /*
+         * Open Razorpay TEST checkout.
+         */
+
+        const paymentResult =
+          await openRazorpayCheckout(
+            result.payment
+          )
+
+
+        console.log(
+          "RAZORPAY PAYMENT RESULT:",
+          paymentResult
+        )
+
+
+        if (
+          !paymentResult?.razorpay_payment_id ||
+          !paymentResult?.razorpay_order_id ||
+          !paymentResult?.razorpay_signature
+        ) {
+
+          throw new Error(
+            "Razorpay returned incomplete payment information."
+          )
+
+        }
+
+
+        /*
+         * -----------------------------------------------------------
+         * VERIFY PAYMENT
+         * -----------------------------------------------------------
+         */
+
+        console.log(
+          "VERIFYING PAYMENT WITH BACKEND"
+        )
+
+
+        const verification =
+          await verifySubscriptionPayment({
+
+            razorpayPaymentId:
+              paymentResult.razorpay_payment_id,
+
+            razorpayOrderId:
+              paymentResult.razorpay_order_id,
+
+            razorpaySignature:
+              paymentResult.razorpay_signature
+
+          })
+
+
+        console.log(
+          "PAYMENT VERIFICATION RESPONSE:",
+          verification
+        )
+
+
+        const paymentVerified =
+          verification?.success !== false &&
+          (
+            verification?.paymentStatus === undefined ||
+            verification?.paymentStatus === "PAID" ||
+            verification?.paymentStatus === "CAPTURED"
+          )
+
+
+        if (!paymentVerified) {
+
+          throw new Error(
+            verification?.message ||
+            "Payment verification failed."
+          )
+
+        }
+
+
+        /*
+         * -----------------------------------------------------------
+         * RELOAD REAL SUBSCRIPTION
+         * -----------------------------------------------------------
+         */
+
+        console.log(
+          "PAYMENT VERIFIED. RELOADING PLAN."
+        )
+
+
+        await loadPlan()
+
+
+        Alert.alert(
+          "Payment successful",
+          `${selectedPlan.name} plan is now active.`
+        )
+
+      }
+
+      catch (error: any) {
+
+        console.error(
+          "CHANGE PLAN / PAYMENT ERROR:",
+          error
+        )
+
+
+        if (
+          error?.code ===
+          "PAYMENT_CANCELLED"
+        ) {
+
+          Alert.alert(
+            "Payment cancelled",
+            "Your plan was not changed."
+          )
+
+        }
+
+        else {
+
+          Alert.alert(
+            "Payment unsuccessful",
+            error?.message ||
+            "We could not complete your payment. Please try again."
+          )
+
+        }
+
+      }
+
+      finally {
+
+        setChangingPlan(false)
+
+      }
+
+    }
+
+
+  /*
+   * ---------------------------------------------------------------
+   * WEB
+   * ---------------------------------------------------------------
+   *
+   * React Native Alert is unreliable on React Native Web.
+   *
+   * window.confirm() gives us a real synchronous confirmation.
+   */
+
+  if (
+    Platform.OS === "web"
+  ) {
+
+    const confirmed =
+      window.confirm(
+        confirmationMessage
+      )
+
+
+    console.log(
+      "WEB CONFIRM RESULT:",
+      confirmed
+    )
+
+
+    if (!confirmed) {
+
+      console.log(
+        "UPGRADE CANCELLED"
       )
 
       return
-    }
-
-
-    /*
-     * PAID PLAN
-     */
-
-    if (
-      !result?.payment
-    ) {
-
-      throw new Error(
-        "Backend did not return a Razorpay payment order."
-      )
 
     }
 
 
-    console.log(
-      "RAZORPAY ORDER RECEIVED:",
-      result.payment
-    )
+    await continueUpgrade()
 
-
-    /*
-     * OPEN RAZORPAY TEST CHECKOUT
-     */
-
-    console.log(
-      "OPENING RAZORPAY TEST CHECKOUT..."
-    )
-
-    const paymentResult =
-      await openRazorpayCheckout(
-        result.payment
-      )
-
-
-    console.log(
-      "RAZORPAY PAYMENT RESULT:",
-      paymentResult
-    )
-
-
-    /*
-     * VERIFY PAYMENT
-     */
-
-    console.log(
-      "VERIFYING PAYMENT..."
-    )
-
-    await verifySubscriptionPayment({
-
-      razorpayPaymentId:
-        paymentResult.razorpay_payment_id,
-
-      razorpayOrderId:
-        paymentResult.razorpay_order_id,
-
-      razorpaySignature:
-        paymentResult.razorpay_signature
-
-    })
-
-
-    console.log(
-      "PAYMENT VERIFIED."
-    )
-
-
-    await loadPlan()
-
-
-    Alert.alert(
-      "Payment successful",
-      `${selectedPlan.name} plan is now active.`
-    )
+    return
 
   }
 
-  catch (error: any) {
 
-    console.error(
-      "UPGRADE / PAYMENT ERROR:",
-      error
-    )
+  /*
+   * ---------------------------------------------------------------
+   * ANDROID / IOS
+   * ---------------------------------------------------------------
+   */
 
-    console.error(
-      "ERROR MESSAGE:",
-      error?.message
-    )
+  Alert.alert(
 
-    console.error(
-      "ERROR RESPONSE:",
-      error?.response?.data
-    )
+    selectedPlan.key === "free"
+      ? "Switch to Free"
+      : `Upgrade to ${selectedPlan.name}`,
 
-    Alert.alert(
-      "Payment unsuccessful",
-      error?.message ||
-      "We could not complete your payment."
-    )
+    confirmationMessage,
 
-  }
+    [
 
-  finally {
+      {
+        text: "Cancel",
 
-    setChangingPlan(false)
+        style: "cancel",
 
-  }
+        onPress: () => {
+
+          console.log(
+            "UPGRADE CANCELLED"
+          )
+
+        }
+
+      },
+
+      {
+        text: "Continue",
+
+        onPress: () => {
+
+          void continueUpgrade()
+
+        }
+
+      }
+
+    ]
+
+  )
 
 }
 
@@ -947,19 +1121,28 @@ export default function PlanUsageScreen() {
                * Verify on backend.
                */
 
-              await verifySubscriptionPayment({
+              const verification =
+                await verifySubscriptionPayment({
+                  razorpayPaymentId:
+                    paymentResult.razorpay_payment_id,
+                  razorpayOrderId:
+                    paymentResult.razorpay_order_id,
+                  razorpaySignature:
+                    paymentResult.razorpay_signature
+                })
 
-                razorpayPaymentId:
-                  paymentResult.razorpay_payment_id,
+              const paymentVerified =
+                verification.success !== false &&
+                (verification.paymentStatus === undefined ||
+                  verification.paymentStatus === "PAID" ||
+                  verification.paymentStatus === "CAPTURED")
 
-                razorpayOrderId:
-                  paymentResult.razorpay_order_id,
-
-                razorpaySignature:
-                  paymentResult.razorpay_signature
-
-              })
-
+              if (!paymentVerified) {
+                throw new Error(
+                  verification.message ||
+                  "Booster payment verification failed."
+                )
+              }
 
               await loadPlan()
 
