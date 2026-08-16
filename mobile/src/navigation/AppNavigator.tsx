@@ -1,4 +1,6 @@
-import { createNativeStackNavigator } from "@react-navigation/native-stack"
+import {
+  createNativeStackNavigator
+} from "@react-navigation/native-stack"
 
 import LoginScreen from "../screens/auth/LoginScreen"
 import RegisterScreen from "../screens/auth/RegisterScreen"
@@ -39,7 +41,8 @@ import { RootStackParamList } from "../types/navigation"
 
 import { useAuth } from "../context/AuthContext"
 
-const Stack = createNativeStackNavigator<RootStackParamList>()
+const Stack =
+  createNativeStackNavigator<RootStackParamList>()
 
 export default function AppNavigator() {
 
@@ -48,206 +51,200 @@ export default function AppNavigator() {
     loading
   } = useAuth()
 
-  /*
-   * Wait until AsyncStorage session restoration
-   * has finished.
-   */
   if (loading) {
     return null
   }
 
+  /*
+   * AUTH STACK
+   */
+
+  if (!user) {
+
+    return (
+
+      <Stack.Navigator
+        key="logged-out"
+        screenOptions={{
+          headerShown: false
+        }}
+      >
+
+        <Stack.Screen
+          name="Login"
+          component={LoginScreen}
+        />
+
+        <Stack.Screen
+          name="Register"
+          component={RegisterScreen}
+        />
+
+      </Stack.Navigator>
+
+    )
+
+  }
+
+  /*
+   * AUTHENTICATED STACK
+   */
+
   return (
 
     <Stack.Navigator
+      key="logged-in"
       screenOptions={{
         headerShown: false
       }}
     >
 
-      {/*
-       * ============================
-       * AUTHENTICATION STACK
-       * ============================
-       *
-       * When user === null:
-       * show Login/Register.
-       *
-       * When logout() calls setUser(null),
-       * this section becomes active automatically.
-       */}
+      <Stack.Screen
+        name="Dashboard"
+        component={BottomTabs}
+      />
 
-      {!user ? (
+      <Stack.Screen
+        name="CreateJob"
+        component={CreateJobScreen}
+        options={{
+          headerShown: true,
+          title: "Create Job"
+        }}
+      />
 
-        <>
+      <Stack.Screen
+        name="EditJobScreen"
+        component={EditJobScreen}
+        options={{
+          headerShown: true,
+          title: "Edit Job"
+        }}
+      />
 
-          <Stack.Screen
-            name="Login"
-            component={LoginScreen}
-          />
+      <Stack.Screen
+        name="Jobs"
+        component={JobsScreen}
+      />
 
-          <Stack.Screen
-            name="Register"
-            component={RegisterScreen}
-          />
+      <Stack.Screen
+        name="JobDetail"
+        component={JobDetailScreen}
+      />
 
-        </>
+      <Stack.Screen
+        name="Invoice"
+        component={InvoiceScreen}
+      />
 
-      ) : (
+      <Stack.Screen
+        name="CustomerDetail"
+        component={CustomerDetailScreen}
+      />
 
-        /*
-         * ============================
-         * AUTHENTICATED STACK
-         * ============================
-         */
+      <Stack.Screen
+        name="AddCustomer"
+        component={AddCustomerScreen}
+      />
 
-        <>
+      <Stack.Screen
+        name="Inventory"
+        component={InventoryScreen}
+      />
 
-          <Stack.Screen
-            name="Dashboard"
-            component={BottomTabs}
-          />
+      <Stack.Screen
+        name="PartDetails"
+        component={PartDetailsScreen}
+      />
 
-          <Stack.Screen
-            name="CreateJob"
-            component={CreateJobScreen}
-            options={{
-              headerShown: true,
-              title: "Create Job"
-            }}
-          />
+      <Stack.Screen
+        name="AddEditPart"
+        component={AddEditPartScreen}
+      />
 
-          <Stack.Screen
-            name="EditJobScreen"
-            component={EditJobScreen}
-            options={{
-              headerShown: true,
-              title: "Edit Job"
-            }}
-          />
+      {/* SETTINGS */}
 
-          <Stack.Screen
-            name="Jobs"
-            component={JobsScreen}
-          />
+      <Stack.Screen
+        name="Settings"
+        component={SettingsScreen}
+      />
 
-          <Stack.Screen
-            name="JobDetail"
-            component={JobDetailScreen}
-          />
+      <Stack.Screen
+        name="GarageProfile"
+        component={GarageProfileScreen}
+      />
 
-          <Stack.Screen
-            name="Invoice"
-            component={InvoiceScreen}
-          />
+      <Stack.Screen
+        name="Workers"
+        component={WorkersScreen}
+      />
 
-          <Stack.Screen
-            name="CustomerDetail"
-            component={CustomerDetailScreen}
-          />
+      <Stack.Screen
+        name="WorkerAccounts"
+        component={WorkerAccountsScreen}
+      />
 
-          <Stack.Screen
-            name="AddCustomer"
-            component={AddCustomerScreen}
-          />
+      <Stack.Screen
+        name="WorkerDetails"
+        component={WorkerDetailsScreen}
+      />
 
-          <Stack.Screen
-            name="Inventory"
-            component={InventoryScreen}
-          />
+      <Stack.Screen
+        name="LoginHistory"
+        component={LoginHistoryScreen}
+      />
 
-          <Stack.Screen
-            name="PartDetails"
-            component={PartDetailsScreen}
-          />
+      <Stack.Screen
+        name="AddWorker"
+        component={AddWorkerScreen}
+      />
 
-          <Stack.Screen
-            name="AddEditPart"
-            component={AddEditPartScreen}
-          />
+      <Stack.Screen
+        name="ServiceTypes"
+        component={ServiceTypesScreen}
+      />
 
-          {/* ============================
-              SETTINGS
-             ============================ */}
+      <Stack.Screen
+        name="AddServiceType"
+        component={AddServiceTypeScreen}
+      />
 
-          <Stack.Screen
-            name="GarageProfile"
-            component={GarageProfileScreen}
-          />
+      <Stack.Screen
+        name="EditServiceType"
+        component={EditServiceTypeScreen}
+      />
 
-          <Stack.Screen
-            name="Workers"
-            component={WorkersScreen}
-          />
+      <Stack.Screen
+        name="GSTConfig"
+        component={GSTConfigScreen}
+      />
 
-          <Stack.Screen
-            name="WorkerAccounts"
-            component={WorkerAccountsScreen}
-          />
+      <Stack.Screen
+        name="InvoiceSettings"
+        component={InvoiceSettingsScreen}
+      />
 
-          <Stack.Screen
-            name="WorkerDetails"
-            component={WorkerDetailsScreen}
-          />
+      <Stack.Screen
+        name="Backup"
+        component={BackupScreen}
+      />
 
-          <Stack.Screen
-            name="LoginHistory"
-            component={LoginHistoryScreen}
-          />
+      <Stack.Screen
+        name="Language"
+        component={LanguageScreen}
+      />
 
-          <Stack.Screen
-            name="AddWorker"
-            component={AddWorkerScreen}
-          />
-
-          <Stack.Screen
-            name="ServiceTypes"
-            component={ServiceTypesScreen}
-          />
-
-          <Stack.Screen
-            name="AddServiceType"
-            component={AddServiceTypeScreen}
-          />
-
-          <Stack.Screen
-            name="EditServiceType"
-            component={EditServiceTypeScreen}
-          />
-
-          <Stack.Screen
-            name="GSTConfig"
-            component={GSTConfigScreen}
-          />
-
-          <Stack.Screen
-            name="InvoiceSettings"
-            component={InvoiceSettingsScreen}
-          />
-
-          <Stack.Screen
-            name="Backup"
-            component={BackupScreen}
-          />
-
-          <Stack.Screen
-            name="Language"
-            component={LanguageScreen}
-          />
-
-          <Stack.Screen
-            name="PlanUsage"
-            component={PlanUsageScreen}
-            options={{
-              headerShown: true,
-              title: "Subscription & Billing"
-            }}
-          />
-
-        </>
-
-      )}
+      <Stack.Screen
+        name="PlanUsage"
+        component={PlanUsageScreen}
+        options={{
+          headerShown: true,
+          title: "Subscription & Billing"
+        }}
+      />
 
     </Stack.Navigator>
 
   )
+
 }

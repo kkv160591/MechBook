@@ -1,14 +1,26 @@
 import api from "./api"
 
+
+// ==================================
+// GET ALL JOBS
+// ==================================
+
 export const getJobs =
 async () => {
 
   const response =
-    await api.get("/jobs")
+    await api.get(
+      "/jobs"
+    )
 
   return response.data
 
 }
+
+
+// ==================================
+// GET JOB BY ID
+// ==================================
 
 export const getJobById =
 async (
@@ -16,26 +28,70 @@ async (
 ) => {
 
   const response =
-    await api.get(`/jobs/${jobId}`)
+    await api.get(
+      `/jobs/${jobId}`
+    )
 
   return response.data
 
 }
+
+
+// ==================================
+// CREATE JOB
+// ==================================
 
 export const createJob =
 async (
   data: any
 ) => {
 
-  const response =
-    await api.post(
-      "/jobs",
-      data
+  try {
+
+    const response =
+      await api.post(
+        "/jobs",
+        data
+      )
+
+    return response.data
+
+  }
+
+  catch (error: any) {
+
+    /*
+     * IMPORTANT:
+     *
+     * We intentionally re-throw the
+     * original Axios error.
+     *
+     * AddJobScreen uses:
+     *
+     * error.response.status
+     *
+     * to detect a backend 403 when
+     * the garage has reached its
+     * plan job limit.
+     */
+
+    console.log(
+      "createJob API error:",
+      error?.response?.data ||
+      error?.message ||
+      error
     )
 
-  return response.data
+    throw error
+
+  }
 
 }
+
+
+// ==================================
+// UPDATE JOB
+// ==================================
 
 export const updateJob =
 async (
@@ -52,6 +108,11 @@ async (
   return response.data
 
 }
+
+
+// ==================================
+// UPDATE JOB STATUS
+// ==================================
 
 export const updateJobStatus =
 async (
@@ -71,6 +132,11 @@ async (
 
 }
 
+
+// ==================================
+// ASSIGN WORKER
+// ==================================
+
 export const assignWorker =
 async (
   jobId: string,
@@ -88,6 +154,11 @@ async (
   return response.data
 
 }
+
+
+// ==================================
+// DELETE JOB
+// ==================================
 
 export const deleteJob =
 async (

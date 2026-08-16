@@ -1,9 +1,10 @@
+// AddJobScreen.tsx
+
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   Keyboard,
   ScrollView,
   StyleSheet,
@@ -15,7 +16,7 @@ import {
   useEffect,
   useMemo,
   useState,
-  useRef 
+  useRef
 } from "react"
 
 import {
@@ -34,25 +35,52 @@ import {
   getServiceTypes
 } from "../../services/serviceTypesService"
 
+import {
+  getPlanUsage,
+  PlanUsageResponse
+} from "../../services/subscriptionService"
+
 import DateTimePicker from "@react-native-community/datetimepicker"
+
 
 export default function AddJobScreen({
   navigation
 }: any) {
 
-  const [submitted, setSubmitted] = useState(false);
+  const [submitted, setSubmitted] =
+    useState(false)
 
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef =
+    useRef<ScrollView>(null)
 
-  const customerNameRef = useRef<TextInput>(null);
-  const phoneRef = useRef<TextInput>(null);
-  const vehicleNumberRef = useRef<TextInput>(null);
-  const vehicleModelRef = useRef<TextInput>(null);
+  const customerNameRef =
+    useRef<TextInput>(null)
 
-  const customerNameY = useRef(0);
-  const phoneY = useRef(0);
-  const vehicleNumberY = useRef(0);
-  const vehicleModelY = useRef(0);
+  const phoneRef =
+    useRef<TextInput>(null)
+
+  const vehicleNumberRef =
+    useRef<TextInput>(null)
+
+  const vehicleModelRef =
+    useRef<TextInput>(null)
+
+  const customerNameY =
+    useRef(0)
+
+  const phoneY =
+    useRef(0)
+
+  const vehicleNumberY =
+    useRef(0)
+
+  const vehicleModelY =
+    useRef(0)
+
+
+  // --------------------------------
+  // LOADING
+  // --------------------------------
 
   const [loading, setLoading] =
     useState(true)
@@ -60,13 +88,30 @@ export default function AddJobScreen({
   const [saving, setSaving] =
     useState(false)
 
+  const [planUsageLoading, setPlanUsageLoading] =
+    useState(true)
+
+  const [planUsageError, setPlanUsageError] =
+    useState(false)
+
+
+  // --------------------------------
+  // DATA
+  // --------------------------------
+
   const [workers, setWorkers] =
     useState<any[]>([])
 
   const [serviceTypes, setServiceTypes] =
     useState<any[]>([])
 
-  /* Customer */
+  const [planUsage, setPlanUsage] =
+    useState<PlanUsageResponse | null>(null)
+
+
+  // --------------------------------
+  // CUSTOMER
+  // --------------------------------
 
   const [customerName, setCustomerName] =
     useState("")
@@ -75,15 +120,18 @@ export default function AddJobScreen({
     useState("")
 
   const [customerAddress, setCustomerAddress] =
-  useState("")
+    useState("")
 
-  /* Vehicle */
+
+  // --------------------------------
+  // VEHICLE
+  // --------------------------------
 
   const [vehicleNumber, setVehicleNumber] =
     useState("")
 
   const [vehicleBrand, setVehicleBrand] =
-  useState("")
+    useState("")
 
   const [vehicleModel, setVehicleModel] =
     useState("")
@@ -92,74 +140,50 @@ export default function AddJobScreen({
     useState("2 Wheeler")
 
   const [complaint, setComplaint] =
-  useState("")
+    useState("")
 
   const [odometer, setOdometer] =
     useState("")
 
-  /* Worker */
+
+  // --------------------------------
+  // WORKER
+  // --------------------------------
 
   const [workerId, setWorkerId] =
     useState("")
 
-  const [workerName, setWorkerName] = useState("")
-  
-  const [showWorkerSuggestions, setShowWorkerSuggestions] = useState(false)
+  const [workerName, setWorkerName] =
+    useState("")
 
-  const [showPaymentSuggestions, setShowPaymentSuggestions] = useState(false)
+  const [showWorkerSuggestions, setShowWorkerSuggestions] =
+    useState(false)
+
+
+  // --------------------------------
+  // PAYMENT
+  // --------------------------------
+
+  const [showPaymentSuggestions, setShowPaymentSuggestions] =
+    useState(false)
 
   const [paymentStatus, setPaymentStatus] =
-      useState("Pending")
+    useState("Pending")
 
   const [paymentMethod, setPaymentMethod] =
-      useState("")
+    useState("")
 
   const paymentMethods = [
-      "Cash",
-      "UPI",
-      "Card",
-      "Bank Transfer"
+    "Cash",
+    "UPI",
+    "Card",
+    "Bank Transfer"
   ]
 
-  const closeDropdowns = () => {
-      Keyboard.dismiss();
 
-      setShowSuggestions(false);
-      setShowWorkerSuggestions(false);
-      setShowPaymentSuggestions(false);
-  };
-
-  const searchedPaymentMethods = useMemo(() => {
-
-      if (!paymentMethod.trim())
-          return paymentMethods
-
-      return paymentMethods.filter(method =>
-
-          method
-              .toLowerCase()
-              .includes(paymentMethod.toLowerCase())
-
-      )
-
-  }, [paymentMethod])
-
-  const searchedWorkers = useMemo(() => {
-
-      if (!workerName.trim())
-          return workers
-
-      return workers.filter(worker =>
-
-          (worker.name || "")
-              .toLowerCase()
-              .includes(workerName.toLowerCase())
-
-      )
-
-  }, [workerName, workers])
-
-  /* Job */
+  // --------------------------------
+  // JOB
+  // --------------------------------
 
   const [priority, setPriority] =
     useState("Normal")
@@ -177,21 +201,115 @@ export default function AddJobScreen({
     useState("")
 
   const [inspectionNotes, setInspectionNotes] =
-  useState("")
+    useState("")
 
-  /* Services */
+
+  // --------------------------------
+  // SERVICES
+  // --------------------------------
 
   const [selectedServices, setSelectedServices] =
     useState<any[]>([])
 
-  const [serviceSearch, setServiceSearch] = useState("")
+  const [serviceName, setServiceName] =
+    useState("")
 
-  const [serviceName, setServiceName] = useState("")
-  const [servicePrice, setServicePrice] = useState("")
-  const [serviceQty, setServiceQty] = useState("1")
+  const [servicePrice, setServicePrice] =
+    useState("")
+
+  const [serviceQty, setServiceQty] =
+    useState("1")
 
   const [showSuggestions, setShowSuggestions] =
     useState(false)
+
+
+  // =================================
+  // CLOSE DROPDOWNS
+  // =================================
+
+  const closeDropdowns = () => {
+
+    Keyboard.dismiss()
+
+    setShowSuggestions(false)
+
+    setShowWorkerSuggestions(false)
+
+    setShowPaymentSuggestions(false)
+
+  }
+
+
+  // =================================
+  // PAYMENT SEARCH
+  // =================================
+
+  const searchedPaymentMethods =
+    useMemo(() => {
+
+      if (!paymentMethod.trim())
+        return paymentMethods
+
+      return paymentMethods.filter(
+        method =>
+          method
+            .toLowerCase()
+            .includes(
+              paymentMethod.toLowerCase()
+            )
+      )
+
+    }, [paymentMethod])
+
+
+  // =================================
+  // WORKER SEARCH
+  // =================================
+
+  const searchedWorkers =
+    useMemo(() => {
+
+      if (!workerName.trim())
+        return workers
+
+      return workers.filter(
+        worker =>
+          (worker.name || "")
+            .toLowerCase()
+            .includes(
+              workerName.toLowerCase()
+            )
+      )
+
+    }, [workerName, workers])
+
+
+  // =================================
+  // SERVICE SEARCH
+  // =================================
+
+  const searchedServices =
+    useMemo(() => {
+
+      if (!serviceName.trim())
+        return []
+
+      return serviceTypes.filter(
+        service =>
+          (service.name || "")
+            .toLowerCase()
+            .includes(
+              serviceName.toLowerCase()
+            )
+      )
+
+    }, [serviceName, serviceTypes])
+
+
+  // =================================
+  // LOAD DATA
+  // =================================
 
   useEffect(() => {
 
@@ -199,46 +317,79 @@ export default function AddJobScreen({
 
   }, [])
 
+
   const loadData =
     async () => {
 
       try {
 
+        setLoading(true)
+
+        setPlanUsageLoading(true)
+
+        setPlanUsageError(false)
+
+
         const [
-
           workersRes,
-
-          servicesRes
-
+          servicesRes,
+          planUsageRes
         ] = await Promise.all([
 
           getWorkers(),
 
-          getServiceTypes()
+          getServiceTypes(),
+
+          getPlanUsage()
 
         ])
 
+
+        // -----------------------------
+        // WORKERS
+        // -----------------------------
+
         setWorkers(
-
-          workersRes.workers || []
-
+          workersRes?.workers || []
         )
 
+
+        // -----------------------------
+        // SERVICES
+        // -----------------------------
+
         setServiceTypes(
+          servicesRes?.services || []
+        )
 
-          servicesRes.services  || []
 
+        // -----------------------------
+        // PLAN USAGE
+        // -----------------------------
+
+        console.log(
+          "ADD JOB PLAN USAGE:",
+          planUsageRes
+        )
+
+        setPlanUsage(
+          planUsageRes || null
         )
 
       }
 
       catch (err) {
 
-        console.log(err)
+        console.log(
+          "Failed to load Add Job data:",
+          err
+        )
+
+        setPlanUsageError(true)
 
         Alert.alert(
           "Error",
-          "Unable to load workers/services."
+          "Unable to load workers, services or plan information."
         )
 
       }
@@ -247,9 +398,74 @@ export default function AddJobScreen({
 
         setLoading(false)
 
+        setPlanUsageLoading(false)
+
       }
 
     }
+
+
+  // =================================
+  // PLAN CALCULATIONS
+  // =================================
+
+  const jobsUsed =
+    Number(
+      planUsage?.jobsUsed ?? 0
+    )
+
+
+  const jobsLimitRaw =
+    planUsage?.jobsLimit
+
+
+  const isUnlimited =
+    String(
+      jobsLimitRaw ?? ""
+    )
+      .toLowerCase() === "unlimited"
+
+
+  const jobsLimit =
+    isUnlimited
+      ? null
+      : Number(
+          jobsLimitRaw ?? 0
+        )
+
+
+  /*
+   * IMPORTANT:
+   *
+   * This usage belongs to the GARAGE.
+   *
+   * Owner + all workers share
+   * the same allowance.
+   */
+
+  const hasReachedJobLimit =
+    !isUnlimited &&
+    jobsLimit !== null &&
+    jobsUsed >= jobsLimit
+
+
+  const usagePercentage =
+    isUnlimited
+      ? 0
+      : jobsLimit !== null &&
+        jobsLimit > 0
+        ? Math.min(
+            Math.round(
+              (jobsUsed / jobsLimit) * 100
+            ),
+            100
+          )
+        : 0
+
+
+  // =================================
+  // ADD SERVICE
+  // =================================
 
   const addService =
     (service: any) => {
@@ -261,44 +477,65 @@ export default function AddJobScreen({
             service.serviceTypeId
         )
 
-      if (exists) return
+      if (exists)
+        return
 
-      setSelectedServices(prev => [
 
-        ...prev,
+      setSelectedServices(
+        prev => [
 
-        {
+          ...prev,
 
-          serviceId:
-            service.serviceTypeId,
+          {
 
-          name:
-            service.name,
+            serviceId:
+              service.serviceTypeId,
 
-          quantity: 1,
+            name:
+              service.name,
 
-          estimatedPrice:
-            Number(service.defaultPrice) || 0,
+            quantity:
+              1,
 
-          actualPrice: 
-            Number(service.defaultPrice) || 0,
+            estimatedPrice:
+              Number(
+                service.defaultPrice
+              ) || 0,
 
-        }
+            actualPrice:
+              Number(
+                service.defaultPrice
+              ) || 0,
 
-      ])
+          }
+
+        ]
+      )
 
     }
+
+
+  // =================================
+  // REMOVE SERVICE
+  // =================================
 
   const removeService =
     (index: number) => {
 
-      setSelectedServices(prev =>
-        prev.filter((_, i) =>
-          i !== index
-        )
+      setSelectedServices(
+        prev =>
+          prev.filter(
+            (_, i) =>
+              i !== index
+          )
       )
 
     }
+
+
+  // =================================
+  // UPDATE SERVICE
+  // =================================
 
   const updateService =
     (
@@ -307,220 +544,437 @@ export default function AddJobScreen({
       value: any
     ) => {
 
-      setSelectedServices(prev => {
+      setSelectedServices(
+        prev => {
 
-        const copy = [...prev]
+          const copy =
+            [...prev]
 
-        copy[index] = {
+          copy[index] = {
 
-          ...copy[index],
+            ...copy[index],
 
-          [field]: value
+            [field]:
+              value
+
+          }
+
+          return copy
 
         }
-
-        return copy
-
-      })
+      )
 
     }
 
-  const addCurrentService = () => {
 
-    if (!serviceName.trim())
-        return
+  // =================================
+  // ADD CUSTOM SERVICE
+  // =================================
 
-    setSelectedServices(prev => [
-
-        ...prev,
-
-        {
-
-            serviceId: null,
-
-            name: serviceName,
-
-            quantity: Number(serviceQty) || 1,
-
-            estimatedPrice: Number(servicePrice) || 0,
-
-            actualPrice: Number(servicePrice) || 0,
-
-        }
-
-    ])
-
-    setServiceName("")
-    setServicePrice("")
-    setServiceQty("1")
-    closeDropdowns();
-
-}
-
-  const total =
-  useMemo(() => {
-
-    return selectedServices.reduce(
-
-      (sum, item) =>
-
-        sum +
-        (
-          Number(item.estimatedPrice) *
-          Number(item.quantity)
-        ),
-
-      0
-
-    )
-
-  }, [selectedServices])
-
-  const searchedServices = useMemo(() => {
+  const addCurrentService =
+    () => {
 
       if (!serviceName.trim())
-          return []
+        return
 
-      return serviceTypes.filter(service =>
 
-          (service.name || "")
-              .toLowerCase()
-              .includes(serviceName.toLowerCase())
+      setSelectedServices(
+        prev => [
+
+          ...prev,
+
+          {
+
+            serviceId:
+              null,
+
+            name:
+              serviceName,
+
+            quantity:
+              Number(
+                serviceQty
+              ) || 1,
+
+            estimatedPrice:
+              Number(
+                servicePrice
+              ) || 0,
+
+            actualPrice:
+              Number(
+                servicePrice
+              ) || 0,
+
+          }
+
+        ]
+      )
+
+
+      setServiceName("")
+
+      setServicePrice("")
+
+      setServiceQty("1")
+
+      closeDropdowns()
+
+    }
+
+
+  // =================================
+  // TOTAL
+  // =================================
+
+  const total =
+    useMemo(() => {
+
+      return selectedServices.reduce(
+
+        (
+          sum,
+          item
+        ) =>
+
+          sum +
+          (
+            Number(
+              item.estimatedPrice
+            ) *
+            Number(
+              item.quantity
+            )
+          ),
+
+        0
 
       )
 
-  }, [serviceName, serviceTypes])
-  
-  const onDateChange = (
-  event: any,
-  selectedDate?: Date
-) => {
+    }, [selectedServices])
 
-  setShowDatePicker(false)
 
-  if (!selectedDate) return
+  // =================================
+  // DATE
+  // =================================
 
-  const current =
-    deliveryDate || new Date()
+  const onDateChange =
+    (
+      event: any,
+      selectedDate?: Date
+    ) => {
 
-  current.setFullYear(
-    selectedDate.getFullYear(),
-    selectedDate.getMonth(),
-    selectedDate.getDate()
-  )
+      setShowDatePicker(false)
 
-  setDeliveryDate(new Date(current))
+      if (!selectedDate)
+        return
 
-  setShowTimePicker(true)
 
-}
+      const current =
+        deliveryDate ||
+        new Date()
 
-const onTimeChange = (
-  event: any,
-  selectedTime?: Date
-) => {
 
-  setShowTimePicker(false)
+      current.setFullYear(
+        selectedDate.getFullYear(),
+        selectedDate.getMonth(),
+        selectedDate.getDate()
+      )
 
-  if (!selectedTime) return
 
-  const current =
-    deliveryDate || new Date()
+      setDeliveryDate(
+        new Date(current)
+      )
 
-  current.setHours(
-    selectedTime.getHours(),
-    selectedTime.getMinutes()
-  )
 
-  setDeliveryDate(new Date(current))
+      setShowTimePicker(true)
 
-}
+    }
+
+
+  const onTimeChange =
+    (
+      event: any,
+      selectedTime?: Date
+    ) => {
+
+      setShowTimePicker(false)
+
+      if (!selectedTime)
+        return
+
+
+      const current =
+        deliveryDate ||
+        new Date()
+
+
+      current.setHours(
+        selectedTime.getHours(),
+        selectedTime.getMinutes()
+      )
+
+
+      setDeliveryDate(
+        new Date(current)
+      )
+
+    }
+
+
+  // =================================
+  // SAVE JOB
+  // =================================
 
   const saveJob =
-
     async () => {
-      const missingFields = [];
-setSubmitted(true);
-if (!customerName.trim())
-    missingFields.push("Customer Name");
 
-if (!phone.trim())
-    missingFields.push("Phone Number");
+      // -----------------------------
+      // PLAN CHECK
+      // -----------------------------
 
-if (!vehicleNumber.trim())
-    missingFields.push("Vehicle Number");
+      if (planUsageLoading) {
 
-if (!vehicleModel.trim())
-    missingFields.push("Vehicle Model");
+        Alert.alert(
+          "Please wait",
+          "Checking your plan usage..."
+        )
 
-if (selectedServices.length === 0)
-    missingFields.push("At least one Service");
+        return
 
-if (missingFields.length > 0) {
+      }
 
-    if (!customerName.trim()) {
 
-        scrollRef.current?.scrollTo({
-            y: customerNameY.current - 20,
-            animated: true,
-        });
+      // If plan information could not
+      // be loaded, do not allow creation.
 
-        setTimeout(() => {
-            customerNameRef.current?.focus();
-        }, 300);
+      if (planUsageError || !planUsage) {
 
-    }
+        Alert.alert(
+          "Unable to Verify Plan",
+          "We could not verify your current plan usage. Please try again."
+        )
 
-    else if (!phone.trim()) {
+        return
 
-        scrollRef.current?.scrollTo({
-            y: phoneY.current - 20,
-            animated: true,
-        });
+      }
 
-        setTimeout(() => {
-            phoneRef.current?.focus();
-        }, 300);
 
-    }
+      // -----------------------------
+      // JOB LIMIT CHECK
+      // -----------------------------
 
-    else if (!vehicleNumber.trim()) {
+      if (hasReachedJobLimit) {
 
-        scrollRef.current?.scrollTo({
-            y: vehicleNumberY.current - 20,
-            animated: true,
-        });
+        Alert.alert(
 
-        setTimeout(() => {
-            vehicleNumberRef.current?.focus();
-        }, 300);
+          "Job Limit Reached",
 
-    }
+          `Your ${
+            planUsage?.planName ||
+            "current"
+          } plan allows ${
+            jobsLimit
+          } jobs.
 
-    else if (!vehicleModel.trim()) {
+You have already used ${
+            jobsUsed
+          } jobs.
 
-        scrollRef.current?.scrollTo({
-            y: vehicleModelY.current - 20,
-            animated: true,
-        });
+Please upgrade your plan to create more jobs.`
 
-        setTimeout(() => {
-            vehicleModelRef.current?.focus();
-        }, 300);
+        )
 
-    }
+        return
 
-    Alert.alert(
-        "Missing Required Fields",
-        "• " + missingFields.join("\n• ")
-    );
+      }
 
-    return;
-}
+
+      // -----------------------------
+      // FORM VALIDATION
+      // -----------------------------
+
+      const missingFields: string[] = []
+
+      setSubmitted(true)
+
+
+      if (!customerName.trim())
+        missingFields.push(
+          "Customer Name"
+        )
+
+
+      if (!phone.trim())
+        missingFields.push(
+          "Phone Number"
+        )
+
+
+      if (!vehicleNumber.trim())
+        missingFields.push(
+          "Vehicle Number"
+        )
+
+
+      if (!vehicleModel.trim())
+        missingFields.push(
+          "Vehicle Model"
+        )
+
+
+      if (selectedServices.length === 0)
+        missingFields.push(
+          "At least one Service"
+        )
+
+
+      if (
+        missingFields.length > 0
+      ) {
+
+        if (
+          !customerName.trim()
+        ) {
+
+          scrollRef.current?.scrollTo({
+
+            y:
+              customerNameY.current -
+              20,
+
+            animated:
+              true,
+
+          })
+
+
+          setTimeout(
+            () => {
+
+              customerNameRef
+                .current
+                ?.focus()
+
+            },
+            300
+          )
+
+        }
+
+        else if (
+          !phone.trim()
+        ) {
+
+          scrollRef.current?.scrollTo({
+
+            y:
+              phoneY.current -
+              20,
+
+            animated:
+              true,
+
+          })
+
+
+          setTimeout(
+            () => {
+
+              phoneRef
+                .current
+                ?.focus()
+
+            },
+            300
+          )
+
+        }
+
+        else if (
+          !vehicleNumber.trim()
+        ) {
+
+          scrollRef.current?.scrollTo({
+
+            y:
+              vehicleNumberY.current -
+              20,
+
+            animated:
+              true,
+
+          })
+
+
+          setTimeout(
+            () => {
+
+              vehicleNumberRef
+                .current
+                ?.focus()
+
+            },
+            300
+          )
+
+        }
+
+        else if (
+          !vehicleModel.trim()
+        ) {
+
+          scrollRef.current?.scrollTo({
+
+            y:
+              vehicleModelY.current -
+              20,
+
+            animated:
+              true,
+
+          })
+
+
+          setTimeout(
+            () => {
+
+              vehicleModelRef
+                .current
+                ?.focus()
+
+            },
+            300
+          )
+
+        }
+
+
+        Alert.alert(
+
+          "Missing Required Fields",
+
+          "• " +
+            missingFields.join(
+              "\n• "
+            )
+
+        )
+
+
+        return
+
+      }
+
+
+      // -----------------------------
+      // CREATE JOB
+      // -----------------------------
 
       try {
 
         setSaving(true)
+
 
         await createJob({
 
@@ -549,12 +1003,9 @@ if (missingFields.length > 0) {
           priority,
 
           deliveryDate:
-
-          deliveryDate
-
-          ? deliveryDate.toISOString()
-
-          : "",
+            deliveryDate
+              ? deliveryDate.toISOString()
+              : "",
 
           paymentStatus,
 
@@ -562,25 +1013,89 @@ if (missingFields.length > 0) {
 
           notes,
 
-          services: selectedServices
+          services:
+            selectedServices
 
         })
+
 
         Alert.alert(
           "Success",
           "Job Created"
         )
 
+
         navigation.goBack()
 
       }
 
-      catch (err) {
+      catch (err: any) {
 
-        console.log(err)
+        console.log(
+          "CREATE JOB ERROR:",
+          err
+        )
+
+
+        /*
+         * Backend should return 403
+         * when the garage has reached
+         * its plan limit.
+         */
+
+        const status =
+          err?.response?.status
+
+
+        if (
+          status === 403
+        ) {
+
+          Alert.alert(
+
+            "Job Limit Reached",
+
+            err?.response?.data?.message ||
+            "Your garage has reached the job limit for the current plan. Please upgrade your plan."
+
+          )
+
+          /*
+           * Refresh usage because another
+           * worker may have created the
+           * last available job.
+           */
+
+          try {
+
+            const latestUsage =
+              await getPlanUsage()
+
+            setPlanUsage(
+              latestUsage
+            )
+
+          }
+
+          catch (
+            refreshError
+          ) {
+
+            console.log(
+              "Failed to refresh plan usage:",
+              refreshError
+            )
+
+          }
+
+          return
+
+        }
+
 
         Alert.alert(
           "Error",
+          err?.response?.data?.message ||
           "Unable to create job."
         )
 
@@ -593,6 +1108,72 @@ if (missingFields.length > 0) {
       }
 
     }
+
+
+  // =================================
+  // FORMAT DATE
+  // =================================
+
+  const formatDate =
+    (date: Date) => {
+
+      return date.toLocaleString(
+        "en-IN",
+        {
+
+          day:
+            "2-digit",
+
+          month:
+            "short",
+
+          year:
+            "numeric",
+
+          hour:
+            "2-digit",
+
+          minute:
+            "2-digit"
+
+        }
+      )
+
+    }
+
+
+  // =================================
+  // REQUIRED LABEL
+  // =================================
+
+  const RequiredLabel =
+    ({
+      text
+    }: {
+      text: string
+    }) => (
+
+      <Text style={styles.label}>
+
+        {text}
+
+        <Text
+          style={{
+            color:
+              "#DC2626"
+          }}
+        >
+          {" "}*
+        </Text>
+
+      </Text>
+
+    )
+
+
+  // =================================
+  // LOADING
+  // =================================
 
   if (loading) {
 
@@ -611,848 +1192,1656 @@ if (missingFields.length > 0) {
 
   }
 
-  const formatDate = (date: Date) => {
 
-  return date.toLocaleString("en-IN", {
+  // =================================
+  // RENDER
+  // =================================
 
-    day: "2-digit",
+  return (
 
-    month: "short",
+    <ScrollView
 
-    year: "numeric",
+      ref={scrollRef}
 
-    hour: "2-digit",
+      style={
+        styles.container
+      }
 
-    minute: "2-digit"
+      keyboardShouldPersistTaps="handled"
 
-  })
-
-}
-
-const RequiredLabel = ({ text }: { text: string }) => (
-    <Text style={styles.label}>
-        {text}
-        <Text style={{ color: "#DC2626" }}> *</Text>
-    </Text>
-);
-
-return (
-
-<ScrollView
-    ref={scrollRef}
-    style={styles.container}
-    keyboardShouldPersistTaps="handled"
-    onScrollBeginDrag={closeDropdowns}
->
-
-{/* CUSTOMER */}
-
-<Text style={styles.heading}>
-Customer Details
-</Text>
-
-<RequiredLabel text="Customer Name" />
-<View
-    onLayout={(e) =>
-        customerNameY.current =
-            e.nativeEvent.layout.y
-    }
->
-<TextInput
-ref={customerNameRef}
-onFocus={closeDropdowns}
-style={[
-        styles.input,
-        submitted &&
-        !customerName.trim() &&
-        styles.inputError
-    ]}
-value={customerName}
-onChangeText={setCustomerName}
-/>
-{
-submitted &&
-!customerName.trim() && (
-<Text style={styles.errorText}>
-Customer Name is required.
-</Text>
-)
-}
-</View>
-
-<RequiredLabel text="Phone Number" />
-<View
-    onLayout={(e) =>
-        phoneY.current =
-            e.nativeEvent.layout.y
-    }
->
-<TextInput
-ref={phoneRef}
-onFocus={closeDropdowns}
-keyboardType="phone-pad"
-maxLength={10}
-style={[
-        styles.input,
-        submitted &&
-        !phone.trim() &&
-        styles.inputError
-    ]}
-value={phone}
-onChangeText={setPhone}
-/>
-{
-submitted &&
-!phone.trim() && (
-<Text style={styles.errorText}>
-Phone Number is required.
-</Text>
-)
-}
-</View>
-
-<Text style={styles.label}>
-Customer Address
-</Text>
-<TextInput
-  onFocus={closeDropdowns}
-  style={styles.input}
-  value={customerAddress}
-  onChangeText={setCustomerAddress}
-/>
-
-{/* VEHICLE */}
-
-<Text style={styles.heading}>
-Vehicle Details
-</Text>
-
-<RequiredLabel text="Vehicle Number" />
-<View
-    onLayout={(e) =>
-        vehicleNumberY.current =
-            e.nativeEvent.layout.y
-    }
->
-<TextInput
-ref={vehicleNumberRef}
-onFocus={closeDropdowns}
-style={[
-        styles.input,
-        submitted &&
-        !vehicleNumber.trim() &&
-        styles.inputError
-    ]}
-value={vehicleNumber}
-onChangeText={(text)=>
-  setVehicleNumber(
-  text.toUpperCase()
-  )
-}
-/>
-{
-submitted &&
-!vehicleNumber.trim() && (
-<Text style={styles.errorText}>
-Vehicle Number is required.
-</Text>
-)
-}
-</View>
-<Text style={styles.label}>
-Vehicle Brand
-</Text>
-<TextInput
-    onFocus={closeDropdowns}
-    style={styles.input}
-    value={vehicleBrand}
-    onChangeText={setVehicleBrand}
-/>
-
-<RequiredLabel text="Vehicle Model" />
-<View
-    onLayout={(e) =>
-        vehicleModelY.current =
-            e.nativeEvent.layout.y
-    }
->
-<TextInput
-ref={vehicleModelRef}
-onFocus={closeDropdowns}
-style={[
-        styles.input,
-        submitted &&
-        !vehicleModel.trim() &&
-        styles.inputError
-    ]}
-value={vehicleModel}
-onChangeText={setVehicleModel}
-/>
-{
-submitted &&
-!vehicleModel.trim() && (
-<Text style={styles.errorText}>
-Vehicle Model is required.
-</Text>
-)
-}
-</View>
-
-<Text style={styles.label}>
-Current Odometer
-</Text>
-<TextInput
-onFocus={closeDropdowns}
-keyboardType="numeric"
-maxLength={7}
-style={styles.input}
-value={odometer}
-onChangeText={setOdometer}
-/>
-
-<RequiredLabel text="Vehicle Type" />
-
-<View style={styles.typeRow}>
-
-<TouchableOpacity
-
-style={[
-
-styles.typeButton,
-
-vehicleType==="2 Wheeler" &&
-
-styles.selectedType
-
-]}
-
-onPress={()=>
-
-setVehicleType("2 Wheeler")
-
-}
-
->
-
-<Text>
-
-🏍 2 Wheeler
-
-</Text>
-
-</TouchableOpacity>
-
-<TouchableOpacity
-
-style={[
-
-styles.typeButton,
-
-vehicleType==="4 Wheeler" &&
-
-styles.selectedType
-
-]}
-
-onPress={()=>
-
-setVehicleType("4 Wheeler")
-
-}
-
->
-
-<Text>
-
-🚗 4 Wheeler
-
-</Text>
-
-</TouchableOpacity>
-
-</View>
-
-{/* ASSIGN WORKER */}
-
-<Text style={styles.heading}>
-Worker
-</Text>
-<Text style={styles.label}>
-Assign Worker
-</Text>
-
-<View style={styles.inputWrapper}>
-
-<TextInput
-    placeholder="Select Worker"
-    style={styles.input}
-    value={workerName}
-    onFocus={() => {
-
-        setShowWorkerSuggestions(true);
-        setShowSuggestions(false);
-        setShowPaymentSuggestions(false);
-
-    }}
-    onChangeText={(text) => {
-
-        setWorkerName(text)
-
-        setShowWorkerSuggestions(true)
-
-    }}
-/>
-
-{
-showWorkerSuggestions && (
-<View style={styles.suggestionContainer}>
-
-
-    {
-
-        searchedWorkers.map(worker => (
-
-        <TouchableOpacity
-
-            key={worker.workerId}
-
-            style={styles.workerSuggestion}
-
-            onPress={() => {
-
-                setWorkerId(worker.workerId)
-
-                setWorkerName(worker.name)
-
-                setShowWorkerSuggestions(false)
-
-            }}
-
-        >
-
-            <View>
-
-                <Text style={styles.cardTitle}>
-                    {worker.name}
-                </Text>
-
-                <Text style={styles.cardSubtitle}>
-                    {worker.role}
-                </Text>
-
-            </View>
-
-            <Ionicons
-                name="person-circle"
-                size={26}
-                color="#2563EB"
-            />
-
-        </TouchableOpacity>
-
-        ))
-
-    }
-
-</View>
-)
-}
-</View>
-
-{/* JOB DETAILS */}
-
-<Text style={styles.heading}>
-Job Details
-</Text>
-
-<Text style={styles.label}>
-Priority
-</Text>
-
-<View style={styles.priorityRow}>
-
-{
-
-["Low","Normal","High"].map(item=>(
-
-<TouchableOpacity
-
-key={item}
-
-style={[
-
-styles.priorityButton,
-
-priority===item &&
-
-styles.selectedPriority
-
-]}
-
-onPress={()=>
-
-setPriority(item)
-
-}
-
->
-
-<Text
-
-style={{
-
-fontWeight:"600",
-
-color:
-
-priority===item
-
-?
-
-"white"
-
-:
-
-"#111827"
-
-}}
-
->
-
-{item}
-
-</Text>
-
-</TouchableOpacity>
-
-))
-
-}
-
-</View>
-
-<Text style={styles.label}>
-Expected Delivery Date
-</Text>
-
-<TouchableOpacity
-style={styles.input}
-onPress={() => {
-
-  setShowDatePicker(true)
-
-}}
->
-
-<Text
-style={{
-color: deliveryDate
-? "#111827"
-: "#9CA3AF"
-}}
->
-
-{deliveryDate
-
-? formatDate(deliveryDate)
-
-: "Delivery Date"}
-
-</Text>
-
-</TouchableOpacity>
-
-{/* SERVICES */}
-
-<Text style={styles.heading}>
-Services
-</Text>
-
-<RequiredLabel text="Service" />
-<View style={styles.inputWrapper}>
-<TextInput
-    style={styles.input}
-    value={serviceName}
-    onFocus={() => {
-
-        setShowSuggestions(true);
-        setShowWorkerSuggestions(false);
-        setShowPaymentSuggestions(false);
-
-    }}
-    onChangeText={(text) => {
-
-        setServiceName(text)
-
-        setShowSuggestions(true)
-
-    }}
-/>
-
-{
-showSuggestions &&
-searchedServices.length > 0 && (
-<View style={styles.suggestionContainer}>
-
-    {searchedServices.map(service => (
-
-    <TouchableOpacity
-
-        key={service.serviceTypeId}
-
-        style={styles.suggestionItem}
-
-        onPress={() => {
-
-            setServiceName(service.name)
-            setServicePrice(String(service.defaultPrice))
-            closeDropdowns();
-            setShowWorkerSuggestions(false)
-            setShowPaymentSuggestions(false)
-
-        }}
+      onScrollBeginDrag={
+        closeDropdowns
+      }
 
     >
 
-        <View style={{ flex: 1 }}>
+      {/* ============================
+          PLAN USAGE
+      ============================ */}
 
-            <Text style={styles.cardTitle}>
-                {service.name}
+      <View
+        style={
+          styles.planUsageCard
+        }
+      >
+
+        <View
+          style={
+            styles.planUsageHeader
+          }
+        >
+
+          <View
+            style={{
+              flex: 1
+            }}
+          >
+
+            <Text
+              style={
+                styles.planUsageTitle
+              }
+            >
+              {planUsage?.planName ||
+                planUsage?.planCode ||
+                "Current Plan"}
             </Text>
 
-            <Text style={styles.cardSubtitle}>
-                {service.category}
+            <Text
+              style={
+                styles.planUsageSubtitle
+              }
+            >
+              Job usage for this garage
             </Text>
+
+          </View>
+
+
+          <Text
+            style={[
+              styles.planUsageCount,
+
+              hasReachedJobLimit && {
+                color:
+                  "#DC2626"
+              }
+            ]}
+          >
+
+            {isUnlimited
+
+              ? `${jobsUsed} / Unlimited`
+
+              : `${jobsUsed} / ${jobsLimit}`
+
+            }
+
+          </Text>
 
         </View>
 
-        <Text style={styles.suggestionPrice}>
-            ₹ {service.defaultPrice}
-        </Text>
 
-    </TouchableOpacity>
+        {/* USAGE BAR */}
 
-    ))}
+        {!isUnlimited &&
+          jobsLimit !== null && (
+            
+            <View
+              style={
+                styles.usageBarBackground
+              }
+            >
 
-</View>
-)
-}
-</View>
+              <View
+                style={[
+                  styles.usageBar,
 
-<View style={styles.row}>
+                  {
+                    width:
+                      `${usagePercentage}%`,
 
-    <View style={{ flex: 2 }}>
+                    backgroundColor:
+                      hasReachedJobLimit
+                        ? "#DC2626"
+                        : usagePercentage >= 80
+                          ? "#F59E0B"
+                          : "#2563EB"
+                  }
 
-      <Text style={styles.label}>
-          Estimate Price
+                ]}
+              />
+
+            </View>
+
+          )
+        }
+
+
+        {/* LIMIT WARNING */}
+
+        {hasReachedJobLimit && (
+
+          <Text
+            style={
+              styles.limitWarning
+            }
+          >
+            Job limit reached. Upgrade
+            your plan to create another job.
+          </Text>
+
+        )}
+
+
+        {/* PLAN CHECK ERROR */}
+
+        {planUsageError && (
+
+          <Text
+            style={
+              styles.limitWarning
+            }
+          >
+            Unable to verify your plan.
+            Please try again.
+          </Text>
+
+        )}
+
+      </View>
+
+
+      {/* ============================
+          CUSTOMER
+      ============================ */}
+
+      <Text
+        style={
+          styles.heading
+        }
+      >
+        Customer Details
       </Text>
 
-      <TextInput
-          onFocus={closeDropdowns}
-          keyboardType="numeric"
-          style={styles.input}
-          value={servicePrice}
-          onChangeText={setServicePrice}
-          placeholder="Enter estimate"
+
+      <RequiredLabel
+        text="Customer Name"
       />
 
-  </View>
 
-    <View style={{ flex: 1 }}>
-        <Text style={styles.label}>Quantity</Text>
+      <View
+        onLayout={
+          e =>
+            customerNameY.current =
+              e.nativeEvent.layout.y
+        }
+      >
 
         <TextInput
-            onFocus={closeDropdowns}
-            keyboardType="numeric"
-            style={styles.input}
-            value={serviceQty}
-            onChangeText={setServiceQty}
+
+          ref={
+            customerNameRef
+          }
+
+          onFocus={
+            closeDropdowns
+          }
+
+          style={[
+            styles.input,
+
+            submitted &&
+              !customerName.trim() &&
+              styles.inputError
+          ]}
+
+          value={
+            customerName
+          }
+
+          onChangeText={
+            setCustomerName
+          }
+
         />
-    </View>
 
-</View>
 
-<TouchableOpacity
+        {submitted &&
+          !customerName.trim() && (
 
-style={styles.addServiceBtn}
+            <Text
+              style={
+                styles.errorText
+              }
+            >
+              Customer Name is required.
+            </Text>
 
-onPress={addCurrentService}
+          )}
 
->
+      </View>
 
-<Text style={styles.addServiceText}>
 
-Add Service
+      <RequiredLabel
+        text="Phone Number"
+      />
 
-</Text>
 
-</TouchableOpacity>
+      <View
+        onLayout={
+          e =>
+            phoneY.current =
+              e.nativeEvent.layout.y
+        }
+      >
 
-{/* SELECTED SERVICES */}
+        <TextInput
 
-<Text style={styles.heading}>
-Selected Services
-</Text>
+          ref={
+            phoneRef
+          }
 
-{
+          onFocus={
+            closeDropdowns
+          }
 
-selectedServices.length === 0 ?
+          keyboardType="phone-pad"
 
-<View style={styles.emptyCard}>
+          maxLength={
+            10
+          }
 
-<Text
-style={[
-styles.emptyText,
-submitted && {
-color:"#DC2626",
-fontWeight:"600"
-}
-]}
->
-At least one service is required.
-</Text>
+          style={[
+            styles.input,
 
-</View>
+            submitted &&
+              !phone.trim() &&
+              styles.inputError
+          ]}
 
-:
+          value={
+            phone
+          }
 
-selectedServices.map((service,index)=>(
+          onChangeText={
+            setPhone
+          }
 
-<View
-key={index}
-style={styles.selectedServiceCard}
->
+        />
 
-<View
-style={styles.selectedHeader}
->
 
-<Text style={styles.cardTitle}>
+        {submitted &&
+          !phone.trim() && (
 
-{service.name}
+            <Text
+              style={
+                styles.errorText
+              }
+            >
+              Phone Number is required.
+            </Text>
 
-</Text>
+          )}
 
-<TouchableOpacity
-onPress={()=>removeService(index)}
->
+      </View>
 
-<Ionicons
-name="trash-outline"
-size={22}
-color="#DC2626"
-/>
 
-</TouchableOpacity>
+      <Text
+        style={
+          styles.label
+        }
+      >
+        Customer Address
+      </Text>
 
-</View>
 
-<View style={styles.row}>
+      <TextInput
 
-  <View style={{ flex: 1 }}>
+        onFocus={
+          closeDropdowns
+        }
 
-    <Text style={styles.smallLabel}>
-      Quantity
-    </Text>
+        style={
+          styles.input
+        }
 
-    <TextInput
-      onFocus={closeDropdowns}
-      style={styles.smallInput}
-      keyboardType="numeric"
-      value={String(service.quantity)}
-      onChangeText={(text) =>
-        updateService(
-          index,
-          "quantity",
-          Number(text) || 1
-        )
-      }
-    />
+        value={
+          customerAddress
+        }
 
-  </View>
+        onChangeText={
+          setCustomerAddress
+        }
 
-  <View style={{ flex: 1 }}>
+      />
 
-    <Text style={styles.smallLabel}>
-      Estimate Price
-    </Text>
 
-    <TextInput
-      onFocus={closeDropdowns}
-      style={styles.smallInput}
-      keyboardType="numeric"
-      value={String(service.estimatedPrice)}
-      onChangeText={(text) =>
-        updateService(
-          index,
-          "estimatedPrice",
-          Number(text) || 0
-        )
-      }
-    />
+      {/* ============================
+          VEHICLE
+      ============================ */}
 
-  </View>
+      <Text
+        style={
+          styles.heading
+        }
+      >
+        Vehicle Details
+      </Text>
 
-</View>
 
-<View
-style={styles.totalRow}
->
+      <RequiredLabel
+        text="Vehicle Number"
+      />
 
-<Text style={styles.totalServiceText}>
 
-Subtotal
+      <View
+        onLayout={
+          e =>
+            vehicleNumberY.current =
+              e.nativeEvent.layout.y
+        }
+      >
 
-</Text>
+        <TextInput
 
-<Text style={styles.totalServicePrice}>
+          ref={
+            vehicleNumberRef
+          }
 
-₹ {Number(service.quantity) * Number(service.estimatedPrice)}
+          onFocus={
+            closeDropdowns
+          }
 
-</Text>
+          style={[
+            styles.input,
 
-</View>
+            submitted &&
+              !vehicleNumber.trim() &&
+              styles.inputError
+          ]}
 
-</View>
+          value={
+            vehicleNumber
+          }
 
-))
+          onChangeText={
+            text =>
+              setVehicleNumber(
+                text.toUpperCase()
+              )
+          }
 
-}
+        />
 
-{/* GRAND TOTAL */}
 
-<View style={styles.totalCard}>
+        {submitted &&
+          !vehicleNumber.trim() && (
 
-<Text style={styles.totalLabel}>
+            <Text
+              style={
+                styles.errorText
+              }
+            >
+              Vehicle Number is required.
+            </Text>
 
-Estimated Bill
+          )}
 
-</Text>
+      </View>
 
-<Text style={styles.totalAmount}>
 
-₹ {total}
+      <Text
+        style={
+          styles.label
+        }
+      >
+        Vehicle Brand
+      </Text>
 
-</Text>
 
-</View>
+      <TextInput
 
-{/* NOTES */}
+        onFocus={
+          closeDropdowns
+        }
 
-<Text style={styles.heading}>
-Customer Complaint
-</Text>
+        style={
+          styles.input
+        }
 
-<TextInput
-onFocus={closeDropdowns}
-multiline
-style={styles.notes}
-value={complaint}
-onChangeText={setComplaint}
-/>
+        value={
+          vehicleBrand
+        }
 
-<Text style={styles.heading}>
-Inspection Notes
-</Text>
+        onChangeText={
+          setVehicleBrand
+        }
 
-<TextInput
-onFocus={closeDropdowns}
-multiline
-style={styles.notes}
-value={inspectionNotes}
-onChangeText={setInspectionNotes}
-/>
+      />
 
-<Text style={styles.heading}>
-Payment Status
-</Text>
 
-<View style={styles.priorityRow}>
+      <RequiredLabel
+        text="Vehicle Model"
+      />
 
-{["Pending","Advance","Paid"].map(item=>(
 
-<TouchableOpacity
-key={item}
-style={[
-styles.priorityButton,
-paymentStatus===item &&
-styles.selectedPriority
-]}
-onPress={()=>setPaymentStatus(item)}
->
+      <View
+        onLayout={
+          e =>
+            vehicleModelY.current =
+              e.nativeEvent.layout.y
+        }
+      >
 
-<Text
-style={{
-color:
-paymentStatus===item
-? "white"
-:"#111827"
-}}
->
-{item}
-</Text>
+        <TextInput
 
-</TouchableOpacity>
+          ref={
+            vehicleModelRef
+          }
 
-))}
+          onFocus={
+            closeDropdowns
+          }
 
-</View>
-<View style={styles.inputWrapper}>
-  <Text style={styles.label}>
-Payment Method
-</Text>
-<TextInput
-    placeholder="Select Payment Method"
-    style={styles.input}
-    value={paymentMethod}
-    onFocus={() => {
+          style={[
+            styles.input,
 
-        setShowPaymentSuggestions(true);
-        setShowSuggestions(false);
-        setShowWorkerSuggestions(false);
+            submitted &&
+              !vehicleModel.trim() &&
+              styles.inputError
+          ]}
 
-    }}
-    onChangeText={(text) => {
+          value={
+            vehicleModel
+          }
 
-        setPaymentMethod(text)
+          onChangeText={
+            setVehicleModel
+          }
 
-        setShowPaymentSuggestions(true)
+        />
 
-    }}
-/>
 
-{
-showPaymentSuggestions && (
+        {submitted &&
+          !vehicleModel.trim() && (
 
-<View style={styles.suggestionContainer}>
+            <Text
+              style={
+                styles.errorText
+              }
+            >
+              Vehicle Model is required.
+            </Text>
 
-        {
+          )}
 
-        searchedPaymentMethods.map(method => (
+      </View>
+
+
+      <Text
+        style={
+          styles.label
+        }
+      >
+        Current Odometer
+      </Text>
+
+
+      <TextInput
+
+        onFocus={
+          closeDropdowns
+        }
+
+        keyboardType="numeric"
+
+        maxLength={
+          7
+        }
+
+        style={
+          styles.input
+        }
+
+        value={
+          odometer
+        }
+
+        onChangeText={
+          setOdometer
+        }
+
+      />
+
+
+      <RequiredLabel
+        text="Vehicle Type"
+      />
+
+
+      <View
+        style={
+          styles.typeRow
+        }
+      >
+
+        <TouchableOpacity
+
+          style={[
+            styles.typeButton,
+
+            vehicleType ===
+              "2 Wheeler" &&
+              styles.selectedType
+          ]}
+
+          onPress={() =>
+            setVehicleType(
+              "2 Wheeler"
+            )
+          }
+
+        >
+
+          <Text>
+            🏍 2 Wheeler
+          </Text>
+
+        </TouchableOpacity>
+
+
+        <TouchableOpacity
+
+          style={[
+            styles.typeButton,
+
+            vehicleType ===
+              "4 Wheeler" &&
+              styles.selectedType
+          ]}
+
+          onPress={() =>
+            setVehicleType(
+              "4 Wheeler"
+            )
+          }
+
+        >
+
+          <Text>
+            🚗 4 Wheeler
+          </Text>
+
+        </TouchableOpacity>
+
+      </View>
+
+
+      {/* ============================
+          WORKER
+      ============================ */}
+
+      <Text
+        style={
+          styles.heading
+        }
+      >
+        Worker
+      </Text>
+
+
+      <Text
+        style={
+          styles.label
+        }
+      >
+        Assign Worker
+      </Text>
+
+
+      <View
+        style={
+          styles.inputWrapper
+        }
+      >
+
+        <TextInput
+
+          placeholder="Select Worker"
+
+          style={
+            styles.input
+          }
+
+          value={
+            workerName
+          }
+
+          onFocus={() => {
+
+            setShowWorkerSuggestions(
+              true
+            )
+
+            setShowSuggestions(
+              false
+            )
+
+            setShowPaymentSuggestions(
+              false
+            )
+
+          }}
+
+          onChangeText={
+            text => {
+
+              setWorkerName(
+                text
+              )
+
+              setShowWorkerSuggestions(
+                true
+              )
+
+            }
+          }
+
+        />
+
+
+        {showWorkerSuggestions && (
+
+          <View
+            style={
+              styles.suggestionContainer
+            }
+          >
+
+            {searchedWorkers.map(
+              worker => (
+
+                <TouchableOpacity
+
+                  key={
+                    worker.workerId
+                  }
+
+                  style={
+                    styles.workerSuggestion
+                  }
+
+                  onPress={() => {
+
+                    setWorkerId(
+                      worker.workerId
+                    )
+
+                    setWorkerName(
+                      worker.name
+                    )
+
+                    setShowWorkerSuggestions(
+                      false
+                    )
+
+                  }}
+
+                >
+
+                  <View>
+
+                    <Text
+                      style={
+                        styles.cardTitle
+                      }
+                    >
+                      {worker.name}
+                    </Text>
+
+                    <Text
+                      style={
+                        styles.cardSubtitle
+                      }
+                    >
+                      {worker.role}
+                    </Text>
+
+                  </View>
+
+
+                  <Ionicons
+                    name="person-circle"
+                    size={26}
+                    color="#2563EB"
+                  />
+
+                </TouchableOpacity>
+
+              )
+            )}
+
+          </View>
+
+        )}
+
+      </View>
+
+
+      {/* ============================
+          JOB DETAILS
+      ============================ */}
+
+      <Text
+        style={
+          styles.heading
+        }
+      >
+        Job Details
+      </Text>
+
+
+      <Text
+        style={
+          styles.label
+        }
+      >
+        Priority
+      </Text>
+
+
+      <View
+        style={
+          styles.priorityRow
+        }
+      >
+
+        {[
+          "Low",
+          "Normal",
+          "High"
+        ].map(
+          item => (
 
             <TouchableOpacity
 
-                key={method}
+              key={
+                item
+              }
 
-                style={styles.workerSuggestion}
+              style={[
+                styles.priorityButton,
 
-                onPress={() => {
+                priority ===
+                  item &&
+                  styles.selectedPriority
+              ]}
 
-                    setPaymentMethod(method)
-
-                    setShowPaymentSuggestions(false)
-
-                }}
+              onPress={() =>
+                setPriority(
+                  item
+                )
+              }
 
             >
 
-                <Text style={styles.cardTitle}>
+              <Text
+                style={{
+                  fontWeight:
+                    "600",
 
+                  color:
+                    priority ===
+                    item
+                      ? "white"
+                      : "#111827"
+                }}
+              >
+                {item}
+              </Text>
+
+            </TouchableOpacity>
+
+          )
+        )}
+
+      </View>
+
+
+      <Text
+        style={
+          styles.label
+        }
+      >
+        Expected Delivery Date
+      </Text>
+
+
+      <TouchableOpacity
+
+        style={
+          styles.input
+        }
+
+        onPress={() =>
+          setShowDatePicker(
+            true
+          )
+        }
+
+      >
+
+        <Text
+          style={{
+            color:
+              deliveryDate
+                ? "#111827"
+                : "#9CA3AF"
+          }}
+        >
+
+          {deliveryDate
+
+            ? formatDate(
+                deliveryDate
+              )
+
+            : "Delivery Date"
+
+          }
+
+        </Text>
+
+      </TouchableOpacity>
+
+
+      {/* ============================
+          SERVICES
+      ============================ */}
+
+      <Text
+        style={
+          styles.heading
+        }
+      >
+        Services
+      </Text>
+
+
+      <RequiredLabel
+        text="Service"
+      />
+
+
+      <View
+        style={
+          styles.inputWrapper
+        }
+      >
+
+        <TextInput
+
+          style={
+            styles.input
+          }
+
+          value={
+            serviceName
+          }
+
+          onFocus={() => {
+
+            setShowSuggestions(
+              true
+            )
+
+            setShowWorkerSuggestions(
+              false
+            )
+
+            setShowPaymentSuggestions(
+              false
+            )
+
+          }}
+
+          onChangeText={
+            text => {
+
+              setServiceName(
+                text
+              )
+
+              setShowSuggestions(
+                true
+              )
+
+            }
+          }
+
+        />
+
+
+        {showSuggestions &&
+          searchedServices.length >
+            0 && (
+
+            <View
+              style={
+                styles.suggestionContainer
+              }
+            >
+
+              {searchedServices.map(
+                service => (
+
+                  <TouchableOpacity
+
+                    key={
+                      service.serviceTypeId
+                    }
+
+                    style={
+                      styles.suggestionItem
+                    }
+
+                    onPress={() => {
+
+                      setServiceName(
+                        service.name
+                      )
+
+                      setServicePrice(
+                        String(
+                          service.defaultPrice
+                        )
+                      )
+
+                      closeDropdowns()
+
+                    }}
+
+                  >
+
+                    <View
+                      style={{
+                        flex: 1
+                      }}
+                    >
+
+                      <Text
+                        style={
+                          styles.cardTitle
+                        }
+                      >
+                        {service.name}
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.cardSubtitle
+                        }
+                      >
+                        {service.category}
+                      </Text>
+
+                    </View>
+
+
+                    <Text
+                      style={
+                        styles.suggestionPrice
+                      }
+                    >
+                      ₹{" "}
+                      {
+                        service.defaultPrice
+                      }
+                    </Text>
+
+                  </TouchableOpacity>
+
+                )
+              )}
+
+            </View>
+
+          )}
+
+      </View>
+
+
+      <View
+        style={
+          styles.row
+        }
+      >
+
+        <View
+          style={{
+            flex: 2
+          }}
+        >
+
+          <Text
+            style={
+              styles.label
+            }
+          >
+            Estimate Price
+          </Text>
+
+          <TextInput
+
+            onFocus={
+              closeDropdowns
+            }
+
+            keyboardType="numeric"
+
+            style={
+              styles.input
+            }
+
+            value={
+              servicePrice
+            }
+
+            onChangeText={
+              setServicePrice
+            }
+
+            placeholder="Enter estimate"
+
+          />
+
+        </View>
+
+
+        <View
+          style={{
+            flex: 1
+          }}
+        >
+
+          <Text
+            style={
+              styles.label
+            }
+          >
+            Quantity
+          </Text>
+
+          <TextInput
+
+            onFocus={
+              closeDropdowns
+            }
+
+            keyboardType="numeric"
+
+            style={
+              styles.input
+            }
+
+            value={
+              serviceQty
+            }
+
+            onChangeText={
+              setServiceQty
+            }
+
+          />
+
+        </View>
+
+      </View>
+
+
+      <TouchableOpacity
+
+        style={
+          styles.addServiceBtn
+        }
+
+        onPress={
+          addCurrentService
+        }
+
+      >
+
+        <Text
+          style={
+            styles.addServiceText
+          }
+        >
+          Add Service
+        </Text>
+
+      </TouchableOpacity>
+
+
+      {/* ============================
+          SELECTED SERVICES
+      ============================ */}
+
+      <Text
+        style={
+          styles.heading
+        }
+      >
+        Selected Services
+      </Text>
+
+
+      {selectedServices.length === 0
+
+        ? (
+
+          <View
+            style={
+              styles.emptyCard
+            }
+          >
+
+            <Text
+              style={[
+                styles.emptyText,
+
+                submitted && {
+                  color:
+                    "#DC2626",
+
+                  fontWeight:
+                    "600"
+                }
+              ]}
+            >
+              At least one service is required.
+            </Text>
+
+          </View>
+
+        )
+
+        : (
+
+          selectedServices.map(
+            (
+              service,
+              index
+            ) => (
+
+              <View
+
+                key={
+                  index
+                }
+
+                style={
+                  styles.selectedServiceCard
+                }
+
+              >
+
+                <View
+                  style={
+                    styles.selectedHeader
+                  }
+                >
+
+                  <Text
+                    style={
+                      styles.cardTitle
+                    }
+                  >
+                    {
+                      service.name
+                    }
+                  </Text>
+
+
+                  <TouchableOpacity
+
+                    onPress={() =>
+                      removeService(
+                        index
+                      )
+                    }
+
+                  >
+
+                    <Ionicons
+
+                      name="trash-outline"
+
+                      size={22}
+
+                      color="#DC2626"
+
+                    />
+
+                  </TouchableOpacity>
+
+                </View>
+
+
+                <View
+                  style={
+                    styles.row
+                  }
+                >
+
+                  <View
+                    style={{
+                      flex: 1
+                    }}
+                  >
+
+                    <Text
+                      style={
+                        styles.smallLabel
+                      }
+                    >
+                      Quantity
+                    </Text>
+
+                    <TextInput
+
+                      onFocus={
+                        closeDropdowns
+                      }
+
+                      style={
+                        styles.smallInput
+                      }
+
+                      keyboardType="numeric"
+
+                      value={
+                        String(
+                          service.quantity
+                        )
+                      }
+
+                      onChangeText={
+                        text =>
+                          updateService(
+                            index,
+                            "quantity",
+                            Number(
+                              text
+                            ) || 1
+                          )
+                      }
+
+                    />
+
+                  </View>
+
+
+                  <View
+                    style={{
+                      flex: 1
+                    }}
+                  >
+
+                    <Text
+                      style={
+                        styles.smallLabel
+                      }
+                    >
+                      Estimate Price
+                    </Text>
+
+                    <TextInput
+
+                      onFocus={
+                        closeDropdowns
+                      }
+
+                      style={
+                        styles.smallInput
+                      }
+
+                      keyboardType="numeric"
+
+                      value={
+                        String(
+                          service.estimatedPrice
+                        )
+                      }
+
+                      onChangeText={
+                        text =>
+                          updateService(
+                            index,
+                            "estimatedPrice",
+                            Number(
+                              text
+                            ) || 0
+                          )
+                      }
+
+                    />
+
+                  </View>
+
+                </View>
+
+
+                <View
+                  style={
+                    styles.totalRow
+                  }
+                >
+
+                  <Text
+                    style={
+                      styles.totalServiceText
+                    }
+                  >
+                    Subtotal
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.totalServicePrice
+                    }
+                  >
+                    ₹{" "}
+                    {
+                      Number(
+                        service.quantity
+                      ) *
+                      Number(
+                        service.estimatedPrice
+                      )
+                    }
+                  </Text>
+
+                </View>
+
+              </View>
+
+            )
+          )
+
+        )}
+
+
+      {/* ============================
+          GRAND TOTAL
+      ============================ */}
+
+      <View
+        style={
+          styles.totalCard
+        }
+      >
+
+        <Text
+          style={
+            styles.totalLabel
+          }
+        >
+          Estimated Bill
+        </Text>
+
+        <Text
+          style={
+            styles.totalAmount
+          }
+        >
+          ₹{" "}
+          {total}
+        </Text>
+
+      </View>
+
+
+      {/* ============================
+          NOTES
+      ============================ */}
+
+      <Text
+        style={
+          styles.heading
+        }
+      >
+        Customer Complaint
+      </Text>
+
+
+      <TextInput
+
+        onFocus={
+          closeDropdowns
+        }
+
+        multiline
+
+        style={
+          styles.notes
+        }
+
+        value={
+          complaint
+        }
+
+        onChangeText={
+          setComplaint
+        }
+
+      />
+
+
+      <Text
+        style={
+          styles.heading
+        }
+      >
+        Inspection Notes
+      </Text>
+
+
+      <TextInput
+
+        onFocus={
+          closeDropdowns
+        }
+
+        multiline
+
+        style={
+          styles.notes
+        }
+
+        value={
+          inspectionNotes
+        }
+
+        onChangeText={
+          setInspectionNotes
+        }
+
+      />
+
+
+      {/* ============================
+          PAYMENT
+      ============================ */}
+
+      <Text
+        style={
+          styles.heading
+        }
+      >
+        Payment Status
+      </Text>
+
+
+      <View
+        style={
+          styles.priorityRow
+        }
+      >
+
+        {[
+          "Pending",
+          "Advance",
+          "Paid"
+        ].map(
+          item => (
+
+            <TouchableOpacity
+
+              key={
+                item
+              }
+
+              style={[
+                styles.priorityButton,
+
+                paymentStatus ===
+                  item &&
+                  styles.selectedPriority
+              ]}
+
+              onPress={() =>
+                setPaymentStatus(
+                  item
+                )
+              }
+
+            >
+
+              <Text
+                style={{
+                  color:
+                    paymentStatus ===
+                    item
+                      ? "white"
+                      : "#111827"
+                }}
+              >
+                {item}
+              </Text>
+
+            </TouchableOpacity>
+
+          )
+        )}
+
+      </View>
+
+
+      <View
+        style={
+          styles.inputWrapper
+        }
+      >
+
+        <Text
+          style={
+            styles.label
+          }
+        >
+          Payment Method
+        </Text>
+
+
+        <TextInput
+
+          placeholder="Select Payment Method"
+
+          style={
+            styles.input
+          }
+
+          value={
+            paymentMethod
+          }
+
+          onFocus={() => {
+
+            setShowPaymentSuggestions(
+              true
+            )
+
+            setShowSuggestions(
+              false
+            )
+
+            setShowWorkerSuggestions(
+              false
+            )
+
+          }}
+
+          onChangeText={
+            text => {
+
+              setPaymentMethod(
+                text
+              )
+
+              setShowPaymentSuggestions(
+                true
+              )
+
+            }
+          }
+
+        />
+
+
+        {showPaymentSuggestions && (
+
+          <View
+            style={
+              styles.suggestionContainer
+            }
+          >
+
+            {searchedPaymentMethods.map(
+              method => (
+
+                <TouchableOpacity
+
+                  key={
+                    method
+                  }
+
+                  style={
+                    styles.workerSuggestion
+                  }
+
+                  onPress={() => {
+
+                    setPaymentMethod(
+                      method
+                    )
+
+                    setShowPaymentSuggestions(
+                      false
+                    )
+
+                  }}
+
+                >
+
+                  <Text
+                    style={
+                      styles.cardTitle
+                    }
+                  >
                     {method}
+                  </Text>
 
-                </Text>
-
-                <Ionicons
+                  <Ionicons
 
                     name="card-outline"
 
@@ -1460,397 +2849,822 @@ showPaymentSuggestions && (
 
                     color="#2563EB"
 
-                />
+                  />
 
-            </TouchableOpacity>
+                </TouchableOpacity>
 
-        ))
+              )
+            )}
 
+          </View>
+
+        )}
+
+      </View>
+
+
+      {/* ============================
+          DATE PICKERS
+      ============================ */}
+
+      {showDatePicker && (
+
+        <DateTimePicker
+
+          value={
+            deliveryDate ||
+            new Date()
+          }
+
+          mode="date"
+
+          minimumDate={
+            new Date()
+          }
+
+          display="default"
+
+          onChange={
+            onDateChange
+          }
+
+        />
+
+      )}
+
+
+      {showTimePicker && (
+
+        <DateTimePicker
+
+          value={
+            deliveryDate ||
+            new Date()
+          }
+
+          mode="time"
+
+          display="default"
+
+          onChange={
+            onTimeChange
+          }
+
+        />
+
+      )}
+
+
+      {/* ============================
+          CREATE JOB
+      ============================ */}
+
+      <TouchableOpacity
+
+        style={[
+          styles.saveBtn,
+
+          (
+            hasReachedJobLimit ||
+            planUsageError
+          ) && {
+            backgroundColor:
+              "#9CA3AF"
+          }
+        ]}
+
+        disabled={
+          saving ||
+          planUsageLoading ||
+          hasReachedJobLimit ||
+          planUsageError
         }
 
-</View>
-)
+        onPress={
+          saveJob
+        }
+
+      >
+
+        {saving ? (
+
+          <ActivityIndicator
+            color="white"
+          />
+
+        ) : planUsageLoading ? (
+
+          <ActivityIndicator
+            color="white"
+          />
+
+        ) : hasReachedJobLimit ? (
+
+          <Text
+            style={
+              styles.saveText
+            }
+          >
+            Job Limit Reached
+          </Text>
+
+        ) : planUsageError ? (
+
+          <Text
+            style={
+              styles.saveText
+            }
+          >
+            Unable to Verify Plan
+          </Text>
+
+        ) : (
+
+          <Text
+            style={
+              styles.saveText
+            }
+          >
+            Create Job
+          </Text>
+
+        )}
+
+      </TouchableOpacity>
+
+
+      <View
+        style={{
+          height: 50
+        }}
+      />
+
+    </ScrollView>
+
+  )
+
 }
-</View>
-{
-showDatePicker && (
 
-<DateTimePicker
-    value={deliveryDate || new Date()}
-    mode="date"
-    minimumDate={new Date()}
-    display="default"
-    onChange={onDateChange}
-/>
 
-)
-}
+// ==================================
+// STYLES
+// ==================================
 
-{
-showTimePicker && (
+const styles =
+  StyleSheet.create({
 
-<DateTimePicker
-    value={deliveryDate || new Date()}
-    mode="time"
-    display="default"
-    onChange={onTimeChange}
-/>
-
-)
-}
-<TouchableOpacity
-style={styles.saveBtn}
-disabled={saving}
-onPress={saveJob}
->
-
-{
-
-saving ?
-
-<ActivityIndicator
-color="white"
-/>
-
-:
-
-<Text style={styles.saveText}>
-
-Create Job
-
-</Text>
-
-}
-
-</TouchableOpacity>
-
-<View style={{height:50}} />
-
-</ScrollView>
-
-)
-
-}
-
-const styles = StyleSheet.create({
-
-  container: {
-    flex: 1,
-    backgroundColor: "#F3F4F6",
-    padding: 16
-  },
-
-  loader: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center"
-  },
-
-  heading: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#111827",
-    marginTop: 20,
-    marginBottom: 12
-  },
-
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 10
-  },
-
-  label: {
-    fontWeight: "600",
-    color: "#374151",
-    marginBottom: 10
-  },
-
-  input: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 18,
-    marginBottom: 14
-  },
-
-  notes: {
-    backgroundColor: "white",
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    minHeight: 120,
-    textAlignVertical: "top"
-  },
-
-  card: {
-    backgroundColor: "white",
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 10
-  },
-
-  pickerContainer: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    overflow: "hidden",
-    marginBottom: 16
-  },
-
-  typeRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 10
-  },
-
-  typeButton: {
-    width: "48%",
-    backgroundColor: "white",
-    borderRadius: 16,
-    padding: 15,
-    alignItems: "center"
-  },
-
-  selectedType: {
-    borderWidth: 2,
-    borderColor: "#2563EB",
-    backgroundColor: "#EFF6FF"
-  },
-
-  priorityRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 16
-  },
-
-  priorityButton: {
-    width: "31%",
-    backgroundColor: "white",
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: "center"
-  },
-
-  selectedPriority: {
-    backgroundColor: "#2563EB"
-  },
-
-  serviceTypeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6"
-  },
-
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111827"
-  },
-
-  cardSubtitle: {
-    color: "#6B7280",
-    marginTop: 4
-  },
-
-  addServiceBtn: {
-    flexDirection: "row",
-    backgroundColor: "#2563EB",
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 16,
-    marginTop: 12,
-    marginBottom: 20,
-  },
-
-  addServiceText: {
-    color: "white",
-    fontWeight: "700",
-    marginLeft: 8
-  },
-
-  selectedServiceCard: {
-    backgroundColor: "white",
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 14
-  },
-
-  selectedHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 14
-  },
-
-  row: {
-    flexDirection: "row",
-    gap: 12,
-    alignItems: "flex-start",
-  },
-
-  smallLabel: {
-    fontSize: 13,
-    color: "#6B7280",
-    marginBottom: 6
-  },
-
-  smallInput: {
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    padding: 12,
-    textAlign: "center"
-  },
-
-  totalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 16,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#F3F4F6"
-  },
-
-  totalServiceText: {
-    fontWeight: "600",
-    color: "#374151"
-  },
-
-  totalServicePrice: {
-    fontWeight: "700",
-    color: "#16A34A",
-    fontSize: 16
-  },
-
-  totalCard: {
-    backgroundColor: "#111827",
-    borderRadius: 18,
-    padding: 20,
-    marginTop: 8,
-    marginBottom: 20
-  },
-
-  totalLabel: {
-    color: "#D1D5DB",
-    fontSize: 15
-  },
-
-  totalAmount: {
-    color: "white",
-    fontSize: 28,
-    fontWeight: "700",
-    marginTop: 8
-  },
-
-  emptyCard: {
-    backgroundColor: "white",
-    padding: 24,
-    borderRadius: 18,
-    alignItems: "center"
-  },
-
-  emptyText: {
-    color: "#6B7280"
-  },
-
-  saveBtn: {
-    backgroundColor: "#2563EB",
-    padding: 18,
-    borderRadius: 18,
-    alignItems: "center",
-    marginTop: 10
-  },
-
-  saveText: {
-    color: "white",
-    fontWeight: "700",
-    fontSize: 16
-  },
-
-  suggestionContainer: {
-    position: "absolute",
-    top: 58,
-    left: 0,
-    right: 0,
-
-    backgroundColor: "#fff",
-
-    borderRadius: 14,
-
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-
-    maxHeight: 220,
-
-    zIndex: 1000,
-    elevation: 20,
-
-    overflow: "hidden",
-
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    shadowOffset: {
-        width: 0,
-        height: 4,
+    container: {
+      flex: 1,
+      backgroundColor:
+        "#F3F4F6",
+      padding: 16
     },
-},
 
-  suggestionItem: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingVertical: 14,
-      paddingHorizontal: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: "#F3F4F6"
-  },
 
-  suggestionPrice: {
-      fontWeight: "700",
-      color: "#2563EB",
-      fontSize: 15
-  },
+    loader: {
+      flex: 1,
+      justifyContent:
+        "center",
+      alignItems:
+        "center"
+    },
 
-  workerSuggestion: {
 
-      flexDirection: "row",
+    // -------------------------------
+    // PLAN USAGE
+    // -------------------------------
 
-      justifyContent: "space-between",
+    planUsageCard: {
+      backgroundColor:
+        "#FFFFFF",
+      borderRadius:
+        18,
+      padding:
+        16,
+      marginBottom:
+        8,
+      borderWidth:
+        1,
+      borderColor:
+        "#E5E7EB"
+    },
 
-      alignItems: "center",
 
-      paddingHorizontal: 16,
+    planUsageHeader: {
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      justifyContent:
+        "space-between"
+    },
 
-      paddingVertical: 14,
 
-      borderBottomWidth: 1,
+    planUsageTitle: {
+      fontSize:
+        15,
+      fontWeight:
+        "700",
+      color:
+        "#111827"
+    },
 
-      borderBottomColor: "#F3F4F6"
 
-  },
+    planUsageSubtitle: {
+      fontSize:
+        12,
+      color:
+        "#6B7280",
+      marginTop:
+        3
+    },
 
-  inputWrapper: {
-    position: "relative",
-    zIndex: 100,
-    marginBottom: 0,
-},
 
-inputError: {
-    borderWidth: 2,
-    borderColor: "#EF4444",
-},
+    planUsageCount: {
+      fontSize:
+        16,
+      fontWeight:
+        "700",
+      color:
+        "#2563EB"
+    },
 
-errorText: {
-    color: "#DC2626",
-    fontSize: 13,
-    marginTop: -8,
-    marginBottom: 12,
-    marginLeft: 4,
-},
 
-})
+    usageBarBackground: {
+      height:
+        7,
+      backgroundColor:
+        "#E5E7EB",
+      borderRadius:
+        10,
+      overflow:
+        "hidden",
+      marginTop:
+        14
+    },
+
+
+    usageBar: {
+      height:
+        "100%",
+      borderRadius:
+        10
+    },
+
+
+    limitWarning: {
+      color:
+        "#DC2626",
+      fontSize:
+        12,
+      fontWeight:
+        "600",
+      marginTop:
+        10,
+      lineHeight:
+        18
+    },
+
+
+    // -------------------------------
+    // GENERAL
+    // -------------------------------
+
+    heading: {
+      fontSize:
+        18,
+      fontWeight:
+        "700",
+      color:
+        "#111827",
+      marginTop:
+        20,
+      marginBottom:
+        12
+    },
+
+
+    sectionTitle: {
+      fontSize:
+        15,
+      fontWeight:
+        "700",
+      color:
+        "#111827",
+      marginBottom:
+        10
+    },
+
+
+    label: {
+      fontWeight:
+        "600",
+      color:
+        "#374151",
+      marginBottom:
+        10
+    },
+
+
+    input: {
+      backgroundColor:
+        "white",
+      borderRadius:
+        16,
+      paddingHorizontal:
+        16,
+      paddingVertical:
+        18,
+      marginBottom:
+        14
+    },
+
+
+    notes: {
+      backgroundColor:
+        "white",
+      borderRadius:
+        18,
+      paddingHorizontal:
+        16,
+      paddingVertical:
+        16,
+      minHeight:
+        120,
+      textAlignVertical:
+        "top"
+    },
+
+
+    card: {
+      backgroundColor:
+        "white",
+      borderRadius:
+        18,
+      padding:
+        14,
+      marginBottom:
+        10
+    },
+
+
+    pickerContainer: {
+      backgroundColor:
+        "white",
+      borderRadius:
+        16,
+      overflow:
+        "hidden",
+      marginBottom:
+        16
+    },
+
+
+    // -------------------------------
+    // VEHICLE
+    // -------------------------------
+
+    typeRow: {
+      flexDirection:
+        "row",
+      justifyContent:
+        "space-between",
+      marginBottom:
+        10
+    },
+
+
+    typeButton: {
+      width:
+        "48%",
+      backgroundColor:
+        "white",
+      borderRadius:
+        16,
+      padding:
+        15,
+      alignItems:
+        "center"
+    },
+
+
+    selectedType: {
+      borderWidth:
+        2,
+      borderColor:
+        "#2563EB",
+      backgroundColor:
+        "#EFF6FF"
+    },
+
+
+    // -------------------------------
+    // PRIORITY
+    // -------------------------------
+
+    priorityRow: {
+      flexDirection:
+        "row",
+      justifyContent:
+        "space-between",
+      marginBottom:
+        16
+    },
+
+
+    priorityButton: {
+      width:
+        "31%",
+      backgroundColor:
+        "white",
+      paddingVertical:
+        14,
+      borderRadius:
+        14,
+      alignItems:
+        "center"
+    },
+
+
+    selectedPriority: {
+      backgroundColor:
+        "#2563EB"
+    },
+
+
+    // -------------------------------
+    // SERVICES
+    // -------------------------------
+
+    serviceTypeRow: {
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      justifyContent:
+        "space-between",
+      paddingVertical:
+        14,
+      borderBottomWidth:
+        1,
+      borderBottomColor:
+        "#F3F4F6"
+    },
+
+
+    cardTitle: {
+      fontSize:
+        16,
+      fontWeight:
+        "600",
+      color:
+        "#111827"
+    },
+
+
+    cardSubtitle: {
+      color:
+        "#6B7280",
+      marginTop:
+        4
+    },
+
+
+    addServiceBtn: {
+      flexDirection:
+        "row",
+      backgroundColor:
+        "#2563EB",
+      borderRadius:
+        16,
+      justifyContent:
+        "center",
+      alignItems:
+        "center",
+      padding:
+        16,
+      marginTop:
+        12,
+      marginBottom:
+        20
+    },
+
+
+    addServiceText: {
+      color:
+        "white",
+      fontWeight:
+        "700",
+      marginLeft:
+        8
+    },
+
+
+    selectedServiceCard: {
+      backgroundColor:
+        "white",
+      borderRadius:
+        18,
+      padding:
+        16,
+      marginBottom:
+        14
+    },
+
+
+    selectedHeader: {
+      flexDirection:
+        "row",
+      justifyContent:
+        "space-between",
+      alignItems:
+        "center",
+      marginBottom:
+        14
+    },
+
+
+    row: {
+      flexDirection:
+        "row",
+      gap:
+        12,
+      alignItems:
+        "flex-start"
+    },
+
+
+    smallLabel: {
+      fontSize:
+        13,
+      color:
+        "#6B7280",
+      marginBottom:
+        6
+    },
+
+
+    smallInput: {
+      backgroundColor:
+        "#F9FAFB",
+      borderRadius:
+        12,
+      padding:
+        12,
+      textAlign:
+        "center"
+    },
+
+
+    totalRow: {
+      flexDirection:
+        "row",
+      justifyContent:
+        "space-between",
+      marginTop:
+        16,
+      paddingTop:
+        12,
+      borderTopWidth:
+        1,
+      borderTopColor:
+        "#F3F4F6"
+    },
+
+
+    totalServiceText: {
+      fontWeight:
+        "600",
+      color:
+        "#374151"
+    },
+
+
+    totalServicePrice: {
+      fontWeight:
+        "700",
+      color:
+        "#16A34A",
+      fontSize:
+        16
+    },
+
+
+    totalCard: {
+      backgroundColor:
+        "#111827",
+      borderRadius:
+        18,
+      padding:
+        20,
+      marginTop:
+        8,
+      marginBottom:
+        20
+    },
+
+
+    totalLabel: {
+      color:
+        "#D1D5DB",
+      fontSize:
+        15
+    },
+
+
+    totalAmount: {
+      color:
+        "white",
+      fontSize:
+        28,
+      fontWeight:
+        "700",
+      marginTop:
+        8
+    },
+
+
+    emptyCard: {
+      backgroundColor:
+        "white",
+      padding:
+        24,
+      borderRadius:
+        18,
+      alignItems:
+        "center"
+    },
+
+
+    emptyText: {
+      color:
+        "#6B7280"
+    },
+
+
+    // -------------------------------
+    // SAVE
+    // -------------------------------
+
+    saveBtn: {
+      backgroundColor:
+        "#2563EB",
+      padding:
+        18,
+      borderRadius:
+        18,
+      alignItems:
+        "center",
+      marginTop:
+        10
+    },
+
+
+    saveText: {
+      color:
+        "white",
+      fontWeight:
+        "700",
+      fontSize:
+        16
+    },
+
+
+    // -------------------------------
+    // DROPDOWNS
+    // -------------------------------
+
+    suggestionContainer: {
+      position:
+        "absolute",
+      top:
+        58,
+      left:
+        0,
+      right:
+        0,
+
+      backgroundColor:
+        "#fff",
+
+      borderRadius:
+        14,
+
+      borderWidth:
+        1,
+
+      borderColor:
+        "#E5E7EB",
+
+      maxHeight:
+        220,
+
+      zIndex:
+        1000,
+
+      elevation:
+        20,
+
+      overflow:
+        "hidden",
+
+      shadowColor:
+        "#000",
+
+      shadowOpacity:
+        0.12,
+
+      shadowRadius:
+        8,
+
+      shadowOffset: {
+        width:
+          0,
+        height:
+          4
+      }
+    },
+
+
+    suggestionItem: {
+      flexDirection:
+        "row",
+      alignItems:
+        "center",
+      justifyContent:
+        "space-between",
+      paddingVertical:
+        14,
+      paddingHorizontal:
+        16,
+      borderBottomWidth:
+        1,
+      borderBottomColor:
+        "#F3F4F6"
+    },
+
+
+    suggestionPrice: {
+      fontWeight:
+        "700",
+      color:
+        "#2563EB",
+      fontSize:
+        15
+    },
+
+
+    workerSuggestion: {
+      flexDirection:
+        "row",
+      justifyContent:
+        "space-between",
+      alignItems:
+        "center",
+      paddingHorizontal:
+        16,
+      paddingVertical:
+        14,
+      borderBottomWidth:
+        1,
+      borderBottomColor:
+        "#F3F4F6"
+    },
+
+
+    inputWrapper: {
+      position:
+        "relative",
+      zIndex:
+        100,
+      marginBottom:
+        0
+    },
+
+
+    // -------------------------------
+    // VALIDATION
+    // -------------------------------
+
+    inputError: {
+      borderWidth:
+        2,
+      borderColor:
+        "#EF4444"
+    },
+
+
+    errorText: {
+      color:
+        "#DC2626",
+      fontSize:
+        13,
+      marginTop:
+        -8,
+      marginBottom:
+        12,
+      marginLeft:
+        4
+    }
+
+  })

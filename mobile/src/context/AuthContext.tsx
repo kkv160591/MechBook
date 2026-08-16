@@ -7,17 +7,23 @@ import {
 
 import AsyncStorage from "@react-native-async-storage/async-storage"
 
-const AuthContext = createContext<any>(null)
+const AuthContext =
+  createContext<any>(null)
 
-export function AuthProvider({ children }: any) {
+export function AuthProvider({
+  children
+}: any) {
 
-  const [user, setUser] = useState(null)
+  const [user, setUser] =
+    useState<any>(null)
 
   const [loading, setLoading] =
     useState(true)
 
   useEffect(() => {
+
     restoreSession()
+
   }, [])
 
   const restoreSession = async () => {
@@ -28,42 +34,82 @@ export function AuthProvider({ children }: any) {
         await AsyncStorage.getItem("user")
 
       if (userData) {
-        setUser(JSON.parse(userData))
+
+        setUser(
+          JSON.parse(userData)
+        )
+
       }
 
     } catch (error) {
-      console.log(error)
-    }
 
-    setLoading(false)
+      console.log(
+        "Restore session error:",
+        error
+      )
+
+      setUser(null)
+
+    } finally {
+
+      setLoading(false)
+
+    }
 
   }
 
   const login = async (
-  userData: any,
-  token: string
-) => {
-  await AsyncStorage.setItem(
-    "user",
-    JSON.stringify(userData)
-  )
+    userData: any,
+    token: string
+  ) => {
 
-  await AsyncStorage.setItem(
-    "token",
-    token
-  )
+    await AsyncStorage.setItem(
+      "user",
+      JSON.stringify(userData)
+    )
 
-  setUser(userData)
-}
-  const logout = async () => {
-  try {
-    await AsyncStorage.removeItem("user");
-    await AsyncStorage.removeItem("token");
-    setUser(null);
-  } catch (error) {
-    throw error;
+    await AsyncStorage.setItem(
+      "token",
+      token
+    )
+
+    setUser(userData)
+
   }
-};
+
+  const logout = async () => {
+
+    try {
+
+      /*
+       * Clear persisted authentication
+       * first.
+       */
+
+      await AsyncStorage.multiRemove([
+        "user",
+        "token"
+      ])
+
+      /*
+       * This causes AppNavigator to switch
+       * from logged-in -> logged-out.
+       */
+
+      setUser(null)
+
+    } catch (error) {
+
+      console.log(
+        "Logout error:",
+        error
+      )
+
+      throw error
+
+    }
+
+  }
 
   return (
 
@@ -75,12 +121,14 @@ export function AuthProvider({ children }: any) {
         loading
       }}
     >
+
       {children}
+
     </AuthContext.Provider>
 
   )
 
 }
 
-export const useAuth = () =>
-  useContext(AuthContext)
+export const useAuth =
+  () => useContext(AuthContext)

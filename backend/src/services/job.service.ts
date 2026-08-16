@@ -3,17 +3,73 @@ import {
   ScanCommand,
   GetItemCommand,
   UpdateItemCommand,
-  DeleteItemCommand
+  DeleteItemCommand,
+  TransactWriteItemsCommand,
 } from "@aws-sdk/client-dynamodb"
 
 import {
   unmarshall,
-  marshall
+  marshall,
 } from "@aws-sdk/util-dynamodb"
 
 import { v4 as uuid } from "uuid"
 
 import { db } from "../config/dynamodb"
+
+import {
+  getOrCreateSubscription,
+} from "./subscription.service"
+
+
+const JOBS_TABLE =
+  process.env.JOBS_TABLE_NAME!
+
+const SUBSCRIPTIONS_TABLE =
+  process.env.SUBSCRIPTIONS_TABLE_NAME || "Subscriptions"
+
+
+/*
+|--------------------------------------------------------------------------
+| JOB LIMIT ERROR
+|--------------------------------------------------------------------------
+*/
+
+export class JobLimitReachedError extends Error {
+
+  code = "JOB_LIMIT_REACHED"
+
+  constructor() {
+
+    super(
+      "Monthly job limit reached"
+    )
+
+    this.name =
+      "JobLimitReachedError"
+
+  }
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| CREATE JOB
+|--------------------------------------------------------------------------
+|
+| IMPORTANT:
+|
+| Job creation and subscription usage update
+| happen inside ONE DynamoDB transaction.
+|
+| This prevents:
+|
+| 1. Job being created without jobsUsed increasing
+| 2. jobsUsed increasing without a job
+| 3. Two workers creating jobs beyond the plan limit
+|
+|--------------------------------------------------------------------------
+*/
 
 export const createJob =
 async (
@@ -21,69 +77,447 @@ async (
   data: any
 ) => {
 
-  const jobId = uuid()
+  /*
+   * ---------------------------------------------------------------
+   * CREATE / GET SUBSCRIPTION
+   * ---------------------------------------------------------------
+   */
 
-  const now = new Date().toISOString()
+  let subscription =
+    await getOrCreateSubscription(
+      garageId
+    )
 
-  const item = {
 
-    jobId,
+  /*
+   * ---------------------------------------------------------------
+   * RETRY LOOP
+   * ---------------------------------------------------------------
+   *
+   * The subscription can be changed by another request at the
+   * same time.
+   *
+   * We use optimistic concurrency by checking that the subscription
+   * values we read are still the same when the transaction executes.
+   *
+   */
 
-    garageId,
+  for (
+    let attempt = 0;
+    attempt < 3;
+    attempt++
+  ) {
 
-    // Customer
-    customerName: data.customerName || "",
-    phone: data.phone || "",
-    customerAddress: data.customerAddress || "",
+    const jobsUsed =
+      Number(
+        subscription.jobsUsed ?? 0
+      )
 
-    // Vehicle
-    vehicleNumber: data.vehicleNumber || "",
-    vehicleBrand: data.vehicleBrand || "",
-    vehicleModel: data.vehicleModel || "",
-    vehicleType: data.vehicleType || "2 Wheeler",
-    odometer: data.odometer || "",
+    const jobLimit =
+      Number(
+        subscription.jobLimit ?? 0
+      )
 
-    // Job
-    status: "pending",
-    workerId: data.workerId || null,
-    priority: data.priority || "Normal",
-    deliveryDate: data.deliveryDate || "",
+    const boosterJobs =
+      Number(
+        subscription.boosterJobs ?? 0
+      )
 
-    // Complaint
-    complaint: data.complaint || "",
 
-    // Inspection
-    inspectionNotes: data.inspectionNotes || "",
+    /*
+     * -------------------------------------------------------------
+     * CALCULATE TOTAL AVAILABLE JOBS
+     * -------------------------------------------------------------
+     */
 
-    // Payment
-    paymentStatus: data.paymentStatus || "Pending",
-    paymentMethod: data.paymentMethod || "",
+    const totalAvailable =
+      jobLimit === -1
+        ? -1
+        : jobLimit + boosterJobs
 
-    // Notes
-    notes: data.notes || "",
 
-    // Services
-    services: data.services || [],
+    /*
+     * -------------------------------------------------------------
+     * CHECK PLAN LIMIT
+     * -------------------------------------------------------------
+     */
 
-    createdAt: now,
-    updatedAt: now
+    if (
+      totalAvailable !== -1 &&
+      jobsUsed >= totalAvailable
+    ) {
+
+      throw new JobLimitReachedError()
+
+    }
+
+
+    /*
+     * -------------------------------------------------------------
+     * CREATE JOB
+     * -------------------------------------------------------------
+     */
+
+    const jobId =
+      uuid()
+
+    const now =
+      new Date().toISOString()
+
+
+    const item = {
+
+      jobId,
+
+      garageId,
+
+      // Customer
+      customerName:
+        data.customerName || "",
+
+      phone:
+        data.phone || "",
+
+      customerAddress:
+        data.customerAddress || "",
+
+
+      // Vehicle
+      vehicleNumber:
+        data.vehicleNumber || "",
+
+      vehicleBrand:
+        data.vehicleBrand || "",
+
+      vehicleModel:
+        data.vehicleModel || "",
+
+      vehicleType:
+        data.vehicleType || "2 Wheeler",
+
+      odometer:
+        data.odometer || "",
+
+
+      // Job
+      status:
+        "pending",
+
+      workerId:
+        data.workerId || null,
+
+      priority:
+        data.priority || "Normal",
+
+      deliveryDate:
+        data.deliveryDate || "",
+
+
+      // Complaint
+      complaint:
+        data.complaint || "",
+
+
+      // Inspection
+      inspectionNotes:
+        data.inspectionNotes || "",
+
+
+      // Payment
+      paymentStatus:
+        data.paymentStatus || "Pending",
+
+      paymentMethod:
+        data.paymentMethod || "",
+
+
+      // Notes
+      notes:
+        data.notes || "",
+
+
+      // Services
+      services:
+        data.services || [],
+
+
+      createdAt:
+        now,
+
+      updatedAt:
+        now
+
+    }
+
+
+    /*
+     * -------------------------------------------------------------
+     * ATOMIC TRANSACTION
+     * -------------------------------------------------------------
+     *
+     * Operation 1:
+     *     Create Job
+     *
+     * Operation 2:
+     *     Increment Subscription.jobsUsed
+     *
+     * Both must succeed.
+     *
+     */
+
+    try {
+
+      await db.send(
+
+        new TransactWriteItemsCommand({
+
+          TransactItems: [
+
+            /*
+             * ---------------------------------------------------
+             * CREATE JOB
+             * ---------------------------------------------------
+             */
+
+            {
+
+              Put: {
+
+                TableName:
+                  JOBS_TABLE,
+
+                Item:
+                  marshall(
+                    item,
+                    {
+                      removeUndefinedValues:
+                        true
+                    }
+                  ),
+
+                /*
+                 * Prevent accidental overwrite if the UUID
+                 * ever happens to collide.
+                 */
+
+                ConditionExpression:
+                  "attribute_not_exists(jobId)"
+
+              }
+
+            },
+
+
+            /*
+             * ---------------------------------------------------
+             * UPDATE SUBSCRIPTION
+             * ---------------------------------------------------
+             */
+
+            {
+
+              Update: {
+
+                TableName:
+                  SUBSCRIPTIONS_TABLE,
+
+                Key: {
+
+                  garageId: {
+
+                    S:
+                      garageId
+
+                  }
+
+                },
+
+
+                UpdateExpression:
+                  "SET jobsUsed = :newJobsUsed, updatedAt = :updatedAt",
+
+
+                /*
+                 * ------------------------------------------------
+                 * OPTIMISTIC CONCURRENCY CHECK
+                 * ------------------------------------------------
+                 *
+                 * Only update the subscription if the values we
+                 * originally read are still current.
+                 *
+                 * This prevents two workers from both consuming
+                 * the same final job slot.
+                 */
+
+                ConditionExpression:
+                  "jobsUsed = :currentJobsUsed AND jobLimit = :currentJobLimit AND boosterJobs = :currentBoosterJobs",
+
+
+                ExpressionAttributeValues: {
+
+                  ":currentJobsUsed": {
+
+                    N:
+                      jobsUsed.toString()
+
+                  },
+
+                  ":currentJobLimit": {
+
+                    N:
+                      jobLimit.toString()
+
+                  },
+
+                  ":currentBoosterJobs": {
+
+                    N:
+                      boosterJobs.toString()
+
+                  },
+
+                  ":newJobsUsed": {
+
+                    N:
+                      (
+                        jobsUsed + 1
+                      ).toString()
+
+                  },
+
+                  ":updatedAt": {
+
+                    S:
+                      now
+
+                  }
+
+                }
+
+              }
+
+            }
+
+          ]
+
+        })
+
+      )
+
+
+      /*
+       * -----------------------------------------------------------
+       * SUCCESS
+       * -----------------------------------------------------------
+       */
+
+      return item
+
+    }
+
+
+    catch (error: any) {
+
+      /*
+       * -----------------------------------------------------------
+       * TRANSACTION CONFLICT
+       * -----------------------------------------------------------
+       *
+       * Another request changed the subscription between our
+       * initial read and transaction.
+       *
+       * Re-read it and try again.
+       */
+
+      if (
+        error?.name ===
+        "TransactionCanceledException"
+      ) {
+
+        subscription =
+          await getOrCreateSubscription(
+            garageId
+          )
+
+        /*
+         * If the newly-read subscription is already full,
+         * return the proper plan-limit error.
+         */
+
+        const latestJobsUsed =
+          Number(
+            subscription.jobsUsed ?? 0
+          )
+
+        const latestJobLimit =
+          Number(
+            subscription.jobLimit ?? 0
+          )
+
+        const latestBoosterJobs =
+          Number(
+            subscription.boosterJobs ?? 0
+          )
+
+        const latestTotalAvailable =
+          latestJobLimit === -1
+            ? -1
+            : latestJobLimit +
+              latestBoosterJobs
+
+
+        if (
+          latestTotalAvailable !== -1 &&
+          latestJobsUsed >=
+            latestTotalAvailable
+        ) {
+
+          throw new JobLimitReachedError()
+
+        }
+
+
+        /*
+         * Otherwise another update probably happened.
+         * Retry the transaction with the latest subscription.
+         */
+
+        if (
+          attempt < 2
+        ) {
+
+          continue
+
+        }
+
+      }
+
+
+      throw error
+
+    }
+
   }
 
-  await db.send(
-    new PutItemCommand({
 
-      TableName:
-        process.env.JOBS_TABLE_NAME,
+  /*
+   * ---------------------------------------------------------------
+   * SHOULD NOT REACH HERE
+   * ---------------------------------------------------------------
+   */
 
-      Item: marshall(item, {
-        removeUndefinedValues: true
-      })
-
-    })
+  throw new Error(
+    "Unable to create job"
   )
 
-  return item
 }
+
+
+/*
+|--------------------------------------------------------------------------
+| GET JOBS
+|--------------------------------------------------------------------------
+*/
 
 export const getJobs =
 async (
@@ -96,11 +530,12 @@ async (
       new ScanCommand({
 
         TableName:
-          process.env.JOBS_TABLE_NAME
+          JOBS_TABLE
 
       })
 
     )
+
 
   const jobs =
     (response.Items || [])
@@ -109,21 +544,34 @@ async (
       )
       .filter(
         (job: any) =>
-          job.garageId === garageId
+          job.garageId ===
+          garageId
       )
       .sort(
 
         (a: any, b: any) =>
 
-          new Date(b.createdAt).getTime() -
+          new Date(
+            b.createdAt
+          ).getTime() -
 
-          new Date(a.createdAt).getTime()
+          new Date(
+            a.createdAt
+          ).getTime()
 
       )
+
 
   return jobs
 
 }
+
+
+/*
+|--------------------------------------------------------------------------
+| GET JOB BY ID
+|--------------------------------------------------------------------------
+*/
 
 export const getJobById =
 async (
@@ -136,13 +584,14 @@ async (
       new GetItemCommand({
 
         TableName:
-          process.env.JOBS_TABLE_NAME,
+          JOBS_TABLE,
 
         Key: {
 
           jobId: {
 
-            S: jobId
+            S:
+              jobId
 
           }
 
@@ -152,17 +601,28 @@ async (
 
     )
 
-  if (!response.Item) {
+
+  if (
+    !response.Item
+  ) {
 
     return null
 
   }
+
 
   return unmarshall(
     response.Item
   )
 
 }
+
+
+/*
+|--------------------------------------------------------------------------
+| UPDATE JOB
+|--------------------------------------------------------------------------
+*/
 
 export const updateJob =
 async (
@@ -171,13 +631,17 @@ async (
 ) => {
 
   const existing =
-    await getJobById(jobId)
+    await getJobById(
+      jobId
+    )
+
 
   if (!existing) {
 
     return null
 
   }
+
 
   const updated = {
 
@@ -190,24 +654,38 @@ async (
 
   }
 
+
   await db.send(
 
     new PutItemCommand({
 
       TableName:
-        process.env.JOBS_TABLE_NAME,
+        JOBS_TABLE,
 
-      Item: marshall(updated, {
-        removeUndefinedValues: true
-      })
+      Item:
+        marshall(
+          updated,
+          {
+            removeUndefinedValues:
+              true
+          }
+        )
 
     })
 
   )
 
+
   return updated
 
 }
+
+
+/*
+|--------------------------------------------------------------------------
+| ASSIGN WORKER
+|--------------------------------------------------------------------------
+*/
 
 export const assignWorker =
 async (
@@ -220,33 +698,35 @@ async (
     new UpdateItemCommand({
 
       TableName:
-        process.env.JOBS_TABLE_NAME,
+        JOBS_TABLE,
 
       Key: {
 
         jobId: {
 
-          S: jobId
+          S:
+            jobId
 
         }
 
       },
 
       UpdateExpression:
-
         "SET workerId = :workerId, updatedAt = :updatedAt",
 
       ExpressionAttributeValues: {
 
         ":workerId": {
 
-          S: workerId
+          S:
+            workerId
 
         },
 
         ":updatedAt": {
 
-          S: new Date().toISOString()
+          S:
+            new Date().toISOString()
 
         }
 
@@ -257,6 +737,13 @@ async (
   )
 
 }
+
+
+/*
+|--------------------------------------------------------------------------
+| UPDATE JOB STATUS
+|--------------------------------------------------------------------------
+*/
 
 export const updateJobStatus =
 async (
@@ -269,25 +756,26 @@ async (
     new UpdateItemCommand({
 
       TableName:
-        process.env.JOBS_TABLE_NAME,
+        JOBS_TABLE,
 
       Key: {
 
         jobId: {
 
-          S: jobId
+          S:
+            jobId
 
         }
 
       },
 
       UpdateExpression:
-
         "SET #status = :status, updatedAt = :updatedAt",
 
       ExpressionAttributeNames: {
 
-        "#status": "status"
+        "#status":
+          "status"
 
       },
 
@@ -295,13 +783,15 @@ async (
 
         ":status": {
 
-          S: status
+          S:
+            status
 
         },
 
         ":updatedAt": {
 
-          S: new Date().toISOString()
+          S:
+            new Date().toISOString()
 
         }
 
@@ -313,20 +803,38 @@ async (
 
 }
 
-export const deleteJob = async (jobId: string) => {
+
+/*
+|--------------------------------------------------------------------------
+| DELETE JOB
+|--------------------------------------------------------------------------
+*/
+
+export const deleteJob =
+async (
+  jobId: string
+) => {
 
   await db.send(
+
     new DeleteItemCommand({
 
-      TableName: process.env.JOBS_TABLE_NAME,
+      TableName:
+        JOBS_TABLE,
 
       Key: {
+
         jobId: {
-          S: jobId
+
+          S:
+            jobId
+
         }
+
       }
 
     })
-  );
 
-};
+  )
+
+}

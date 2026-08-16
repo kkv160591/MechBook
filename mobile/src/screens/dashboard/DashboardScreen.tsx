@@ -6,7 +6,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  RefreshControl
+  RefreshControl,
+  ActivityIndicator
 } from "react-native"
 
 import {
@@ -45,17 +46,25 @@ import {
   useAuth
 } from "../../context/AuthContext"
 
+import {
+  getPlanUsage,
+  PlanUsageResponse
+} from "../../services/subscriptionService"
+
+
 export default function DashboardScreen() {
 
-  const navigation: any = useNavigation()
+  const navigation: any =
+    useNavigation()
 
   const {
     user
   } = useAuth()
 
-  // --------------------------------
+
+  // ==================================
   // STATE
-  // --------------------------------
+  // ==================================
 
   const [garage, setGarage] =
     useState<any>(null)
@@ -75,175 +84,352 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] =
     useState(false)
 
-  // --------------------------------
+  const [planUsage, setPlanUsage] =
+    useState<PlanUsageResponse | null>(null)
+
+  const [planUsageLoading, setPlanUsageLoading] =
+    useState(true)
+
+
+  // ==================================
+  // LOAD SUBSCRIPTION
+  // ==================================
+
+  const loadSubscription =
+    useCallback(
+      async () => {
+
+        try {
+
+          setPlanUsageLoading(true)
+
+          const data =
+            await getPlanUsage()
+
+          console.log(
+            "========== DASHBOARD SUBSCRIPTION =========="
+          )
+
+          console.log(
+            "garageId:",
+            data?.garageId
+          )
+
+          console.log(
+            "planCode:",
+            data?.planCode
+          )
+
+          console.log(
+            "planName:",
+            data?.planName
+          )
+
+          console.log(
+            "billingCycle:",
+            data?.billingCycle
+          )
+
+          console.log(
+            "jobsUsed:",
+            data?.jobsUsed
+          )
+
+          console.log(
+            "jobsLimit:",
+            data?.jobsLimit
+          )
+
+          console.log(
+            "boosterJobs:",
+            data?.boosterJobs
+          )
+
+          console.log(
+            "usagePercentage:",
+            data?.usagePercentage
+          )
+
+          console.log(
+            "jobsRemaining:",
+            data?.jobsRemaining
+          )
+
+          console.log(
+            "============================================"
+          )
+
+
+          setPlanUsage(data)
+
+        }
+
+        catch (error) {
+
+          console.log(
+            "Failed to load dashboard subscription:",
+            error
+          )
+
+          /*
+           * Do not destroy existing subscription
+           * information if a refresh fails.
+           */
+
+        }
+
+        finally {
+
+          setPlanUsageLoading(false)
+
+        }
+
+      },
+      []
+    )
+
+
+  // ==================================
   // LOAD DASHBOARD DATA
-  // --------------------------------
+  // ==================================
 
   const loadDashboardData =
-    async () => {
+    useCallback(
+      async () => {
 
-      try {
+        try {
 
-        setLoading(true)
+          setLoading(true)
 
-        const [
-          garageResponse,
-          jobsResponse,
-          workersResponse,
-          lowStockResponse
-        ] = await Promise.all([
+          const [
+            garageResponse,
+            jobsResponse,
+            workersResponse,
+            lowStockResponse
+          ] =
+            await Promise.all([
 
-          getGarageProfile(),
+              getGarageProfile(),
 
-          getJobs(),
+              getJobs(),
 
-          getWorkers(),
+              getWorkers(),
 
-          getLowStockItems()
+              getLowStockItems()
 
-        ])
+            ])
 
-        console.log(
-          "Dashboard Garage:",
-          garageResponse?.garage
-        )
 
-        console.log(
-          "Dashboard Jobs:",
-          jobsResponse
-        )
+          console.log(
+            "Dashboard Garage:",
+            garageResponse?.garage
+          )
 
-        console.log(
-          "Dashboard Workers:",
-          workersResponse
-        )
+          console.log(
+            "Dashboard Jobs:",
+            jobsResponse
+          )
 
-        console.log(
-          "Dashboard Low Stock:",
-          lowStockResponse
-        )
+          console.log(
+            "Dashboard Workers:",
+            workersResponse
+          )
 
-        // ----------------------------
-        // GARAGE
-        // ----------------------------
+          console.log(
+            "Dashboard Low Stock:",
+            lowStockResponse
+          )
 
-        setGarage(
-          garageResponse?.garage || null
-        )
 
-        // ----------------------------
-        // JOBS
-        // ----------------------------
+          // ----------------------------
+          // GARAGE
+          // ----------------------------
 
-        const jobList =
-          Array.isArray(jobsResponse)
-            ? jobsResponse
-            : Array.isArray(jobsResponse?.jobs)
-              ? jobsResponse.jobs
-              : []
+          setGarage(
+            garageResponse?.garage ||
+            null
+          )
 
-        setJobs(jobList)
 
-        // ----------------------------
-        // WORKERS
-        // ----------------------------
+          // ----------------------------
+          // JOBS
+          // ----------------------------
 
-        const workerList =
-          Array.isArray(workersResponse)
-            ? workersResponse
-            : Array.isArray(workersResponse?.workers)
-              ? workersResponse.workers
-              : []
+          const jobList =
+            Array.isArray(jobsResponse)
 
-        setWorkers(workerList)
+              ? jobsResponse
 
-        // ----------------------------
-        // LOW STOCK
-        // ----------------------------
+              : Array.isArray(
+                  jobsResponse?.jobs
+                )
 
-        const inventoryList =
-          Array.isArray(lowStockResponse)
-            ? lowStockResponse
-            : Array.isArray(lowStockResponse?.items)
-              ? lowStockResponse.items
-              : []
+                ? jobsResponse.jobs
 
-        setLowStockItems(
-          inventoryList
-        )
+                : []
 
-      }
+          setJobs(jobList)
 
-      catch (error) {
 
-        console.log(
-          "Failed to load dashboard:",
-          error
-        )
+          // ----------------------------
+          // WORKERS
+          // ----------------------------
 
-      }
+          const workerList =
+            Array.isArray(workersResponse)
 
-      finally {
+              ? workersResponse
 
-        setLoading(false)
+              : Array.isArray(
+                  workersResponse?.workers
+                )
 
-      }
+                ? workersResponse.workers
 
-    }
+                : []
 
-  // --------------------------------
-  // REFRESH WHEN SCREEN OPENS
-  // --------------------------------
+          setWorkers(workerList)
+
+
+          // ----------------------------
+          // LOW STOCK
+          // ----------------------------
+
+          const inventoryList =
+            Array.isArray(lowStockResponse)
+
+              ? lowStockResponse
+
+              : Array.isArray(
+                  lowStockResponse?.items
+                )
+
+                ? lowStockResponse.items
+
+                : []
+
+          setLowStockItems(
+            inventoryList
+          )
+
+        }
+
+        catch (error) {
+
+          console.log(
+            "Failed to load dashboard:",
+            error
+          )
+
+        }
+
+        finally {
+
+          setLoading(false)
+
+        }
+
+      },
+      []
+    )
+
+
+  // ==================================
+  // LOAD EVERYTHING WHEN SCREEN
+  // GETS FOCUS
+  // ==================================
 
   useFocusEffect(
-    useCallback(() => {
+    useCallback(
+      () => {
 
-      loadDashboardData()
+        /*
+         * Refresh both dashboard data AND
+         * subscription data whenever the
+         * dashboard becomes active.
+         */
 
-    }, [])
+        void loadDashboardData()
+
+        void loadSubscription()
+
+      },
+      [
+        loadDashboardData,
+        loadSubscription
+      ]
+    )
   )
 
-  // --------------------------------
+
+  // ==================================
   // PULL TO REFRESH
-  // --------------------------------
+  // ==================================
 
   const onRefresh =
-    async () => {
+    useCallback(
+      async () => {
 
-      try {
+        try {
 
-        setRefreshing(true)
+          setRefreshing(true)
 
-        await loadDashboardData()
+          await Promise.all([
 
-      }
+            loadDashboardData(),
 
-      finally {
+            loadSubscription()
 
-        setRefreshing(false)
+          ])
 
-      }
+        }
 
-    }
+        catch (error) {
 
-  // --------------------------------
+          console.log(
+            "Dashboard refresh failed:",
+            error
+          )
+
+        }
+
+        finally {
+
+          setRefreshing(false)
+
+        }
+
+      },
+      [
+        loadDashboardData,
+        loadSubscription
+      ]
+    )
+
+
+  // ==================================
   // JOB STATISTICS
-  // --------------------------------
+  // ==================================
 
   const totalJobs =
     jobs.length
 
+
   const completedJobs =
     jobs.filter(
       job =>
-        job.status === "completed"
+        job.status ===
+        "completed"
     ).length
+
 
   const pendingJobs =
     jobs.filter(
       job =>
-        job.status === "pending"
+        job.status ===
+        "pending"
     ).length
+
 
   const inProgressJobs =
     jobs.filter(
@@ -253,97 +439,287 @@ export default function DashboardScreen() {
         job.status === "inProgress"
     ).length
 
-  // --------------------------------
+
+  // ==================================
   // DEMO REVENUE
-  // --------------------------------
-  // Keep this temporary until
-  // invoice/revenue API is available.
+  // ==================================
 
-  const demoRevenue = 48500
+  /*
+   * Keep this temporary until
+   * invoice/revenue API is available.
+   */
 
-  // --------------------------------
-  // DEMO PLAN USAGE
-  // --------------------------------
-  // Keep temporary until plan API
-  // is implemented.
+  const demoRevenue =
+    48500
 
-  const jobsUsed = 18
 
-  const jobLimit = 20
+  // ==================================
+  // ACTUAL PLAN INFORMATION
+  // ==================================
 
-  const usagePercent =
-    Math.round(
-      (jobsUsed / jobLimit) * 100
+  const actualPlanName =
+    planUsage?.planName ||
+    planUsage?.planCode ||
+    "Free"
+
+
+  // ==================================
+  // ACTUAL USAGE
+  // ==================================
+
+  const rawJobsUsed =
+    Number(
+      planUsage?.jobsUsed ?? 0
     )
 
-  // --------------------------------
+
+  const jobsUsed =
+    Number.isFinite(rawJobsUsed)
+      ? Math.max(
+          rawJobsUsed,
+          0
+        )
+      : 0
+
+
+  /*
+   * Determine whether the plan is
+   * unlimited.
+   */
+
+  const jobsLimitValue =
+    planUsage?.jobsLimit
+
+
+  const isUnlimited =
+    String(
+      jobsLimitValue ?? ""
+    )
+      .trim()
+      .toLowerCase() ===
+      "unlimited"
+
+
+  /*
+   * Numeric limit for normal plans.
+   */
+
+  const numericJobLimit =
+    Number(
+      jobsLimitValue ?? 0
+    )
+
+
+  /*
+   * Prefer the backend's usagePercentage.
+   *
+   * PlanUsageScreen also receives this
+   * value from getPlanUsage().
+   *
+   * If the backend doesn't provide it,
+   * calculate it locally as a fallback.
+   */
+
+  const backendUsagePercentage =
+    Number(
+      planUsage?.usagePercentage
+    )
+
+
+  const calculatedUsagePercentage =
+    numericJobLimit > 0
+
+      ? Math.round(
+          (
+            jobsUsed /
+            numericJobLimit
+          ) * 100
+        )
+
+      : 0
+
+
+  const usagePercentage =
+    isUnlimited
+
+      ? 0
+
+      : Number.isFinite(
+          backendUsagePercentage
+        )
+
+        ? Math.min(
+            Math.max(
+              Math.round(
+                backendUsagePercentage
+              ),
+              0
+            ),
+            100
+          )
+
+        : Math.min(
+            Math.max(
+              calculatedUsagePercentage,
+              0
+            ),
+            100
+          )
+
+
+  /*
+   * Remaining jobs.
+   */
+
+  const jobsRemaining =
+    isUnlimited
+
+      ? "Unlimited"
+
+      : Math.max(
+          numericJobLimit -
+          jobsUsed,
+          0
+        )
+
+
+  /*
+   * Color the ring based on usage.
+   */
+
+  const planRingColor =
+    isUnlimited
+
+      ? "#16A34A"
+
+      : usagePercentage >= 100
+
+        ? "#DC2626"
+
+        : usagePercentage >= 80
+
+          ? "#EA580C"
+
+          : "#2563EB"
+
+
+  const planRingBackground =
+    isUnlimited
+
+      ? "#ECFDF5"
+
+      : usagePercentage >= 100
+
+        ? "#FEF2F2"
+
+        : usagePercentage >= 80
+
+          ? "#FFF7ED"
+
+          : "#EFF6FF"
+
+
+  // ==================================
   // DEMO PAYMENT DATA
-  // --------------------------------
-  // Temporary until invoice/payment
-  // API is implemented.
+  // ==================================
 
-  const pendingPayments = 2
+  /*
+   * Temporary until invoice/payment
+   * API is implemented.
+   */
 
-  // --------------------------------
+  const pendingPayments =
+    2
+
+
+  // ==================================
   // RECENT JOBS
-  // --------------------------------
+  // ==================================
 
   const recentJobs =
     jobs.slice(0, 4)
 
-  // --------------------------------
+
+  // ==================================
   // STATUS HELPERS
-  // --------------------------------
+  // ==================================
 
   const getStatusColor =
-    (status: string) => {
+    (
+      status: string
+    ) => {
 
       if (
-        status === "completed"
+        status ===
+        "completed"
       ) {
+
         return "#16A34A"
+
       }
 
+
       if (
-        status === "pending"
+        status ===
+        "pending"
       ) {
+
         return "#DC2626"
+
       }
+
 
       if (
         status === "progress" ||
         status === "in-progress" ||
         status === "inProgress"
       ) {
+
         return "#EA580C"
+
       }
+
 
       return "#2563EB"
 
     }
 
+
   const getStatusText =
-    (status: string) => {
+    (
+      status: string
+    ) => {
 
       if (
-        status === "completed"
+        status ===
+        "completed"
       ) {
+
         return "COMPLETED"
+
       }
 
+
       if (
-        status === "pending"
+        status ===
+        "pending"
       ) {
+
         return "PENDING"
+
       }
+
 
       if (
         status === "progress" ||
         status === "in-progress" ||
         status === "inProgress"
       ) {
+
         return "IN PROGRESS"
+
       }
+
 
       return (
         status?.toUpperCase() ||
@@ -352,27 +728,40 @@ export default function DashboardScreen() {
 
     }
 
-  // --------------------------------
+
+  // ==================================
   // JOB TOTAL
-  // --------------------------------
+  // ==================================
 
   const getJobTotal =
-    (job: any) => {
+    (
+      job: any
+    ) => {
 
       if (
-        typeof job.totalAmount === "number"
+        typeof job.totalAmount ===
+        "number"
       ) {
+
         return job.totalAmount
+
       }
 
+
       if (
-        typeof job.total === "number"
+        typeof job.total ===
+        "number"
       ) {
+
         return job.total
+
       }
 
+
       if (
-        Array.isArray(job.services)
+        Array.isArray(
+          job.services
+        )
       ) {
 
         return job.services.reduce(
@@ -396,29 +785,41 @@ export default function DashboardScreen() {
 
       }
 
+
       return 0
 
     }
 
-  // --------------------------------
+
+  // ==================================
   // RENDER
-  // --------------------------------
+  // ==================================
 
   return (
 
-    <View style={styles.screen}>
+    <View
+      style={styles.screen}
+    >
 
       <ScrollView
 
-        style={styles.container}
+        style={
+          styles.container
+        }
 
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={
+          false
+        }
 
         refreshControl={
 
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
+            refreshing={
+              refreshing
+            }
+            onRefresh={
+              onRefresh
+            }
           />
 
         }
@@ -429,16 +830,31 @@ export default function DashboardScreen() {
             HEADER
         ========================== */}
 
-        <View style={styles.headerRow}>
+        <View
+          style={
+            styles.headerRow
+          }
+        >
 
-          <View style={styles.headerInfo}>
+          <View
+            style={
+              styles.headerInfo
+            }
+          >
 
-            <Text style={styles.greeting}>
+            <Text
+              style={
+                styles.greeting
+              }
+            >
               Welcome Back 👋
             </Text>
 
+
             <Text
-              style={styles.header}
+              style={
+                styles.header
+              }
               numberOfLines={1}
             >
 
@@ -449,8 +865,11 @@ export default function DashboardScreen() {
 
             </Text>
 
+
             <Text
-              style={styles.subHeader}
+              style={
+                styles.subHeader
+              }
               numberOfLines={1}
             >
 
@@ -467,7 +886,12 @@ export default function DashboardScreen() {
 
             </Text>
 
-            <Text style={styles.roleText}>
+
+            <Text
+              style={
+                styles.roleText
+              }
+            >
 
               {user?.role
                 ?.toUpperCase() ||
@@ -477,8 +901,15 @@ export default function DashboardScreen() {
 
           </View>
 
+
+          {/* ========================
+              ACTUAL PLAN + USAGE
+          ======================== */}
+
           <TouchableOpacity
-            style={styles.planRing}
+            style={
+              styles.planHeaderContainer
+            }
             onPress={() =>
               navigation.navigate(
                 "PlanUsage"
@@ -487,17 +918,121 @@ export default function DashboardScreen() {
             activeOpacity={0.7}
           >
 
-            <Text
-              style={styles.planRingNumber}
+            <View
+              style={[
+                styles.planRing,
+                {
+                  borderColor:
+                    planRingColor,
+
+                  backgroundColor:
+                    planRingBackground
+                }
+              ]}
             >
-              {usagePercent}%
-            </Text>
+
+              {planUsageLoading ? (
+
+                <ActivityIndicator
+                  size="small"
+                  color={
+                    planRingColor
+                  }
+                />
+
+              ) : isUnlimited ? (
+
+                <>
+
+                  <Text
+                    style={[
+                      styles.planRingNumber,
+                      {
+                        color:
+                          planRingColor
+                      }
+                    ]}
+                  >
+                    ∞
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.planRingLabel
+                    }
+                  >
+                    USED
+                  </Text>
+
+                </>
+
+              ) : (
+
+                <>
+
+                  <Text
+                    style={[
+                      styles.planRingNumber,
+                      {
+                        color:
+                          planRingColor
+                      }
+                    ]}
+                  >
+                    {usagePercentage}%
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.planRingLabel
+                    }
+                  >
+                    USED
+                  </Text>
+
+                </>
+
+              )}
+
+            </View>
+
+
+            {/* ACTUAL PLAN NAME */}
 
             <Text
-              style={styles.planRingLabel}
+              style={[
+                styles.planNameHeader,
+                {
+                  color:
+                    planRingColor
+                }
+              ]}
+              numberOfLines={1}
             >
-              USED
+              {actualPlanName}
             </Text>
+
+
+            {/* ACTUAL JOB COUNT */}
+
+            {!planUsageLoading && (
+
+              <Text
+                style={
+                  styles.planUsageHeader
+                }
+                numberOfLines={1}
+              >
+
+                {isUnlimited
+
+                  ? `${jobsUsed} jobs`
+
+                  : `${jobsUsed}/${numericJobLimit} jobs`}
+
+              </Text>
+
+            )}
 
           </TouchableOpacity>
 
@@ -508,13 +1043,25 @@ export default function DashboardScreen() {
             STATS
         ========================== */}
 
-        <View style={styles.statsContainer}>
+        <View
+          style={
+            styles.statsContainer
+          }
+        >
 
           {/* TOTAL JOBS */}
 
-          <View style={styles.card}>
+          <View
+            style={
+              styles.card
+            }
+          >
 
-            <View style={styles.iconBox}>
+            <View
+              style={
+                styles.iconBox
+              }
+            >
 
               <MaterialIcons
                 name="build"
@@ -524,14 +1071,20 @@ export default function DashboardScreen() {
 
             </View>
 
+
             <Text
-              style={styles.cardValue}
+              style={
+                styles.cardValue
+              }
             >
               {totalJobs}
             </Text>
 
+
             <Text
-              style={styles.cardTitle}
+              style={
+                styles.cardTitle
+              }
             >
               Total Jobs
             </Text>
@@ -541,7 +1094,11 @@ export default function DashboardScreen() {
 
           {/* PENDING */}
 
-          <View style={styles.card}>
+          <View
+            style={
+              styles.card
+            }
+          >
 
             <View
               style={[
@@ -561,14 +1118,20 @@ export default function DashboardScreen() {
 
             </View>
 
+
             <Text
-              style={styles.cardValue}
+              style={
+                styles.cardValue
+              }
             >
               {pendingJobs}
             </Text>
 
+
             <Text
-              style={styles.cardTitle}
+              style={
+                styles.cardTitle
+              }
             >
               Pending Jobs
             </Text>
@@ -578,7 +1141,11 @@ export default function DashboardScreen() {
 
           {/* COMPLETED */}
 
-          <View style={styles.card}>
+          <View
+            style={
+              styles.card
+            }
+          >
 
             <View
               style={[
@@ -598,14 +1165,20 @@ export default function DashboardScreen() {
 
             </View>
 
+
             <Text
-              style={styles.cardValue}
+              style={
+                styles.cardValue
+              }
             >
               {completedJobs}
             </Text>
 
+
             <Text
-              style={styles.cardTitle}
+              style={
+                styles.cardTitle
+              }
             >
               Completed
             </Text>
@@ -615,7 +1188,11 @@ export default function DashboardScreen() {
 
           {/* REVENUE */}
 
-          <View style={styles.card}>
+          <View
+            style={
+              styles.card
+            }
+          >
 
             <View
               style={[
@@ -635,16 +1212,25 @@ export default function DashboardScreen() {
 
             </View>
 
+
             <Text
-              style={styles.cardValue}
+              style={
+                styles.cardValue
+              }
               numberOfLines={1}
               adjustsFontSizeToFit
             >
-              ₹{demoRevenue.toLocaleString("en-IN")}
+              ₹
+              {demoRevenue.toLocaleString(
+                "en-IN"
+              )}
             </Text>
 
+
             <Text
-              style={styles.cardTitle}
+              style={
+                styles.cardTitle
+              }
             >
               Revenue
             </Text>
@@ -658,16 +1244,27 @@ export default function DashboardScreen() {
             QUICK ACTIONS
         ========================== */}
 
-        <Text style={styles.sectionTitle}>
+        <Text
+          style={
+            styles.sectionTitle
+          }
+        >
           Quick Actions
         </Text>
 
-        <View style={styles.quickActions}>
+
+        <View
+          style={
+            styles.quickActions
+          }
+        >
 
           {/* CREATE JOB */}
 
           <TouchableOpacity
-            style={styles.actionBtn}
+            style={
+              styles.actionBtn
+            }
             onPress={() =>
               navigation.navigate(
                 "CreateJob"
@@ -682,7 +1279,12 @@ export default function DashboardScreen() {
               color="#2563EB"
             />
 
-            <Text style={styles.actionText}>
+
+            <Text
+              style={
+                styles.actionText
+              }
+            >
               Create Job
             </Text>
 
@@ -692,7 +1294,9 @@ export default function DashboardScreen() {
           {/* INVOICE */}
 
           <TouchableOpacity
-            style={styles.actionBtn}
+            style={
+              styles.actionBtn
+            }
             onPress={() =>
               navigation.navigate(
                 "Invoice"
@@ -707,7 +1311,12 @@ export default function DashboardScreen() {
               color="#2563EB"
             />
 
-            <Text style={styles.actionText}>
+
+            <Text
+              style={
+                styles.actionText
+              }
+            >
               Invoices
             </Text>
 
@@ -720,18 +1329,33 @@ export default function DashboardScreen() {
             BUSINESS OVERVIEW
         ========================== */}
 
-        <Text style={styles.sectionTitle}>
+        <Text
+          style={
+            styles.sectionTitle
+          }
+        >
           Business Overview
         </Text>
 
-        <View style={styles.overviewCard}>
+
+        <View
+          style={
+            styles.overviewCard
+          }
+        >
 
           {/* WORKERS */}
 
-          <View style={styles.overviewRow}>
+          <View
+            style={
+              styles.overviewRow
+            }
+          >
 
             <View
-              style={styles.overviewIcon}
+              style={
+                styles.overviewIcon
+              }
             >
 
               <Ionicons
@@ -742,24 +1366,37 @@ export default function DashboardScreen() {
 
             </View>
 
-            <View style={styles.overviewText}>
+
+            <View
+              style={
+                styles.overviewText
+              }
+            >
 
               <Text
-                style={styles.overviewTitle}
+                style={
+                  styles.overviewTitle
+                }
               >
                 Workers
               </Text>
 
+
               <Text
-                style={styles.overviewSubtitle}
+                style={
+                  styles.overviewSubtitle
+                }
               >
                 Active staff available
               </Text>
 
             </View>
 
+
             <Text
-              style={styles.overviewValue}
+              style={
+                styles.overviewValue
+              }
             >
               {workers.length}
             </Text>
@@ -767,15 +1404,25 @@ export default function DashboardScreen() {
           </View>
 
 
-          <View style={styles.divider} />
+          <View
+            style={
+              styles.divider
+            }
+          />
 
 
           {/* IN PROGRESS */}
 
-          <View style={styles.overviewRow}>
+          <View
+            style={
+              styles.overviewRow
+            }
+          >
 
             <View
-              style={styles.overviewIcon}
+              style={
+                styles.overviewIcon
+              }
             >
 
               <MaterialIcons
@@ -786,24 +1433,37 @@ export default function DashboardScreen() {
 
             </View>
 
-            <View style={styles.overviewText}>
+
+            <View
+              style={
+                styles.overviewText
+              }
+            >
 
               <Text
-                style={styles.overviewTitle}
+                style={
+                  styles.overviewTitle
+                }
               >
                 In Progress
               </Text>
 
+
               <Text
-                style={styles.overviewSubtitle}
+                style={
+                  styles.overviewSubtitle
+                }
               >
                 Jobs currently being serviced
               </Text>
 
             </View>
 
+
             <Text
-              style={styles.overviewValue}
+              style={
+                styles.overviewValue
+              }
             >
               {inProgressJobs}
             </Text>
@@ -811,12 +1471,20 @@ export default function DashboardScreen() {
           </View>
 
 
-          <View style={styles.divider} />
+          <View
+            style={
+              styles.divider
+            }
+          />
 
 
           {/* LOW STOCK */}
 
-          <View style={styles.overviewRow}>
+          <View
+            style={
+              styles.overviewRow
+            }
+          >
 
             <View
               style={[
@@ -836,21 +1504,32 @@ export default function DashboardScreen() {
 
             </View>
 
-            <View style={styles.overviewText}>
+
+            <View
+              style={
+                styles.overviewText
+              }
+            >
 
               <Text
-                style={styles.overviewTitle}
+                style={
+                  styles.overviewTitle
+                }
               >
                 Low Stock
               </Text>
 
+
               <Text
-                style={styles.overviewSubtitle}
+                style={
+                  styles.overviewSubtitle
+                }
               >
                 Spare parts need attention
               </Text>
 
             </View>
+
 
             <Text
               style={[
@@ -869,12 +1548,20 @@ export default function DashboardScreen() {
           </View>
 
 
-          <View style={styles.divider} />
+          <View
+            style={
+              styles.divider
+            }
+          />
 
 
           {/* PAYMENTS */}
 
-          <View style={styles.overviewRow}>
+          <View
+            style={
+              styles.overviewRow
+            }
+          >
 
             <View
               style={[
@@ -894,27 +1581,39 @@ export default function DashboardScreen() {
 
             </View>
 
-            <View style={styles.overviewText}>
+
+            <View
+              style={
+                styles.overviewText
+              }
+            >
 
               <Text
-                style={styles.overviewTitle}
+                style={
+                  styles.overviewTitle
+                }
               >
                 Pending Payments
               </Text>
 
+
               <Text
-                style={styles.overviewSubtitle}
+                style={
+                  styles.overviewSubtitle
+                }
               >
                 Demo data for now
               </Text>
 
             </View>
 
+
             <Text
               style={[
                 styles.overviewValue,
                 {
-                  color: "#EA580C"
+                  color:
+                    "#EA580C"
                 }
               ]}
             >
@@ -930,19 +1629,34 @@ export default function DashboardScreen() {
             RECENT JOBS
         ========================== */}
 
-        <View style={styles.sectionRow}>
+        <View
+          style={
+            styles.sectionRow
+          }
+        >
 
-          <Text style={styles.sectionTitle}>
+          <Text
+            style={
+              styles.sectionTitle
+            }
+          >
             Recent Jobs
           </Text>
 
+
           <TouchableOpacity
             onPress={() =>
-              navigation.navigate("Jobs")
+              navigation.navigate(
+                "Jobs"
+              )
             }
           >
 
-            <Text style={styles.viewAll}>
+            <Text
+              style={
+                styles.viewAll
+              }
+            >
               View All
             </Text>
 
@@ -953,7 +1667,11 @@ export default function DashboardScreen() {
 
         {recentJobs.length === 0 ? (
 
-          <View style={styles.emptyCard}>
+          <View
+            style={
+              styles.emptyCard
+            }
+          >
 
             <MaterialIcons
               name="assignment"
@@ -961,21 +1679,30 @@ export default function DashboardScreen() {
               color="#9CA3AF"
             />
 
+
             <Text
-              style={styles.emptyTitle}
+              style={
+                styles.emptyTitle
+              }
             >
               No jobs yet
             </Text>
 
+
             <Text
-              style={styles.emptyText}
+              style={
+                styles.emptyText
+              }
             >
               Create your first job to see
               it here.
             </Text>
 
+
             <TouchableOpacity
-              style={styles.emptyButton}
+              style={
+                styles.emptyButton
+              }
               onPress={() =>
                 navigation.navigate(
                   "CreateJob"
@@ -984,7 +1711,9 @@ export default function DashboardScreen() {
             >
 
               <Text
-                style={styles.emptyButtonText}
+                style={
+                  styles.emptyButtonText
+                }
               >
                 Create Job
               </Text>
@@ -996,16 +1725,23 @@ export default function DashboardScreen() {
         ) : (
 
           recentJobs.map(
-            (item: any) => {
+            (
+              item: any
+            ) => {
 
               const total =
-                getJobTotal(item)
+                getJobTotal(
+                  item
+                )
+
 
               return (
 
                 <TouchableOpacity
                   key={item.id}
-                  style={styles.jobCard}
+                  style={
+                    styles.jobCard
+                  }
                   onPress={() =>
                     navigation.navigate(
                       "JobDetail",
@@ -1018,7 +1754,9 @@ export default function DashboardScreen() {
                 >
 
                   <View
-                    style={styles.jobTop}
+                    style={
+                      styles.jobTop
+                    }
                   >
 
                     <View
@@ -1052,6 +1790,7 @@ export default function DashboardScreen() {
 
                         </View>
 
+
                         <View
                           style={{
                             flex: 1
@@ -1071,6 +1810,7 @@ export default function DashboardScreen() {
                             }
                           </Text>
 
+
                           <Text
                             style={
                               styles.vehicleModel
@@ -1088,8 +1828,11 @@ export default function DashboardScreen() {
 
                       </View>
 
+
                       <Text
-                        style={styles.customer}
+                        style={
+                          styles.customer
+                        }
                         numberOfLines={1}
                       >
                         {
@@ -1102,8 +1845,11 @@ export default function DashboardScreen() {
 
                     </View>
 
+
                     <Text
-                      style={styles.amount}
+                      style={
+                        styles.amount
+                      }
                     >
                       ₹
                       {Number(total)
@@ -1116,7 +1862,9 @@ export default function DashboardScreen() {
 
 
                   <View
-                    style={styles.jobBottom}
+                    style={
+                      styles.jobBottom
+                    }
                   >
 
                     <View
@@ -1145,6 +1893,7 @@ export default function DashboardScreen() {
 
                     </View>
 
+
                     <Text
                       style={
                         styles.servicesText
@@ -1154,7 +1903,9 @@ export default function DashboardScreen() {
                         Array.isArray(
                           item.services
                         )
+
                           ? `${item.services.length} services`
+
                           : "Service"
                       }
                     </Text>
@@ -1185,316 +1936,386 @@ export default function DashboardScreen() {
 
 }
 
+
 // ==================================
 // STYLES
 // ==================================
 
-const styles = StyleSheet.create({
+const styles =
+  StyleSheet.create({
 
-  screen: {
-    flex: 1,
-    backgroundColor: "#F3F4F6"
-  },
+    screen: {
+      flex: 1,
+      backgroundColor:
+        "#F3F4F6"
+    },
 
-  container: {
-    flex: 1,
-    backgroundColor: "#F3F4F6",
-    paddingHorizontal: 18,
-    paddingTop: 18
-  },
+    container: {
+      flex: 1,
+      backgroundColor:
+        "#F3F4F6",
+      paddingHorizontal: 18,
+      paddingTop: 18
+    },
 
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 22
-  },
+    headerRow: {
+      flexDirection: "row",
+      justifyContent:
+        "space-between",
+      alignItems: "center",
+      marginBottom: 22
+    },
 
-  headerInfo: {
-    flex: 1,
-    paddingRight: 12
-  },
+    headerInfo: {
+      flex: 1,
+      paddingRight: 12
+    },
 
-  greeting: {
-    color: "#6B7280",
-    fontSize: 14
-  },
+    greeting: {
+      color: "#6B7280",
+      fontSize: 14
+    },
 
-  header: {
-    fontSize: 30,
-    fontWeight: "bold",
-    color: "#111827",
-    marginTop: 4
-  },
+    header: {
+      fontSize: 30,
+      fontWeight: "bold",
+      color: "#111827",
+      marginTop: 4
+    },
 
-  subHeader: {
-    color: "#6B7280",
-    marginTop: 3
-  },
+    subHeader: {
+      color: "#6B7280",
+      marginTop: 3
+    },
 
-  roleText: {
-    marginTop: 6,
-    color: "#2563EB",
-    fontWeight: "700",
-    fontSize: 13
-  },
+    roleText: {
+      marginTop: 6,
+      color: "#2563EB",
+      fontWeight: "700",
+      fontSize: 13
+    },
 
-  planRing: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    borderWidth: 3,
-    borderColor: "#2563EB",
-    backgroundColor: "#EFF6FF",
-    justifyContent: "center",
-    alignItems: "center"
-  },
 
-  planRingNumber: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#2563EB"
-  },
+    // ==================================
+    // PLAN HEADER
+    // ==================================
 
-  planRingLabel: {
-    fontSize: 9,
-    color: "#6B7280",
-    fontWeight: "600"
-  },
+    planHeaderContainer: {
+      alignItems: "center",
+      justifyContent: "center",
+      minWidth: 78,
+      marginLeft: 8
+    },
 
-  statsContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between"
-  },
+    planRing: {
+      width: 62,
+      height: 62,
+      borderRadius: 31,
+      borderWidth: 3,
+      justifyContent: "center",
+      alignItems: "center"
+    },
 
-  card: {
-    width: "48%",
-    backgroundColor: "white",
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 15
-  },
+    planRingNumber: {
+      fontSize: 16,
+      fontWeight: "bold"
+    },
 
-  iconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: "#EFF6FF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12
-  },
+    planRingLabel: {
+      fontSize: 8,
+      color: "#6B7280",
+      fontWeight: "700",
+      marginTop: 1
+    },
 
-  cardValue: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#111827"
-  },
+    planNameHeader: {
+      marginTop: 4,
+      fontSize: 11,
+      fontWeight: "800",
+      maxWidth: 78,
+      textAlign: "center"
+    },
 
-  cardTitle: {
-    color: "#6B7280",
-    marginTop: 5,
-    fontSize: 13
-  },
+    planUsageHeader: {
+      marginTop: 1,
+      fontSize: 9,
+      color: "#6B7280",
+      fontWeight: "600",
+      textAlign: "center"
+    },
 
-  sectionTitle: {
-    fontSize: 19,
-    fontWeight: "bold",
-    color: "#111827",
-    marginBottom: 14,
-    marginTop: 8
-  },
 
-  quickActions: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 12
-  },
+    // ==================================
+    // STATS
+    // ==================================
 
-  actionBtn: {
-    width: "48%",
-    backgroundColor: "white",
-    borderRadius: 18,
-    paddingVertical: 22,
-    alignItems: "center"
-  },
+    statsContainer: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent:
+        "space-between"
+    },
 
-  actionText: {
-    marginTop: 10,
-    fontWeight: "600",
-    color: "#374151"
-  },
+    card: {
+      width: "48%",
+      backgroundColor: "white",
+      borderRadius: 20,
+      padding: 18,
+      marginBottom: 15
+    },
 
-  overviewCard: {
-    backgroundColor: "white",
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    marginBottom: 18
-  },
+    iconBox: {
+      width: 42,
+      height: 42,
+      borderRadius: 14,
+      backgroundColor:
+        "#EFF6FF",
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 12
+    },
 
-  overviewRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 14
-  },
+    cardValue: {
+      fontSize: 24,
+      fontWeight: "bold",
+      color: "#111827"
+    },
 
-  overviewIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "#EFF6FF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12
-  },
+    cardTitle: {
+      color: "#6B7280",
+      marginTop: 5,
+      fontSize: 13
+    },
 
-  overviewText: {
-    flex: 1
-  },
 
-  overviewTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#111827"
-  },
+    // ==================================
+    // SECTIONS
+    // ==================================
 
-  overviewSubtitle: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginTop: 3
-  },
+    sectionTitle: {
+      fontSize: 19,
+      fontWeight: "bold",
+      color: "#111827",
+      marginBottom: 14,
+      marginTop: 8
+    },
 
-  overviewValue: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#111827"
-  },
 
-  divider: {
-    height: 1,
-    backgroundColor: "#E5E7EB"
-  },
+    // ==================================
+    // QUICK ACTIONS
+    // ==================================
 
-  sectionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center"
-  },
+    quickActions: {
+      flexDirection: "row",
+      justifyContent:
+        "space-between",
+      marginBottom: 12
+    },
 
-  viewAll: {
-    color: "#2563EB",
-    fontWeight: "600"
-  },
+    actionBtn: {
+      width: "48%",
+      backgroundColor: "white",
+      borderRadius: 18,
+      paddingVertical: 22,
+      alignItems: "center"
+    },
 
-  jobCard: {
-    backgroundColor: "white",
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 14
-  },
+    actionText: {
+      marginTop: 10,
+      fontWeight: "600",
+      color: "#374151"
+    },
 
-  jobTop: {
-    flexDirection: "row",
-    justifyContent: "space-between"
-  },
 
-  vehicleRow: {
-    flexDirection: "row",
-    alignItems: "center"
-  },
+    // ==================================
+    // BUSINESS OVERVIEW
+    // ==================================
 
-  vehicleIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: "#EFF6FF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12
-  },
+    overviewCard: {
+      backgroundColor: "white",
+      borderRadius: 18,
+      paddingHorizontal: 16,
+      marginBottom: 18
+    },
 
-  vehicle: {
-    fontSize: 17,
-    fontWeight: "bold",
-    color: "#111827"
-  },
+    overviewRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 14
+    },
 
-  vehicleModel: {
-    color: "#6B7280",
-    marginTop: 2
-  },
+    overviewIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor:
+        "#EFF6FF",
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 12
+    },
 
-  customer: {
-    marginTop: 14,
-    color: "#374151",
-    fontWeight: "500"
-  },
+    overviewText: {
+      flex: 1
+    },
 
-  amount: {
-    fontWeight: "bold",
-    color: "#16A34A",
-    fontSize: 17,
-    marginLeft: 8
-  },
+    overviewTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: "#111827"
+    },
 
-  jobBottom: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 18
-  },
+    overviewSubtitle: {
+      fontSize: 12,
+      color: "#6B7280",
+      marginTop: 3
+    },
 
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 30
-  },
+    overviewValue: {
+      fontSize: 18,
+      fontWeight: "bold",
+      color: "#111827"
+    },
 
-  statusText: {
-    color: "white",
-    fontWeight: "bold",
-    fontSize: 11
-  },
+    divider: {
+      height: 1,
+      backgroundColor:
+        "#E5E7EB"
+    },
 
-  servicesText: {
-    color: "#6B7280",
-    fontWeight: "500"
-  },
 
-  emptyCard: {
-    backgroundColor: "white",
-    borderRadius: 20,
-    padding: 28,
-    alignItems: "center",
-    marginBottom: 20
-  },
+    // ==================================
+    // RECENT JOBS
+    // ==================================
 
-  emptyTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#111827",
-    marginTop: 10
-  },
+    sectionRow: {
+      flexDirection: "row",
+      justifyContent:
+        "space-between",
+      alignItems: "center"
+    },
 
-  emptyText: {
-    fontSize: 13,
-    color: "#6B7280",
-    textAlign: "center",
-    marginTop: 5,
-    marginBottom: 16
-  },
+    viewAll: {
+      color: "#2563EB",
+      fontWeight: "600"
+    },
 
-  emptyButton: {
-    backgroundColor: "#2563EB",
-    paddingHorizontal: 20,
-    paddingVertical: 11,
-    borderRadius: 12
-  },
+    jobCard: {
+      backgroundColor: "white",
+      borderRadius: 20,
+      padding: 18,
+      marginBottom: 14
+    },
 
-  emptyButtonText: {
-    color: "white",
-    fontWeight: "700"
-  }
+    jobTop: {
+      flexDirection: "row",
+      justifyContent:
+        "space-between"
+    },
 
-})
+    vehicleRow: {
+      flexDirection: "row",
+      alignItems: "center"
+    },
+
+    vehicleIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 14,
+      backgroundColor:
+        "#EFF6FF",
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 12
+    },
+
+    vehicle: {
+      fontSize: 17,
+      fontWeight: "bold",
+      color: "#111827"
+    },
+
+    vehicleModel: {
+      color: "#6B7280",
+      marginTop: 2
+    },
+
+    customer: {
+      marginTop: 14,
+      color: "#374151",
+      fontWeight: "500"
+    },
+
+    amount: {
+      fontWeight: "bold",
+      color: "#16A34A",
+      fontSize: 17,
+      marginLeft: 8
+    },
+
+    jobBottom: {
+      flexDirection: "row",
+      justifyContent:
+        "space-between",
+      alignItems: "center",
+      marginTop: 18
+    },
+
+    statusBadge: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 30
+    },
+
+    statusText: {
+      color: "white",
+      fontWeight: "bold",
+      fontSize: 11
+    },
+
+    servicesText: {
+      color: "#6B7280",
+      fontWeight: "500"
+    },
+
+
+    // ==================================
+    // EMPTY STATE
+    // ==================================
+
+    emptyCard: {
+      backgroundColor: "white",
+      borderRadius: 20,
+      padding: 28,
+      alignItems: "center",
+      marginBottom: 20
+    },
+
+    emptyTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: "#111827",
+      marginTop: 10
+    },
+
+    emptyText: {
+      fontSize: 13,
+      color: "#6B7280",
+      textAlign: "center",
+      marginTop: 5,
+      marginBottom: 16
+    },
+
+    emptyButton: {
+      backgroundColor: "#2563EB",
+      paddingHorizontal: 20,
+      paddingVertical: 11,
+      borderRadius: 12
+    },
+
+    emptyButtonText: {
+      color: "white",
+      fontWeight: "700"
+    }
+
+  })

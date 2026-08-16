@@ -4,8 +4,12 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Alert
+  Modal
 } from "react-native"
+
+import {
+  useState
+} from "react"
 
 import {
   MaterialIcons,
@@ -23,6 +27,9 @@ import {
 export default function SettingsScreen() {
 
   const navigation: any = useNavigation()
+
+  const [logoutVisible, setLogoutVisible] =
+    useState(false)
 
   const {
     logout
@@ -104,43 +111,30 @@ export default function SettingsScreen() {
 
   const handleLogout = () => {
 
-    Alert.alert(
-      "Logout",
-      "Are you sure you want to logout?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
-        {
-          text: "Logout",
-          style: "destructive",
-          onPress: async () => {
+    setLogoutVisible(true)
 
-            try {
+  }
 
-              await logout()
+  const confirmLogout = async () => {
 
-            }
+    try {
 
-            catch (error) {
+      console.log("🔥 CONFIRM LOGOUT")
 
-              console.log(
-                "Logout error:",
-                error
-              )
+      setLogoutVisible(false)
 
-              Alert.alert(
-                "Logout Failed",
-                "Unable to logout. Please try again."
-              )
+      await logout()
 
-            }
+      console.log("🔥 LOGOUT COMPLETED")
 
-          }
-        }
-      ]
-    )
+    } catch (error) {
+
+      console.log(
+        "Logout error:",
+        error
+      )
+
+    }
 
   }
 
@@ -288,6 +282,74 @@ export default function SettingsScreen() {
 
       <View style={styles.bottomSpace} />
 
+      <Modal
+  visible={logoutVisible}
+  transparent
+  animationType="fade"
+  onRequestClose={() =>
+    setLogoutVisible(false)
+  }
+>
+
+  <View style={styles.modalOverlay}>
+
+    <View style={styles.logoutModal}>
+
+      <View style={styles.modalIcon}>
+
+        <MaterialIcons
+          name="logout"
+          size={28}
+          color="#DC2626"
+        />
+
+      </View>
+
+      <Text style={styles.modalTitle}>
+        Logout
+      </Text>
+
+      <Text style={styles.modalMessage}>
+        Are you sure you want to logout
+        from your GarageBook account?
+      </Text>
+
+      <View style={styles.modalActions}>
+
+        <TouchableOpacity
+          style={styles.cancelButton}
+          activeOpacity={0.8}
+          onPress={() =>
+            setLogoutVisible(false)
+          }
+        >
+
+          <Text style={styles.cancelButtonText}>
+            Cancel
+          </Text>
+
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.confirmButton}
+          activeOpacity={0.8}
+          onPress={confirmLogout}
+        >
+
+          <Text style={styles.confirmButtonText}>
+            Logout
+          </Text>
+
+        </TouchableOpacity>
+
+      </View>
+
+    </View>
+
+  </View>
+
+</Modal>
+
     </ScrollView>
 
   )
@@ -425,6 +487,84 @@ const styles = StyleSheet.create({
 
   bottomSpace: {
     height: 20
-  }
+  },
+
+  modalOverlay: {
+  flex: 1,
+  backgroundColor: "rgba(0, 0, 0, 0.45)",
+  justifyContent: "center",
+  alignItems: "center",
+  padding: 24
+},
+
+logoutModal: {
+  width: "100%",
+  maxWidth: 420,
+  backgroundColor: "#FFFFFF",
+  borderRadius: 22,
+  padding: 24,
+  alignItems: "center"
+},
+
+modalIcon: {
+  width: 58,
+  height: 58,
+  borderRadius: 18,
+  backgroundColor: "#FEF2F2",
+  justifyContent: "center",
+  alignItems: "center",
+  marginBottom: 16
+},
+
+modalTitle: {
+  fontSize: 21,
+  fontWeight: "700",
+  color: "#111827",
+  marginBottom: 8
+},
+
+modalMessage: {
+  fontSize: 14,
+  lineHeight: 21,
+  color: "#6B7280",
+  textAlign: "center",
+  marginBottom: 24
+},
+
+modalActions: {
+  width: "100%",
+  flexDirection: "row",
+  gap: 12
+},
+
+cancelButton: {
+  flex: 1,
+  height: 48,
+  borderRadius: 12,
+  backgroundColor: "#F3F4F6",
+  justifyContent: "center",
+  alignItems: "center"
+},
+
+cancelButtonText: {
+  fontSize: 15,
+  fontWeight: "700",
+  color: "#374151"
+},
+
+confirmButton: {
+  flex: 1,
+  height: 48,
+  borderRadius: 12,
+  backgroundColor: "#DC2626",
+  justifyContent: "center",
+  alignItems: "center"
+},
+
+confirmButtonText: {
+  fontSize: 15,
+  fontWeight: "700",
+  color: "#FFFFFF"
+}
 
 })

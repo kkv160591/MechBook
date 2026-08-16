@@ -1,6 +1,11 @@
-import { Request, Response } from "express"
+import {
+  Request,
+  Response
+} from "express"
 
-import * as JobService from "../services/job.service"
+import * as JobService
+  from "../services/job.service"
+
 
 export const createJob =
 async (
@@ -13,11 +18,28 @@ async (
     const garageId =
       req.user.garageId
 
+
+    if (!garageId) {
+
+      return res.status(401).json({
+
+        message:
+          "Garage not found for current user"
+
+      })
+
+    }
+
+
     const job =
       await JobService.createJob(
+
         garageId,
+
         req.body
+
       )
+
 
     return res.status(201).json({
 
@@ -30,9 +52,44 @@ async (
 
   }
 
-  catch (error) {
 
-    console.error(error)
+  catch (error: any) {
+
+    console.error(
+      "CREATE JOB ERROR:",
+      error
+    )
+
+
+    /*
+     * -------------------------------------------------------------
+     * PLAN LIMIT
+     * -------------------------------------------------------------
+     */
+
+    if (
+      error?.code ===
+      "JOB_LIMIT_REACHED"
+    ) {
+
+      return res.status(403).json({
+
+        code:
+          "JOB_LIMIT_REACHED",
+
+        message:
+          "Monthly job limit reached. Please upgrade your plan or purchase additional job capacity."
+
+      })
+
+    }
+
+
+    /*
+     * -------------------------------------------------------------
+     * SERVER ERROR
+     * -------------------------------------------------------------
+     */
 
     return res.status(500).json({
 
@@ -45,6 +102,13 @@ async (
 
 }
 
+
+/*
+|--------------------------------------------------------------------------
+| GET JOBS
+|--------------------------------------------------------------------------
+*/
+
 export const getJobs =
 async (
   req: any,
@@ -56,10 +120,12 @@ async (
     const garageId =
       req.user.garageId
 
+
     const jobs =
       await JobService.getJobs(
         garageId
       )
+
 
     return res.json({
 
@@ -69,9 +135,13 @@ async (
 
   }
 
+
   catch (error) {
 
-    console.error(error)
+    console.error(
+      error
+    )
+
 
     return res.status(500).json({
 
@@ -83,6 +153,13 @@ async (
   }
 
 }
+
+
+/*
+|--------------------------------------------------------------------------
+| GET JOB BY ID
+|--------------------------------------------------------------------------
+*/
 
 export const getJobById =
 async (
@@ -99,6 +176,7 @@ async (
 
       )
 
+
     if (!job) {
 
       return res.status(404).json({
@@ -110,6 +188,7 @@ async (
 
     }
 
+
     return res.json({
 
       job
@@ -118,9 +197,13 @@ async (
 
   }
 
+
   catch (error) {
 
-    console.error(error)
+    console.error(
+      error
+    )
+
 
     return res.status(500).json({
 
@@ -132,6 +215,13 @@ async (
   }
 
 }
+
+
+/*
+|--------------------------------------------------------------------------
+| UPDATE JOB
+|--------------------------------------------------------------------------
+*/
 
 export const updateJob =
 async (
@@ -150,6 +240,7 @@ async (
 
       )
 
+
     if (!job) {
 
       return res.status(404).json({
@@ -160,6 +251,7 @@ async (
       })
 
     }
+
 
     return res.json({
 
@@ -172,9 +264,13 @@ async (
 
   }
 
+
   catch (error) {
 
-    console.error(error)
+    console.error(
+      error
+    )
+
 
     return res.status(500).json({
 
@@ -186,6 +282,13 @@ async (
   }
 
 }
+
+
+/*
+|--------------------------------------------------------------------------
+| ASSIGN WORKER
+|--------------------------------------------------------------------------
+*/
 
 export const assignWorker =
 async (
@@ -203,6 +306,7 @@ async (
 
     )
 
+
     return res.json({
 
       message:
@@ -212,9 +316,13 @@ async (
 
   }
 
+
   catch (error) {
 
-    console.error(error)
+    console.error(
+      error
+    )
+
 
     return res.status(500).json({
 
@@ -226,6 +334,13 @@ async (
   }
 
 }
+
+
+/*
+|--------------------------------------------------------------------------
+| UPDATE JOB STATUS
+|--------------------------------------------------------------------------
+*/
 
 export const updateJobStatus =
 async (
@@ -243,6 +358,7 @@ async (
 
     )
 
+
     return res.json({
 
       message:
@@ -252,9 +368,13 @@ async (
 
   }
 
+
   catch (error) {
 
-    console.error(error)
+    console.error(
+      error
+    )
+
 
     return res.status(500).json({
 
@@ -266,6 +386,13 @@ async (
   }
 
 }
+
+
+/*
+|--------------------------------------------------------------------------
+| DELETE JOB
+|--------------------------------------------------------------------------
+*/
 
 export const deleteJob =
 async (
@@ -281,6 +408,7 @@ async (
 
     )
 
+
     return res.json({
 
       message:
@@ -290,9 +418,13 @@ async (
 
   }
 
+
   catch (error) {
 
-    console.error(error)
+    console.error(
+      error
+    )
+
 
     return res.status(500).json({
 
