@@ -18,17 +18,6 @@ const router =
 |--------------------------------------------------------------------------
 | PLAN & USAGE
 |--------------------------------------------------------------------------
-|
-| Requires authenticated user.
-|
-| verifyToken decodes the JWT and attaches:
-|
-| req.user = {
-|   garageId,
-|   role,
-|   ...
-| }
-|
 */
 
 router.get(
@@ -40,15 +29,8 @@ router.get(
 
 /*
 |--------------------------------------------------------------------------
-| CREATE PAYMENT ORDER
+| PLAN PAYMENT
 |--------------------------------------------------------------------------
-|
-| Requires authenticated user.
-|
-| The controller gets the real garageId from:
-|
-| req.user.garageId
-|
 */
 
 router.post(
@@ -57,15 +39,6 @@ router.post(
   subscriptionController.createPaymentOrder
 )
 
-
-/*
-|--------------------------------------------------------------------------
-| VERIFY PAYMENT
-|--------------------------------------------------------------------------
-|
-| Requires authenticated user.
-|
-*/
 
 router.post(
   "/payment/verify",
@@ -76,40 +49,36 @@ router.post(
 
 /*
 |--------------------------------------------------------------------------
+| BOOSTER PAYMENT
+|--------------------------------------------------------------------------
+*/
+
+router.post(
+  "/booster/order",
+  verifyToken,
+  subscriptionController.createBoosterOrder
+)
+
+
+router.post(
+  "/booster/verify",
+  verifyToken,
+  subscriptionController.verifyBoosterPayment
+)
+
+
+/*
+|--------------------------------------------------------------------------
 | RAZORPAY WEBHOOK
 |--------------------------------------------------------------------------
 |
-| DO NOT use verifyToken here.
-|
-| Razorpay does not send your application's JWT.
-|
-| This route authenticates the webhook using the
-| Razorpay webhook signature instead.
-|
-| IMPORTANT:
-| The server must provide the RAW request body.
+| DO NOT add verifyToken.
 |
 */
 
 router.post(
   "/payment/webhook",
   subscriptionController.razorpayWebhook
-)
-
-
-/*
-|--------------------------------------------------------------------------
-| BUY BOOSTER
-|--------------------------------------------------------------------------
-|
-| Requires authenticated user.
-|
-*/
-
-router.post(
-  "/booster",
-  verifyToken,
-  subscriptionController.buyBooster
 )
 
 

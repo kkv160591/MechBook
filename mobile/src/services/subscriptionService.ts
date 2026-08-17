@@ -309,28 +309,37 @@ export const buyBooster =
 async (
   boosterCode: string
 ): Promise<BoosterResponse> => {
+
   try {
-    const garageId = requireGarageId()
+
+    const garageId =
+      requireGarageId()
 
     const response =
       await api.post<BoosterResponse>(
-        "/api/subscription/booster",
+        "/api/subscription/booster/order",
         {
           garageId,
-          boosterCode: boosterCode.toUpperCase()
+          boosterCode:
+            boosterCode.toUpperCase()
         }
       )
 
     return response.data
+
   }
+
   catch (error) {
+
     console.log(
       "buyBooster failed:",
       error
     )
 
     throw normalizeError(error)
+
   }
+
 }
 
 export type VerifyPaymentRequest = {
@@ -407,4 +416,74 @@ async (
 
     throw normalizeError(error)
   }
+}
+
+export const verifyBoosterPayment =
+async (
+  payload: VerifyPaymentRequest
+): Promise<VerifyPaymentResponse> => {
+
+  try {
+
+    const response =
+      await api.post<VerifyPaymentResponse>(
+        "/api/subscription/booster/verify",
+        {
+          razorpay_payment_id:
+            payload.razorpayPaymentId,
+
+          razorpay_order_id:
+            payload.razorpayOrderId,
+
+          razorpay_signature:
+            payload.razorpaySignature
+        }
+      )
+
+    const data =
+      response.data
+
+    if (
+      data?.subscription
+    ) {
+
+      currentGarageId =
+        data.subscription.garageId ??
+        currentGarageId
+
+    }
+
+    return {
+
+      ...data,
+
+      garageId:
+        data?.garageId ??
+        data?.subscription?.garageId,
+
+      paymentStatus:
+        data?.paymentStatus ??
+        data?.subscription?.paymentStatus,
+
+      boosterCode:
+        data?.boosterCode,
+
+      jobsAdded:
+        data?.jobsAdded
+
+    }
+
+  }
+
+  catch (error) {
+
+    console.log(
+      "verifyBoosterPayment failed:",
+      error
+    )
+
+    throw normalizeError(error)
+
+  }
+
 }

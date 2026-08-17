@@ -1,11 +1,12 @@
 import {
   GetItemCommand,
   PutItemCommand,
-  UpdateItemCommand
+  UpdateItemCommand,
+  TransactWriteItemsCommand
 } from "@aws-sdk/client-dynamodb"
 
 import {
-  unmarshall,
+  unmarshall
 } from "@aws-sdk/util-dynamodb"
 
 import {
@@ -14,9 +15,9 @@ import {
 
 import {
   createRazorpayOrder,
-  verifyPaymentSignature,
-  verifyWebhookSignature
+  verifyPaymentSignature
 } from "./razorpay.service"
+
 
 const TABLE =
   process.env.SUBSCRIPTIONS_TABLE_NAME || "Subscriptions"
@@ -24,7 +25,18 @@ const TABLE =
 
 /*
 |--------------------------------------------------------------------------
-| PLAN DEFINITIONS
+| TYPES
+|--------------------------------------------------------------------------
+*/
+
+type BillingCycle =
+  | "MONTHLY"
+  | "ANNUAL"
+
+
+/*
+|--------------------------------------------------------------------------
+| PLANS
 |--------------------------------------------------------------------------
 */
 
@@ -95,7 +107,6 @@ export const PLANS = {
     annualPricePerMonth: 629,
 
     jobsPerMonth: -1,
-
     workers: -1,
 
     inventory: "Full",
@@ -107,36 +118,36 @@ export const PLANS = {
     prioritySupport: true
   }
 
-}
+} as const
 
 
 /*
 |--------------------------------------------------------------------------
-| BOOSTER DEFINITIONS
+| BOOSTERS
 |--------------------------------------------------------------------------
 */
 
 export const BOOSTERS = {
 
   MINI: {
-    code: "MINI",
+    code: "MINI_BOOST",
     jobs: 20,
     price: 49
   },
 
   STANDARD: {
-    code: "STANDARD",
+    code: "STANDARD_BOOST",
     jobs: 50,
     price: 99
   },
 
   BIG: {
-    code: "BIG",
+    code: "BIG_BOOST",
     jobs: 150,
     price: 249
   }
 
-}
+} as const
 
 
 /*
@@ -166,9 +177,7 @@ async (
     )
 
   if (!response.Item) {
-
     return null
-
   }
 
   return unmarshall(
@@ -199,7 +208,7 @@ async (
     renewalDate.getMonth() + 1
   )
 
-  const freePlan =
+  const plan =
     PLANS.FREE
 
   const item = {
@@ -209,11 +218,11 @@ async (
     },
 
     planCode: {
-      S: freePlan.code
+      S: plan.code
     },
 
     planName: {
-      S: freePlan.name
+      S: plan.name
     },
 
     billingCycle: {
@@ -229,7 +238,7 @@ async (
     },
 
     jobLimit: {
-      N: freePlan.jobsPerMonth.toString()
+      N: plan.jobsPerMonth.toString()
     },
 
     boosterJobs: {
@@ -255,7 +264,12 @@ async (
 
       TableName: TABLE,
 
-      Item: item
+      Item: item,
+
+      // Prevent two simultaneous requests from
+      // creating competing subscriptions.
+      ConditionExpression:
+        "attribute_not_exists(garageId)"
 
     })
   )
@@ -267,7 +281,7 @@ async (
 
 /*
 |--------------------------------------------------------------------------
-| GET OR CREATE SUBSCRIPTION
+| GET OR CREATE
 |--------------------------------------------------------------------------
 */
 
@@ -282,181 +296,38 @@ async (
     )
 
   if (existing) {
-
     return existing
-
   }
 
-  return createDefaultSubscription(
-    garageId
-  )
+  try {
 
-}
-
-/*
-|--------------------------------------------------------------------------
-| ADD BOOSTER
-|--------------------------------------------------------------------------
-*/
-
-export const addBooster =
-async (
-  garageId: string,
-  boosterCode: string
-) => {
-
-  const booster =
-    Object.values(BOOSTERS)
-      .find(
-        item =>
-          item.code === boosterCode
-      )
-
-  if (!booster) {
-
-    throw new Error(
-      "Invalid booster"
-    )
-
-  }
-
-  const subscription =
-    await getOrCreateSubscription(
+    return await createDefaultSubscription(
       garageId
     )
 
-  const currentBoosterJobs =
-    Number(
-      subscription.boosterJobs || 0
-    )
+  } catch (error: any) {
 
-  const newBoosterJobs =
-    currentBoosterJobs +
-    booster.jobs
+    // Another request may have created it
+    // between GET and PUT.
+    if (
+      error?.name ===
+      "ConditionalCheckFailedException"
+    ) {
 
-  const now =
-    new Date()
+      const created =
+        await getSubscription(
+          garageId
+        )
 
-  await db.send(
-    new UpdateItemCommand({
-
-      TableName: TABLE,
-
-      Key: {
-        garageId: {
-          S: garageId
-        }
-      },
-
-      UpdateExpression:
-        "SET boosterJobs = :boosterJobs, updatedAt = :updatedAt",
-
-      ExpressionAttributeValues: {
-
-        ":boosterJobs": {
-          N: newBoosterJobs.toString()
-        },
-
-        ":updatedAt": {
-          S: now.toISOString()
-        }
-
+      if (created) {
+        return created
       }
 
-    })
-  )
+    }
 
-  return getSubscription(
-    garageId
-  )
-
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| UPDATE JOB USAGE
-|--------------------------------------------------------------------------
-*/
-
-export const incrementJobUsage =
-async (
-  garageId: string
-) => {
-
-  const subscription =
-    await getOrCreateSubscription(
-      garageId
-    )
-
-  const jobsUsed =
-    Number(
-      subscription.jobsUsed || 0
-    )
-
-  const jobLimit =
-    Number(
-      subscription.jobLimit || 0
-    )
-
-  const boosterJobs =
-    Number(
-      subscription.boosterJobs || 0
-    )
-
-  const totalAvailable =
-    jobLimit === -1
-      ? -1
-      : jobLimit + boosterJobs
-
-  if (
-    totalAvailable !== -1 &&
-    jobsUsed >= totalAvailable
-  ) {
-
-    throw new Error(
-      "Monthly job limit reached"
-    )
+    throw error
 
   }
-
-  const now =
-    new Date()
-
-  await db.send(
-    new UpdateItemCommand({
-
-      TableName: TABLE,
-
-      Key: {
-        garageId: {
-          S: garageId
-        }
-      },
-
-      UpdateExpression:
-        "SET jobsUsed = :jobsUsed, updatedAt = :updatedAt",
-
-      ExpressionAttributeValues: {
-
-        ":jobsUsed": {
-          N: (
-            jobsUsed + 1
-          ).toString()
-        },
-
-        ":updatedAt": {
-          S: now.toISOString()
-        }
-
-      }
-
-    })
-  )
-
-  return getSubscription(
-    garageId
-  )
 
 }
 
@@ -472,34 +343,41 @@ async (
   garageId: string
 ) => {
 
-  const subscription =
+  let subscription =
     await getOrCreateSubscription(
       garageId
     )
 
-    console.log(
-    "GET PLAN INFORMATION",
-    {
-      garageId,
-      table: TABLE,
-      subscription
-    }
-  )
 
-  console.log(
-  "SUBSCRIPTIONS_TABLE_NAME:",
-  process.env.SUBSCRIPTIONS_TABLE_NAME
-)
+  /*
+   * ---------------------------------------------------------------
+   * AUTOMATIC RENEWAL / MONTH RESET
+   * ---------------------------------------------------------------
+   *
+   * When the renewal date has passed:
+   *
+   * - reset monthly usage
+   * - remove consumed/old booster jobs
+   * - keep the current plan
+   * - create the next renewal date
+   *
+   */
 
-console.log(
-  "AWS_REGION:",
-  process.env.AWS_REGION
-)
+  if (
+    subscription.renewalDate &&
+    new Date(subscription.renewalDate).getTime()
+      <= Date.now()
+  ) {
 
-console.log(
-  "RAZORPAY_MODE:",
-  process.env.RAZORPAY_MODE
-)
+    subscription =
+      await renewSubscription(
+        garageId,
+        subscription
+      )
+
+  }
+
+
   const plan =
     Object.values(PLANS)
       .find(
@@ -507,6 +385,7 @@ console.log(
           item.code ===
           subscription.planCode
       )
+
 
   const jobsUsed =
     Number(
@@ -523,10 +402,12 @@ console.log(
       subscription.boosterJobs || 0
     )
 
+
   const totalJobsAvailable =
     jobLimit === -1
       ? -1
       : jobLimit + boosterJobs
+
 
   const jobsRemaining =
     totalJobsAvailable === -1
@@ -536,6 +417,7 @@ console.log(
           jobsUsed,
           0
         )
+
 
   const usagePercentage =
     totalJobsAvailable === -1
@@ -550,11 +432,12 @@ console.log(
           100
         )
 
+
   return {
 
     subscription,
 
-    plan,
+    plan: plan || null,
 
     usage: {
 
@@ -582,6 +465,120 @@ console.log(
 
 }
 
+
+/*
+|--------------------------------------------------------------------------
+| RENEW SUBSCRIPTION
+|--------------------------------------------------------------------------
+*/
+
+const renewSubscription =
+async (
+  garageId: string,
+  subscription: any
+) => {
+
+  const currentRenewal =
+    subscription.renewalDate
+      ? new Date(
+          subscription.renewalDate
+        )
+      : new Date()
+
+
+  const billingCycle =
+    subscription.billingCycle ===
+    "ANNUAL"
+      ? "ANNUAL"
+      : "MONTHLY"
+
+
+  const nextRenewal =
+    new Date(
+      currentRenewal
+    )
+
+
+  if (
+    billingCycle ===
+    "ANNUAL"
+  ) {
+
+    nextRenewal.setFullYear(
+      nextRenewal.getFullYear() + 1
+    )
+
+  } else {
+
+    nextRenewal.setMonth(
+      nextRenewal.getMonth() + 1
+    )
+
+  }
+
+
+  /*
+   * Important:
+   *
+   * Booster jobs are monthly/period usage additions
+   * in this implementation.
+   *
+   * They reset with the monthly period.
+   */
+
+  await db.send(
+    new UpdateItemCommand({
+
+      TableName: TABLE,
+
+      Key: {
+        garageId: {
+          S: garageId
+        }
+      },
+
+      UpdateExpression:
+        `
+        SET
+          jobsUsed = :jobsUsed,
+          boosterJobs = :boosterJobs,
+          renewalDate = :renewalDate,
+          updatedAt = :updatedAt
+        `,
+
+      ExpressionAttributeValues: {
+
+        ":jobsUsed": {
+          N: "0"
+        },
+
+        ":boosterJobs": {
+          N: "0"
+        },
+
+        ":renewalDate": {
+          S:
+            nextRenewal.toISOString()
+        },
+
+        ":updatedAt": {
+          S:
+            new Date().toISOString()
+        }
+
+      }
+
+    })
+  )
+
+
+  return getSubscription(
+    garageId
+  )
+
+}
+
+
 /*
 |--------------------------------------------------------------------------
 | CREATE PLAN PAYMENT ORDER
@@ -592,26 +589,24 @@ export const createPlanPaymentOrder =
 async (
   garageId: string,
   planCode: string,
-  billingCycle: "MONTHLY" | "ANNUAL"
+  billingCycle: BillingCycle
 ) => {
 
   const normalizedPlanCode =
-    String(planCode || "")
+    String(
+      planCode || ""
+    )
       .trim()
       .toUpperCase()
 
 
   const normalizedBillingCycle =
-    String(billingCycle || "")
+    String(
+      billingCycle || ""
+    )
       .trim()
-      .toUpperCase()
+      .toUpperCase() as BillingCycle
 
-
-  console.log("CREATE PLAN PAYMENT ORDER SERVICE", {
-    garageId,
-    planCode,
-    billingCycle
-  })
 
   if (
     normalizedBillingCycle !== "MONTHLY" &&
@@ -672,6 +667,58 @@ async (
   }
 
 
+  const subscription =
+    await getOrCreateSubscription(
+      garageId
+    )
+
+
+  /*
+   * Do not allow another payment order while
+   * a previous order is still pending.
+   */
+
+  if (
+    subscription.pendingOrderId &&
+    subscription.paymentStatus ===
+      "CREATED"
+  ) {
+
+    return {
+
+      paymentRequired: true,
+
+      payment: {
+
+        orderId:
+          subscription.pendingOrderId,
+
+        amount:
+          Math.round(
+            Number(
+              subscription.pendingAmount
+            ) * 100
+          ),
+
+        currency:
+          "INR",
+
+        keyId:
+          process.env.RAZORPAY_KEY_ID,
+
+        planCode:
+          subscription.pendingPlanCode,
+
+        billingCycle:
+          subscription.pendingBillingCycle
+
+      }
+
+    }
+
+  }
+
+
   const receipt =
     `plan_${garageId}_${Date.now()}`
 
@@ -687,6 +734,9 @@ async (
 
         garageId,
 
+        paymentType:
+          "PLAN",
+
         planCode:
           plan.code,
 
@@ -698,17 +748,6 @@ async (
     )
 
 
-  console.log("RAZORPAY ORDER CREATED", {
-    orderId: order.id,
-    amount: order.amount,
-    currency: order.currency,
-    notes: {
-      garageId,
-      planCode: plan.code,
-      billingCycle: normalizedBillingCycle
-    }
-  })
-  
   const now =
     new Date()
 
@@ -716,15 +755,12 @@ async (
   await db.send(
     new UpdateItemCommand({
 
-      TableName:
-        TABLE,
+      TableName: TABLE,
 
       Key: {
-
         garageId: {
           S: garageId
         }
-
       },
 
       UpdateExpression:
@@ -749,11 +785,13 @@ async (
         },
 
         ":billingCycle": {
-          S: normalizedBillingCycle
+          S:
+            normalizedBillingCycle
         },
 
         ":amount": {
-          N: amount.toString()
+          N:
+            amount.toString()
         },
 
         ":paymentStatus": {
@@ -761,7 +799,8 @@ async (
         },
 
         ":updatedAt": {
-          S: now.toISOString()
+          S:
+            now.toISOString()
         }
 
       }
@@ -772,33 +811,262 @@ async (
 
   return {
 
-  paymentRequired: true,
+    paymentRequired: true,
 
-  payment: {
+    payment: {
 
-    orderId:
-      order.id,
+      orderId:
+        order.id,
 
-    amount:
-      order.amount,
+      amount:
+        order.amount,
 
-    currency:
-      order.currency,
+      currency:
+        order.currency,
 
-    keyId:
-      process.env.RAZORPAY_KEY_ID,
+      keyId:
+        process.env.RAZORPAY_KEY_ID,
 
-    planCode:
-      plan.code,
+      planCode:
+        plan.code,
 
-    billingCycle:
-      normalizedBillingCycle
+      billingCycle:
+        normalizedBillingCycle
+
+    }
 
   }
 
 }
 
+
+/*
+|--------------------------------------------------------------------------
+| ACTIVATE PLAN
+|--------------------------------------------------------------------------
+*/
+
+const activatePlan =
+async (
+  garageId: string,
+  orderId: string,
+  paymentId: string
+) => {
+
+  const subscription =
+    await getOrCreateSubscription(
+      garageId
+    )
+
+
+  if (
+    subscription.razorpayPaymentId ===
+    paymentId
+  ) {
+
+    return subscription
+
+  }
+
+
+  if (
+    subscription.pendingOrderId !==
+    orderId
+  ) {
+
+    throw new Error(
+      "Payment order does not match pending subscription order"
+    )
+
+  }
+
+
+  const planCode =
+    subscription.pendingPlanCode
+
+
+  const billingCycle =
+    subscription.pendingBillingCycle
+
+
+  if (
+    !planCode ||
+    !billingCycle
+  ) {
+
+    throw new Error(
+      "Pending subscription information missing"
+    )
+
+  }
+
+
+  const plan =
+    Object.values(PLANS)
+      .find(
+        item =>
+          item.code ===
+          planCode
+      )
+
+
+  if (!plan) {
+
+    throw new Error(
+      "Invalid pending plan"
+    )
+
+  }
+
+
+  const now =
+    new Date()
+
+
+  const renewalDate =
+    new Date(now)
+
+
+  if (
+    billingCycle ===
+    "ANNUAL"
+  ) {
+
+    renewalDate.setFullYear(
+      renewalDate.getFullYear() + 1
+    )
+
+  } else {
+
+    renewalDate.setMonth(
+      renewalDate.getMonth() + 1
+    )
+
+  }
+
+
+  /*
+   * IMPORTANT:
+   *
+   * Do NOT reset boosterJobs.
+   *
+   * A plan upgrade must preserve purchased booster
+   * jobs that are still available.
+   */
+
+  const currentBoosterJobs =
+    Number(
+      subscription.boosterJobs || 0
+    )
+
+
+  await db.send(
+    new UpdateItemCommand({
+
+      TableName: TABLE,
+
+      Key: {
+        garageId: {
+          S: garageId
+        }
+      },
+
+      UpdateExpression:
+        `
+        SET
+          planCode = :planCode,
+          planName = :planName,
+          billingCycle = :billingCycle,
+          #status = :status,
+          jobsUsed = :jobsUsed,
+          jobLimit = :jobLimit,
+          boosterJobs = :boosterJobs,
+          renewalDate = :renewalDate,
+          paymentStatus = :paymentStatus,
+          razorpayOrderId = :razorpayOrderId,
+          razorpayPaymentId = :razorpayPaymentId,
+          updatedAt = :updatedAt
+        REMOVE
+          pendingOrderId,
+          pendingPlanCode,
+          pendingBillingCycle,
+          pendingAmount
+        `,
+
+      ExpressionAttributeNames: {
+        "#status": "status"
+      },
+
+      ExpressionAttributeValues: {
+
+        ":planCode": {
+          S: plan.code
+        },
+
+        ":planName": {
+          S: plan.name
+        },
+
+        ":billingCycle": {
+          S: billingCycle
+        },
+
+        ":status": {
+          S: "ACTIVE"
+        },
+
+        ":jobsUsed": {
+          N: String(
+            Number(
+              subscription.jobsUsed || 0
+            )
+          )
+        },
+
+        ":jobLimit": {
+          N:
+            plan.jobsPerMonth.toString()
+        },
+
+        ":boosterJobs": {
+          N:
+            currentBoosterJobs.toString()
+        },
+
+        ":renewalDate": {
+          S:
+            renewalDate.toISOString()
+        },
+
+        ":paymentStatus": {
+          S: "CAPTURED"
+        },
+
+        ":razorpayOrderId": {
+          S: orderId
+        },
+
+        ":razorpayPaymentId": {
+          S: paymentId
+        },
+
+        ":updatedAt": {
+          S:
+            now.toISOString()
+        }
+
+      }
+
+    })
+  )
+
+
+  return getSubscription(
+    garageId
+  )
+
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -849,164 +1117,401 @@ async (
   }
 
 
-  /*
-   * Make sure the payment belongs
-   * to the currently pending order.
-   */
+  return activatePlan(
+    garageId,
+    razorpayOrderId,
+    razorpayPaymentId
+  )
 
-  const pendingPlanCode =
-    subscription.pendingPlanCode
-
-  const pendingBillingCycle =
-    subscription.pendingBillingCycle
+}
 
 
-  if (!pendingPlanCode) {
+/*
+|--------------------------------------------------------------------------
+| CREATE BOOSTER PAYMENT ORDER
+|--------------------------------------------------------------------------
+*/
 
-    throw new Error(
-      "No pending plan payment found"
+export const createBoosterPaymentOrder =
+async (
+  garageId: string,
+  boosterCode: string
+) => {
+
+  const normalizedCode =
+    String(
+      boosterCode || ""
     )
+      .trim()
+      .toUpperCase()
 
-  }
 
-
-  const plan =
-    Object.values(PLANS)
+  const booster =
+    Object.values(BOOSTERS)
       .find(
         item =>
           item.code ===
-          pendingPlanCode
+          normalizedCode
       )
 
 
-  if (!plan) {
+  if (!booster) {
 
     throw new Error(
-      "Invalid pending plan"
+      "Invalid booster"
     )
 
   }
+
+
+  const receipt =
+    `booster_${boosterCode}_${Date.now()}`
+
+
+  console.log("receipt =>", receipt);
+  const order =
+    await createRazorpayOrder(
+
+      booster.price,
+
+      receipt,
+
+      {
+
+        garageId,
+
+        paymentType:
+          "BOOSTER",
+
+        boosterCode:
+          booster.code
+
+      }
+
+    )
 
 
   const now =
     new Date()
 
 
-  const renewalDate =
-    new Date(now)
-
-
-  if (
-    pendingBillingCycle ===
-    "ANNUAL"
-  ) {
-
-    renewalDate.setFullYear(
-      renewalDate.getFullYear() + 1
+  const subscription =
+    await getOrCreateSubscription(
+      garageId
     )
-
-  } else {
-
-    renewalDate.setMonth(
-      renewalDate.getMonth() + 1
-    )
-
-  }
-
-
-  const jobLimit =
-    plan.jobsPerMonth
 
 
   await db.send(
     new UpdateItemCommand({
 
-      TableName:
-        TABLE,
+      TableName: TABLE,
 
       Key: {
-
         garageId: {
           S: garageId
         }
-
       },
 
       UpdateExpression:
         `
         SET
-          planCode = :planCode,
-          planName = :planName,
-          billingCycle = :billingCycle,
-          #status = :status,
-          jobsUsed = :jobsUsed,
-          jobLimit = :jobLimit,
-          boosterJobs = :boosterJobs,
-          renewalDate = :renewalDate,
+          pendingOrderId = :orderId,
+          pendingPaymentType = :paymentType,
+          pendingBoosterCode = :boosterCode,
+          pendingAmount = :amount,
           paymentStatus = :paymentStatus,
-          razorpayOrderId = :razorpayOrderId,
-          razorpayPaymentId = :razorpayPaymentId,
           updatedAt = :updatedAt
-        REMOVE
-          pendingOrderId,
-          pendingPlanCode,
-          pendingBillingCycle,
-          pendingAmount
         `,
-
-      ExpressionAttributeNames: {
-        "#status": "status"
-      },
 
       ExpressionAttributeValues: {
 
-        ":planCode": {
-          S: plan.code
+        ":orderId": {
+          S: order.id
         },
 
-        ":planName": {
-          S: plan.name
+        ":paymentType": {
+          S: "BOOSTER"
         },
 
-        ":billingCycle": {
-          S:
-            pendingBillingCycle
+        ":boosterCode": {
+          S: booster.code
         },
 
-        ":status": {
-          S: "ACTIVE"
-        },
-
-        ":jobsUsed": {
-          N: "0"
-        },
-
-        ":jobLimit": {
+        ":amount": {
           N:
-            jobLimit.toString()
-        },
-
-        ":boosterJobs": {
-          N: "0"
-        },
-
-        ":renewalDate": {
-          S:
-            renewalDate.toISOString()
+            booster.price.toString()
         },
 
         ":paymentStatus": {
-          S: "CAPTURED"
+          S: "CREATED"
         },
 
-        ":razorpayOrderId": {
+        ":updatedAt": {
           S:
-            razorpayOrderId
+            now.toISOString()
+        }
+
+      }
+
+    })
+  )
+
+
+  return {
+
+    paymentRequired: true,
+
+    payment: {
+
+      orderId:
+        order.id,
+
+      amount:
+        order.amount,
+
+      currency:
+        order.currency,
+
+      keyId:
+        process.env.RAZORPAY_KEY_ID,
+
+      boosterCode:
+        booster.code,
+
+      jobs:
+        booster.jobs
+
+    }
+
+  }
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| VERIFY BOOSTER PAYMENT
+|--------------------------------------------------------------------------
+*/
+
+export const verifyBoosterPayment =
+async (
+  garageId: string,
+  razorpayOrderId: string,
+  razorpayPaymentId: string,
+  razorpaySignature: string
+) => {
+
+  const subscription =
+    await getOrCreateSubscription(
+      garageId
+    )
+
+
+  if (
+    subscription.pendingOrderId !==
+    razorpayOrderId
+  ) {
+
+    throw new Error(
+      "Invalid Razorpay order"
+    )
+
+  }
+
+
+  if (
+    subscription.pendingPaymentType !==
+    "BOOSTER"
+  ) {
+
+    throw new Error(
+      "Pending payment is not a booster payment"
+    )
+
+  }
+
+
+  const valid =
+    verifyPaymentSignature(
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature
+    )
+
+
+  if (!valid) {
+
+    throw new Error(
+      "Invalid payment signature"
+    )
+
+  }
+
+
+  return activateBooster(
+    garageId,
+    razorpayOrderId,
+    razorpayPaymentId
+  )
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| ACTIVATE BOOSTER
+|--------------------------------------------------------------------------
+*/
+
+const activateBooster =
+async (
+  garageId: string,
+  orderId: string,
+  paymentId: string
+) => {
+
+  const subscription =
+    await getOrCreateSubscription(
+      garageId
+    )
+
+
+  if (
+    subscription.lastBoosterPaymentId ===
+    paymentId
+  ) {
+
+    return subscription
+
+  }
+
+
+  if (
+    subscription.pendingOrderId !==
+    orderId
+  ) {
+
+    throw new Error(
+      "Booster order does not match pending order"
+    )
+
+  }
+
+
+  if (
+    subscription.pendingPaymentType !==
+    "BOOSTER"
+  ) {
+
+    throw new Error(
+      "Pending order is not a booster"
+    )
+
+  }
+
+
+  const boosterCode =
+    subscription.pendingBoosterCode
+
+
+  const booster =
+    Object.values(BOOSTERS)
+      .find(
+        item =>
+          item.code ===
+          boosterCode
+      )
+
+
+  if (!booster) {
+
+    throw new Error(
+      "Invalid pending booster"
+    )
+
+  }
+
+
+  const currentBoosterJobs =
+    Number(
+      subscription.boosterJobs || 0
+    )
+
+
+  const newBoosterJobs =
+    currentBoosterJobs +
+    booster.jobs
+
+
+  const now =
+    new Date()
+
+
+  await db.send(
+    new UpdateItemCommand({
+
+      TableName: TABLE,
+
+      Key: {
+        garageId: {
+          S: garageId
+        }
+      },
+
+      UpdateExpression:
+        `
+        SET
+          boosterJobs = :boosterJobs,
+          lastBoosterCode = :boosterCode,
+          lastBoosterPaymentId = :paymentId,
+          lastBoosterOrderId = :orderId,
+          lastBoosterJobs = :jobs,
+          lastBoosterPurchasedAt = :purchasedAt,
+          paymentStatus = :paymentStatus,
+          updatedAt = :updatedAt
+        REMOVE
+          pendingOrderId,
+          pendingPaymentType,
+          pendingBoosterCode,
+          pendingAmount
+        `,
+
+      ExpressionAttributeValues: {
+
+        ":boosterJobs": {
+          N:
+            newBoosterJobs.toString()
         },
 
-        ":razorpayPaymentId": {
+        ":boosterCode": {
           S:
-            razorpayPaymentId
+            booster.code
+        },
+
+        ":paymentId": {
+          S:
+            paymentId
+        },
+
+        ":orderId": {
+          S:
+            orderId
+        },
+
+        ":jobs": {
+          N:
+            booster.jobs.toString()
+        },
+
+        ":purchasedAt": {
+          S:
+            now.toISOString()
+        },
+
+        ":paymentStatus": {
+          S:
+            "CAPTURED"
         },
 
         ":updatedAt": {
@@ -1026,13 +1531,143 @@ async (
 
 }
 
+
 /*
 |--------------------------------------------------------------------------
-| PROCESS RAZORPAY PAYMENT CAPTURED WEBHOOK
+| ADD BOOSTER
 |--------------------------------------------------------------------------
 |
-| TEST MODE
+| DO NOT expose this as a public "give me jobs" endpoint.
 |
+| Booster activation must happen only after payment verification.
+|
+*/
+
+export const addBooster =
+async (
+  garageId: string,
+  boosterCode: string
+) => {
+
+  throw new Error(
+    "Direct booster activation is disabled. Create a booster payment order instead."
+  )
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| INCREMENT JOB USAGE
+|--------------------------------------------------------------------------
+*/
+
+export const incrementJobUsage =
+async (
+  garageId: string
+) => {
+
+  const subscription =
+    await getOrCreateSubscription(
+      garageId
+    )
+
+
+  const jobsUsed =
+    Number(
+      subscription.jobsUsed || 0
+    )
+
+  const jobLimit =
+    Number(
+      subscription.jobLimit || 0
+    )
+
+  const boosterJobs =
+    Number(
+      subscription.boosterJobs || 0
+    )
+
+
+  const totalAvailable =
+    jobLimit === -1
+      ? -1
+      : jobLimit + boosterJobs
+
+
+  if (
+    totalAvailable !== -1 &&
+    jobsUsed >= totalAvailable
+  ) {
+
+    throw new Error(
+      "Monthly job limit reached"
+    )
+
+  }
+
+
+  /*
+   * IMPORTANT:
+   *
+   * This calculation is not atomic.
+   *
+   * For production, the job creation flow should use
+   * an atomic DynamoDB update.
+   *
+   * The current implementation is retained here for
+   * compatibility with your existing callers.
+   */
+
+  const now =
+    new Date()
+
+
+  await db.send(
+    new UpdateItemCommand({
+
+      TableName: TABLE,
+
+      Key: {
+        garageId: {
+          S: garageId
+        }
+      },
+
+      UpdateExpression:
+        "SET jobsUsed = :jobsUsed, updatedAt = :updatedAt",
+
+      ExpressionAttributeValues: {
+
+        ":jobsUsed": {
+          N:
+            (
+              jobsUsed + 1
+            ).toString()
+        },
+
+        ":updatedAt": {
+          S:
+            now.toISOString()
+        }
+
+      }
+
+    })
+  )
+
+
+  return getSubscription(
+    garageId
+  )
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| RAZORPAY CAPTURED WEBHOOK
+|--------------------------------------------------------------------------
 */
 
 export const processRazorpayPaymentCaptured =
@@ -1050,34 +1685,20 @@ async (
 
 
   /*
-   * ---------------------------------------------------------------
-   * IDEMPOTENCY
-   * ---------------------------------------------------------------
-   *
-   * If this payment was already processed, do nothing.
-   *
+   * Already processed.
    */
 
   if (
     subscription.razorpayPaymentId ===
+    paymentId ||
+    subscription.lastBoosterPaymentId ===
     paymentId
   ) {
-
-    console.log(
-      "Razorpay payment already processed:",
-      paymentId
-    )
 
     return subscription
 
   }
 
-
-  /*
-   * ---------------------------------------------------------------
-   * CHECK PENDING ORDER
-   * ---------------------------------------------------------------
-   */
 
   if (
     subscription.pendingOrderId !==
@@ -1085,22 +1706,11 @@ async (
   ) {
 
     throw new Error(
-      "Webhook order does not match pending subscription payment"
+      "Webhook order does not match pending payment"
     )
 
   }
 
-
-  /*
-   * ---------------------------------------------------------------
-   * CHECK AMOUNT
-   * ---------------------------------------------------------------
-   *
-   * pendingAmount is stored in rupees.
-   *
-   * Razorpay webhook amount is in paise.
-   *
-   */
 
   const expectedAmountInPaise =
     Math.round(
@@ -1116,232 +1726,43 @@ async (
   ) {
 
     throw new Error(
-      "Webhook payment amount does not match subscription order"
+      "Webhook payment amount does not match pending order"
     )
 
   }
-
-
-  const planCode =
-    subscription.pendingPlanCode
-
-
-  const billingCycle =
-    subscription.pendingBillingCycle
 
 
   if (
-    !planCode ||
-    !billingCycle
+    subscription.pendingPaymentType ===
+    "BOOSTER"
   ) {
 
-    throw new Error(
-      "Pending subscription payment information missing"
-    )
-
-  }
-
-
-  const plan =
-    Object.values(PLANS)
-      .find(
-        item =>
-          item.code ===
-          planCode
-      )
-
-
-  if (!plan) {
-
-    throw new Error(
-      "Invalid pending plan"
-    )
-
-  }
-
-
-  /*
-   * ---------------------------------------------------------------
-   * CALCULATE RENEWAL
-   * ---------------------------------------------------------------
-   */
-
-  const now =
-    new Date()
-
-
-  const renewalDate =
-    new Date(
-      now
-    )
-
-
-  if (
-    billingCycle ===
-    "ANNUAL"
-  ) {
-
-    renewalDate.setFullYear(
-      renewalDate.getFullYear() + 1
-    )
-
-  } else {
-
-    renewalDate.setMonth(
-      renewalDate.getMonth() + 1
-    )
-
-  }
-
-
-  /*
-   * ---------------------------------------------------------------
-   * UPDATE SUBSCRIPTION
-   * ---------------------------------------------------------------
-   */
-
-  await db.send(
-    new UpdateItemCommand({
-
-      TableName:
-        TABLE,
-
-      Key: {
-
-        garageId: {
-          S: garageId
-        }
-
-      },
-
-      UpdateExpression:
-        `
-        SET
-          planCode = :planCode,
-          planName = :planName,
-          billingCycle = :billingCycle,
-          #status = :status,
-          jobsUsed = :jobsUsed,
-          jobLimit = :jobLimit,
-          boosterJobs = :boosterJobs,
-          renewalDate = :renewalDate,
-          paymentStatus = :paymentStatus,
-          razorpayOrderId = :razorpayOrderId,
-          razorpayPaymentId = :razorpayPaymentId,
-          updatedAt = :updatedAt
-        REMOVE
-          pendingOrderId,
-          pendingPlanCode,
-          pendingBillingCycle,
-          pendingAmount
-        `,
-
-      ExpressionAttributeNames: {
-        "#status": "status"
-      },
-
-      ExpressionAttributeValues: {
-
-        ":planCode": {
-          S:
-            plan.code
-        },
-
-        ":planName": {
-          S:
-            plan.name
-        },
-
-        ":billingCycle": {
-          S:
-            billingCycle
-        },
-
-        ":status": {
-          S:
-            "ACTIVE"
-        },
-
-        ":jobsUsed": {
-          N:
-            "0"
-        },
-
-        ":jobLimit": {
-          N:
-            plan.jobsPerMonth.toString()
-        },
-
-        ":boosterJobs": {
-          N:
-            "0"
-        },
-
-        ":renewalDate": {
-          S:
-            renewalDate.toISOString()
-        },
-
-        ":paymentStatus": {
-          S:
-            "CAPTURED"
-        },
-
-        ":razorpayOrderId": {
-          S:
-            orderId
-        },
-
-        ":razorpayPaymentId": {
-          S:
-            paymentId
-        },
-
-        ":updatedAt": {
-          S:
-            now.toISOString()
-        }
-
-      }
-
-    })
-  )
-
-
-  console.log(
-    "Subscription activated from Razorpay webhook:",
-    {
+    return activateBooster(
       garageId,
       orderId,
-      paymentId,
-      planCode,
-      billingCycle
-    }
-  )
+      paymentId
+    )
+
+  }
 
 
-  return getSubscription(
-    garageId
+  /*
+   * Default is PLAN.
+   */
+
+  return activatePlan(
+    garageId,
+    orderId,
+    paymentId
   )
 
 }
 
+
 /*
 |--------------------------------------------------------------------------
-| PROCESS RAZORPAY PAYMENT FAILED
+| PAYMENT FAILED
 |--------------------------------------------------------------------------
-|
-| TEST MODE ONLY
-|
-| Important:
-| A failed payment should NOT change the user's subscription plan.
-|
-| Razorpay can send payment.failed and later payment.captured
-| for the same payment attempt, especially with UPI retries.
-|
-| For now we only record the latest failed payment information
-| inside the existing Subscriptions table.
-|
 */
 
 type RazorpayPaymentEntity = {
@@ -1350,6 +1771,7 @@ type RazorpayPaymentEntity = {
   error_code?: string
   error_description?: string
 }
+
 
 export const processRazorpayPaymentFailed =
 async (
@@ -1362,30 +1784,35 @@ async (
       garageId
     )
 
+
   const now =
     new Date()
+
 
   const paymentId =
     payment.id ||
     "unknown"
 
+
   const orderId =
     payment.order_id ||
     "unknown"
+
 
   const errorCode =
     payment.error_code ||
     "UNKNOWN"
 
+
   const errorDescription =
     payment.error_description ||
     "Payment failed"
 
+
   await db.send(
     new UpdateItemCommand({
 
-      TableName:
-        TABLE,
+      TableName: TABLE,
 
       Key: {
         garageId: {
@@ -1434,6 +1861,7 @@ async (
 
     })
   )
+
 
   return getSubscription(
     garageId

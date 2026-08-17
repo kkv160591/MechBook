@@ -24,6 +24,7 @@ import {
 
 import {
   verifySubscriptionPayment,
+  verifyBoosterPayment,
   getPlanUsage,
   changePlan,
   buyBooster,
@@ -467,6 +468,42 @@ export default function PlanUsageScreen() {
     ) ||
     billingCycle
 
+  const getDaysRemaining = (
+    renewalDate?: string | null
+  ): number | null => {
+
+    if (!renewalDate) {
+      return null
+    }
+
+    const renewalTime =
+      new Date(renewalDate).getTime()
+
+    if (Number.isNaN(renewalTime)) {
+      return null
+    }
+
+    const now =
+      Date.now()
+
+    const difference =
+      renewalTime - now
+
+    if (difference <= 0) {
+      return 0
+    }
+
+    return Math.ceil(
+      difference /
+      (1000 * 60 * 60 * 24)
+    )
+  }
+
+  const daysRemaining =
+    getDaysRemaining(
+      plan?.renewalDate
+    )
+
 
   /*
    * USAGE
@@ -480,24 +517,20 @@ export default function PlanUsageScreen() {
       0
     )
 
+  const normalizedJobLimit =
+    plan?.jobsLimit ??
+    (plan as any)?.jobLimit ??
+    currentPlan.jobs
 
   const jobsLimit =
-    String(
-      plan?.jobsLimit ?? currentPlan.jobs
-    )
-      .toLowerCase() ===
-      "unlimited"
-
+    normalizedJobLimit === "Unlimited" ||
+    String(normalizedJobLimit).toLowerCase() === "unlimited" ||
+    Number(normalizedJobLimit) === -1
       ? "Unlimited"
-
       : Math.max(
-          Number(
-            plan?.jobsLimit ??
-            currentPlan.jobs
-          ),
+          Number(normalizedJobLimit),
           0
         )
-
 
   const usagePercentage =
     jobsLimit === "Unlimited"
@@ -1047,12 +1080,240 @@ export default function PlanUsageScreen() {
       return
     }
 
+    const confirmationMessage =
+      `Add ${booster.jobs} jobs for ₹${booster.price}?`
+
+    const continueBooster =
+      async () => {
+
+        console.log(
+          "BOOSTER PURCHASE STARTED:",
+          booster.code,
+          booster.jobs,
+          booster.price
+        )
+
+        try {
+
+          setBuyingBooster(true)
+
+          /*
+          * Create booster payment/order on backend.
+          */
+
+          const result =
+            await buyBooster(
+              booster.code
+            )
+
+          console.log(
+            "BOOSTER API RESPONSE:",
+            result
+          )
+
+          /*
+          * Non-payment flow.
+          */
+
+          if (
+            !result?.paymentRequired
+          ) {
+
+            await loadPlan()
+
+            Alert.alert(
+              "Booster added",
+              `${booster.jobs} additional jobs have been added.`
+            )
+
+            return
+          }
+
+          /*
+          * Payment is required.
+          */
+
+          if (
+            !result?.payment
+          ) {
+
+            throw new Error(
+              "Booster payment order was not created by the server."
+            )
+
+          }
+
+          console.log(
+            "OPENING BOOSTER RAZORPAY CHECKOUT:",
+            result.payment
+          )
+
+          /*
+          * Open Razorpay.
+          */
+
+          const paymentResult =
+            await openRazorpayCheckout(
+              result.payment
+            )
+
+          console.log(
+            "BOOSTER RAZORPAY RESULT:",
+            paymentResult
+          )
+
+          if (
+            !paymentResult?.razorpay_payment_id ||
+            !paymentResult?.razorpay_order_id ||
+            !paymentResult?.razorpay_signature
+          ) {
+
+            throw new Error(
+              "Razorpay returned incomplete payment information."
+            )
+
+          }
+
+          /*
+          * Verify payment.
+          */
+
+          const verification =
+  await verifyBoosterPayment({
+
+    razorpayPaymentId:
+      paymentResult.razorpay_payment_id,
+
+    razorpayOrderId:
+      paymentResult.razorpay_order_id,
+
+    razorpaySignature:
+      paymentResult.razorpay_signature
+
+  })
+
+          console.log(
+            "BOOSTER PAYMENT VERIFICATION:",
+            verification
+          )
+
+          const paymentVerified =
+            verification?.success !== false &&
+            (
+              verification?.paymentStatus === undefined ||
+              verification?.paymentStatus === "PAID" ||
+              verification?.paymentStatus === "CAPTURED"
+            )
+
+          if (!paymentVerified) {
+
+            throw new Error(
+              verification?.message ||
+              "Booster payment verification failed."
+            )
+
+          }
+
+          /*
+          * Reload subscription/usage.
+          */
+
+          await loadPlan()
+
+          Alert.alert(
+            "Payment successful",
+            `${booster.jobs} additional jobs have been added.`
+          )
+
+        }
+
+        catch (error: any) {
+
+          console.error(
+            "BOOSTER PURCHASE ERROR:",
+            error
+          )
+
+          if (
+            error?.code ===
+            "PAYMENT_CANCELLED"
+          ) {
+
+            Alert.alert(
+              "Payment cancelled",
+              "The booster was not added."
+            )
+
+          }
+
+          else {
+
+            Alert.alert(
+              "Payment unsuccessful",
+              error?.message ||
+              "We could not complete the booster purchase."
+            )
+
+          }
+
+        }
+
+        finally {
+
+          setBuyingBooster(false)
+
+        }
+
+      }
+
+
+    /*
+    * ------------------------------------------------
+    * WEB
+    * ------------------------------------------------
+    */
+
+    if (
+      Platform.OS === "web"
+    ) {
+
+      const confirmed =
+        window.confirm(
+          confirmationMessage
+        )
+
+      console.log(
+        "BOOSTER WEB CONFIRM RESULT:",
+        confirmed
+      )
+
+      if (!confirmed) {
+
+        console.log(
+          "BOOSTER PURCHASE CANCELLED"
+        )
+
+        return
+
+      }
+
+      void continueBooster()
+
+      return
+    }
+
+
+    /*
+    * ------------------------------------------------
+    * ANDROID / IOS
+    * ------------------------------------------------
+    */
 
     Alert.alert(
 
       booster.title,
 
-      `Add ${booster.jobs} jobs for ₹${booster.price}?`,
+      confirmationMessage,
 
       [
 
@@ -1064,133 +1325,9 @@ export default function PlanUsageScreen() {
         {
           text: "Continue",
 
-          onPress: async () => {
+          onPress: () => {
 
-            try {
-
-              setBuyingBooster(true)
-
-              /*
-               * Backend creates Razorpay TEST order.
-               */
-
-              const result =
-                await buyBooster(
-                  booster.code
-                )
-
-
-              if (
-                !result.paymentRequired
-              ) {
-
-                await loadPlan()
-
-                Alert.alert(
-                  "Booster added",
-                  `${booster.jobs} additional jobs have been added.`
-                )
-
-                return
-
-              }
-
-
-              if (
-                !result.payment
-              ) {
-
-                throw new Error(
-                  "Payment order was not created."
-                )
-
-              }
-
-
-              /*
-               * Open Razorpay TEST Checkout.
-               */
-
-              const paymentResult =
-                await openRazorpayCheckout(
-                  result.payment
-                )
-
-
-              /*
-               * Verify on backend.
-               */
-
-              const verification =
-                await verifySubscriptionPayment({
-                  razorpayPaymentId:
-                    paymentResult.razorpay_payment_id,
-                  razorpayOrderId:
-                    paymentResult.razorpay_order_id,
-                  razorpaySignature:
-                    paymentResult.razorpay_signature
-                })
-
-              const paymentVerified =
-                verification.success !== false &&
-                (verification.paymentStatus === undefined ||
-                  verification.paymentStatus === "PAID" ||
-                  verification.paymentStatus === "CAPTURED")
-
-              if (!paymentVerified) {
-                throw new Error(
-                  verification.message ||
-                  "Booster payment verification failed."
-                )
-              }
-
-              await loadPlan()
-
-
-              Alert.alert(
-                "Payment successful",
-                `${booster.jobs} additional jobs have been added.`
-              )
-
-            }
-
-            catch (error: any) {
-
-              console.log(
-                "Booster payment failed:",
-                error
-              )
-
-
-              if (
-                error?.code ===
-                "PAYMENT_CANCELLED"
-              ) {
-
-                Alert.alert(
-                  "Payment cancelled",
-                  "The booster was not added."
-                )
-
-              }
-
-              else {
-
-                Alert.alert(
-                  "Payment unsuccessful",
-                  error?.message ||
-                  "We could not complete the booster purchase."
-                )
-
-              }
-
-            }
-
-            finally {
-
-              setBuyingBooster(false)
-
-            }
+            void continueBooster()
 
           }
 
@@ -1465,8 +1602,7 @@ export default function PlanUsageScreen() {
                 }
               ]}
             >
-              {plan?.daysRemaining ??
-                "—"}
+              {daysRemaining ?? "—"}
             </Text>
 
           </View>
