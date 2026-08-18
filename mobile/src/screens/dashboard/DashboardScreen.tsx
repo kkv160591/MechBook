@@ -830,11 +830,7 @@ export default function DashboardScreen() {
             HEADER
         ========================== */}
 
-        <View
-          style={
-            styles.headerRow
-          }
-        >
+        <View style={styles.headerRow}>
 
           <View
             style={
@@ -903,138 +899,74 @@ export default function DashboardScreen() {
 
 
           {/* ========================
-              ACTUAL PLAN + USAGE
-          ======================== */}
+    ACTUAL PLAN + USAGE
+======================== */}
 
-          <TouchableOpacity
-            style={
-              styles.planHeaderContainer
-            }
-            onPress={() =>
-              navigation.navigate(
-                "PlanUsage"
-              )
-            }
-            activeOpacity={0.7}
-          >
+<TouchableOpacity
+  style={styles.planHeaderContainer}
+  onPress={() =>
+    navigation.navigate(
+      "PlanUsage"
+    )
+  }
+  activeOpacity={0.7}
+>
 
-            <View
-              style={[
-                styles.planRing,
-                {
-                  borderColor:
-                    planRingColor,
+  <View
+  style={[
+    styles.planRing,
+    {
+      borderColor: planRingColor,
+      backgroundColor: planRingBackground,
+    }
+  ]}
+>
+  {planUsageLoading ? (
+    <ActivityIndicator
+      size="small"
+      color={planRingColor}
+    />
+  ) : isUnlimited ? (
+    <Text
+      style={[
+        styles.planRingNumber,
+        {
+          color: planRingColor
+        }
+      ]}
+    >
+      ∞
+    </Text>
+  ) : (
+    <Text
+      style={[
+        styles.planRingNumber,
+        {
+          color: planRingColor
+        }
+      ]}
+    >
+      {usagePercentage}%
+    </Text>
+  )}
+</View>
 
-                  backgroundColor:
-                    planRingBackground
-                }
-              ]}
-            >
+  {/* PLAN NAME */}
 
-              {planUsageLoading ? (
+  <Text
+    style={[
+      styles.planNameHeader,
+      {
+        color:
+          planRingColor
+      }
+    ]}
+    numberOfLines={1}
+  >
+    {actualPlanName}
+  </Text>
 
-                <ActivityIndicator
-                  size="small"
-                  color={
-                    planRingColor
-                  }
-                />
-
-              ) : isUnlimited ? (
-
-                <>
-
-                  <Text
-                    style={[
-                      styles.planRingNumber,
-                      {
-                        color:
-                          planRingColor
-                      }
-                    ]}
-                  >
-                    ∞
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.planRingLabel
-                    }
-                  >
-                    USED
-                  </Text>
-
-                </>
-
-              ) : (
-
-                <>
-
-                  <Text
-                    style={[
-                      styles.planRingNumber,
-                      {
-                        color:
-                          planRingColor
-                      }
-                    ]}
-                  >
-                    {usagePercentage}%
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.planRingLabel
-                    }
-                  >
-                    USED
-                  </Text>
-
-                </>
-
-              )}
-
-            </View>
-
-
-            {/* ACTUAL PLAN NAME */}
-
-            <Text
-              style={[
-                styles.planNameHeader,
-                {
-                  color:
-                    planRingColor
-                }
-              ]}
-              numberOfLines={1}
-            >
-              {actualPlanName}
-            </Text>
-
-
-            {/* ACTUAL JOB COUNT */}
-
-            {!planUsageLoading && (
-
-              <Text
-                style={
-                  styles.planUsageHeader
-                }
-                numberOfLines={1}
-              >
-
-                {isUnlimited
-
-                  ? `${jobsUsed} jobs`
-
-                  : `${jobsUsed}/${numericJobLimit} jobs`}
-
-              </Text>
-
-            )}
-
-          </TouchableOpacity>
+</TouchableOpacity>
 
         </View>
 
@@ -1959,40 +1891,57 @@ const styles =
     },
 
     headerRow: {
+      backgroundColor: "#FFFFFF",
+      borderRadius: 20,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
       flexDirection: "row",
-      justifyContent:
-        "space-between",
+      justifyContent: "space-between",
       alignItems: "center",
-      marginBottom: 22
+      marginBottom: 18,
+
+      borderWidth: 1,
+      borderColor: "#E5E7EB",
+
+      shadowColor: "#000",
+      shadowOffset: {
+        width: 0,
+        height: 2
+      },
+      shadowOpacity: 0.04,
+      shadowRadius: 6,
+      elevation: 2
     },
 
     headerInfo: {
       flex: 1,
-      paddingRight: 12
+      paddingRight: 10
     },
 
     greeting: {
       color: "#6B7280",
-      fontSize: 14
+      fontSize: 12,
+      fontWeight: "500"
     },
 
     header: {
-      fontSize: 30,
-      fontWeight: "bold",
+      fontSize: 24,
+      fontWeight: "800",
       color: "#111827",
-      marginTop: 4
+      marginTop: 2
     },
 
     subHeader: {
       color: "#6B7280",
-      marginTop: 3
+      fontSize: 12,
+      marginTop: 2
     },
 
     roleText: {
-      marginTop: 6,
+      marginTop: 4,
       color: "#2563EB",
       fontWeight: "700",
-      fontSize: 13
+      fontSize: 11
     },
 
 
@@ -2003,36 +1952,33 @@ const styles =
     planHeaderContainer: {
       alignItems: "center",
       justifyContent: "center",
-      minWidth: 78,
-      marginLeft: 8
+      width: 54,
+      marginLeft: 6
     },
 
     planRing: {
-      width: 62,
-      height: 62,
-      borderRadius: 31,
+      width: 50,
+      height: 50,
+      borderRadius: 25,
       borderWidth: 3,
       justifyContent: "center",
       alignItems: "center"
     },
 
     planRingNumber: {
-      fontSize: 16,
-      fontWeight: "bold"
+      fontSize: 12,
+      fontWeight: "800"
     },
 
     planRingLabel: {
-      fontSize: 8,
-      color: "#6B7280",
-      fontWeight: "700",
-      marginTop: 1
+      display: "none"
     },
 
     planNameHeader: {
-      marginTop: 4,
-      fontSize: 11,
+      marginTop: 2,
+      fontSize: 9,
       fontWeight: "800",
-      maxWidth: 78,
+      maxWidth: 60,
       textAlign: "center"
     },
 

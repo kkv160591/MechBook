@@ -12,11 +12,20 @@ export type SubscriptionRecord = {
   garageId?: string
   planName?: string
   planCode?: string
+
   boosterJobs?: number
+
+  lastBoosterOrderId?: string
+  lastBoosterCode?: string
+  lastBoosterJobs?: number
+  lastBoosterPurchasedAt?: string
+  lastBoosterPaymentId?: string
+
   renewalDate?: string
   createdAt?: string
   jobLimit?: number | string
   billingCycle?: string
+
   razorpayPaymentId?: string
   jobsUsed?: number
   paymentStatus?: string
@@ -65,14 +74,25 @@ export type PlanUsageResponse = {
   planName?: string
   planCode?: string
   billingCycle?: string
+
   jobsUsed?: number
   jobsLimit?: number | string
+
   boosterJobs?: number
   totalJobsAvailable?: number
   jobsRemaining?: number | string
   usagePercentage?: number
+
   renewalDate?: string
   daysRemaining?: number
+
+  // Last purchased booster
+  lastBoosterCode?: string
+  lastBoosterJobs?: number
+  lastBoosterPurchasedAt?: string
+  lastBoosterOrderId?: string
+  lastBoosterPaymentId?: string
+
   availablePlans?: PlanDefinition[]
   availableBoosters?: BoosterDefinition[]
 }
@@ -152,8 +172,12 @@ const normalizeError = (error: any): SubscriptionServiceError => {
 const normalizePlanUsage = (
   payload: PlanUsageApiResponse
 ): PlanUsageResponse => {
-  const subscription = payload?.subscription ?? undefined
-  const usage = payload?.usage ?? undefined
+
+  const subscription =
+    payload?.subscription ?? undefined
+
+  const usage =
+    payload?.usage ?? undefined
 
   const jobLimit =
     usage?.jobLimit ??
@@ -164,26 +188,71 @@ const normalizePlanUsage = (
     subscription?.jobsUsed
 
   return {
-    garageId: subscription?.garageId,
+
+    garageId:
+      subscription?.garageId,
+
     planName:
       subscription?.planName ??
       payload?.plan?.name,
+
     planCode:
       subscription?.planCode ??
       payload?.plan?.code,
+
     billingCycle:
       subscription?.billingCycle,
+
     jobsUsed,
-    jobsLimit: jobLimit,
+
+    jobsLimit:
+      jobLimit,
+
     boosterJobs:
       usage?.boosterJobs ??
       subscription?.boosterJobs,
-    totalJobsAvailable: usage?.totalJobsAvailable,
-    jobsRemaining: usage?.jobsRemaining,
-    usagePercentage: usage?.usagePercentage,
-    renewalDate: subscription?.renewalDate,
-    availablePlans: payload?.availablePlans ?? [],
-    availableBoosters: payload?.availableBoosters ?? []
+
+    totalJobsAvailable:
+      usage?.totalJobsAvailable,
+
+    jobsRemaining:
+      usage?.jobsRemaining,
+
+    usagePercentage:
+      usage?.usagePercentage,
+
+    renewalDate:
+      subscription?.renewalDate,
+
+    /*
+     * LAST BOOSTER
+     */
+
+    lastBoosterCode:
+      subscription?.lastBoosterCode,
+
+    lastBoosterJobs:
+      subscription?.lastBoosterJobs,
+
+    lastBoosterPurchasedAt:
+      subscription?.lastBoosterPurchasedAt,
+
+    lastBoosterOrderId:
+      subscription?.lastBoosterOrderId,
+
+    lastBoosterPaymentId:
+      subscription?.lastBoosterPaymentId,
+
+    /*
+     * AVAILABLE OPTIONS
+     */
+
+    availablePlans:
+      payload?.availablePlans ?? [],
+
+    availableBoosters:
+      payload?.availableBoosters ?? []
+
   }
 }
 

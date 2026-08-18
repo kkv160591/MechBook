@@ -224,36 +224,66 @@ const FEATURES = [
  * BOOSTERS
  */
 
-const BOOSTERS: Booster[] = [
+const boosterTitle = (
+  code: string
+) => {
 
-  {
-    code: "MINI_BOOST",
-    title: "Mini Boost",
-    jobs: 20,
-    price: 49,
-    cost: "₹2.45/job",
-    bestFor: "Free plan overflow"
-  },
+  switch (code) {
 
-  {
-    code: "STANDARD_BOOST",
-    title: "Standard Boost",
-    jobs: 50,
-    price: 99,
-    cost: "₹1.98/job",
-    bestFor: "Basic plan users"
-  },
+    case "MINI_BOOST":
+      return "Mini Boost"
 
-  {
-    code: "BIG_BOOST",
-    title: "Big Boost",
-    jobs: 150,
-    price: 249,
-    cost: "₹1.66/job",
-    bestFor: "Growth plan users"
+    case "STANDARD_BOOST":
+      return "Standard Boost"
+
+    case "BIG_BOOST":
+      return "Big Boost"
+
+    default:
+      return code
+
   }
 
-]
+}
+
+
+const boosterBestFor = (
+  code: string
+) => {
+
+  switch (code) {
+
+    case "MINI_BOOST":
+      return "Free plan overflow"
+
+    case "STANDARD_BOOST":
+      return "Basic plan users"
+
+    case "BIG_BOOST":
+      return "Growth plan users"
+
+    default:
+      return "Additional jobs"
+
+  }
+
+}
+
+
+const boosterCost = (
+  jobs: number,
+  price: number
+) => {
+
+  if (!jobs) {
+    return ""
+  }
+
+  return `₹${(
+    price / jobs
+  ).toFixed(2)}/job`
+
+}
 
 
 /*
@@ -499,6 +529,29 @@ export default function PlanUsageScreen() {
     )
   }
 
+  const formatRenewalDate = (
+  date?: string | null
+) => {
+  if (!date) {
+    return "—"
+  }
+
+  const parsed = new Date(date)
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "—"
+  }
+
+  return parsed.toLocaleDateString(
+    undefined,
+    {
+      day: "2-digit",
+      month: "short",
+      year: "numeric"
+    }
+  )
+}
+
   const daysRemaining =
     getDaysRemaining(
       plan?.renewalDate
@@ -510,54 +563,62 @@ export default function PlanUsageScreen() {
    */
 
   const jobsUsed =
-    Math.max(
-      Number(
-        plan?.jobsUsed ?? 0
-      ),
-      0
-    )
+  Math.max(
+    Number(
+      plan?.jobsUsed ?? 0
+    ),
+    0
+  )
 
   const normalizedJobLimit =
-    plan?.jobsLimit ??
-    (plan as any)?.jobLimit ??
-    currentPlan.jobs
+  plan?.jobsLimit ??
+  (plan as any)?.jobLimit ??
+  currentPlan.jobs
 
   const jobsLimit =
-    normalizedJobLimit === "Unlimited" ||
-    String(normalizedJobLimit).toLowerCase() === "unlimited" ||
-    Number(normalizedJobLimit) === -1
-      ? "Unlimited"
-      : Math.max(
-          Number(normalizedJobLimit),
-          0
-        )
+  normalizedJobLimit === "Unlimited" ||
+  String(normalizedJobLimit).toLowerCase() === "unlimited" ||
+  Number(normalizedJobLimit) === -1
+    ? "Unlimited"
+    : Math.max(
+        Number(normalizedJobLimit),
+        0
+      )
 
+  const totalJobsAvailable =
+  jobsLimit === "Unlimited"
+    ? "Unlimited"
+    : Math.max(
+        Number(
+          plan?.totalJobsAvailable ??
+          jobsLimit
+        ),
+        0
+      )
+  
   const usagePercentage =
-    jobsLimit === "Unlimited"
-
-      ? 0
-
-      : Math.min(
-          Math.round(
-            (
-              jobsUsed /
-              Number(jobsLimit)
-            ) * 100
-          ),
-          100
-        )
-
+  totalJobsAvailable === "Unlimited"
+    ? 0
+    : Math.min(
+        Math.round(
+          (
+            jobsUsed /
+            Number(totalJobsAvailable)
+          ) * 100
+        ),
+        100
+      )
 
   const jobsRemaining =
-    jobsLimit === "Unlimited"
-
-      ? "Unlimited"
-
-      : Math.max(
-          Number(jobsLimit) -
-          jobsUsed,
-          0
-        )
+  totalJobsAvailable === "Unlimited"
+    ? "Unlimited"
+    : Math.max(
+        Number(
+          plan?.jobsRemaining ??
+          Number(totalJobsAvailable) - jobsUsed
+        ),
+        0
+      )
 
 
   const isNearLimit =
@@ -1454,300 +1515,198 @@ export default function PlanUsageScreen() {
       {/* CURRENT PLAN + USAGE
           MERGED INTO ONE SECTION */}
 
-      <View
-        style={styles.currentPlanCard}
+      <View style={styles.currentPlanCard}>
+
+  {/* PLAN HEADER */}
+
+  <View style={styles.currentPlanTop}>
+
+    <View style={styles.currentPlanIcon}>
+      <MaterialIcons
+        name="workspace-premium"
+        size={22}
+        color="#F59E0B"
+      />
+    </View>
+
+    <View style={styles.currentPlanInfo}>
+
+      <Text style={styles.currentPlanLabel}>
+        CURRENT PLAN
+      </Text>
+
+      <Text style={styles.currentPlanName}>
+        {currentPlanName}
+      </Text>
+
+    </View>
+
+    <View style={styles.activeBadge}>
+      <View style={styles.activeDot} />
+
+      <Text style={styles.activeText}>
+        ACTIVE
+      </Text>
+    </View>
+
+  </View>
+
+
+  {/* BILLING + RENEWAL */}
+
+  <View style={styles.compactDetailsRow}>
+
+    <View style={styles.compactDetail}>
+      <Text style={styles.compactDetailLabel}>
+        Billing
+      </Text>
+
+      <Text style={styles.compactDetailValue}>
+        {currentPlan.monthly === 0
+          ? "Free"
+          : currentBillingCycle === "annual"
+          ? `₹${currentPlan.annual}/mo`
+          : `₹${currentPlan.monthly}/mo`}
+      </Text>
+    </View>
+
+
+    <View style={styles.compactDetail}>
+      <Text style={styles.compactDetailLabel}>
+        Renewal
+      </Text>
+
+      <Text style={styles.compactDetailValue}>
+        {formatRenewalDate(
+          plan?.renewalDate
+        )}
+      </Text>
+    </View>
+
+
+    <View style={styles.compactDetail}>
+      <Text style={styles.compactDetailLabel}>
+        Days left
+      </Text>
+
+      <Text
+        style={[
+          styles.compactDetailValue,
+          {
+            color:
+              (daysRemaining ?? 0) <= 7
+                ? "#FCA5A5"
+                : "#34D399"
+          }
+        ]}
       >
+        {daysRemaining ?? "—"}
+      </Text>
+    </View>
 
-        <View
-          style={styles.currentPlanTop}
-        >
+  </View>
 
-          <View
-            style={styles.currentPlanIcon}
-          >
 
-            <MaterialIcons
-              name="workspace-premium"
-              size={28}
-              color="#F59E0B"
-            />
+  {/* BOOSTER */}
 
-          </View>
+  {plan?.lastBoosterCode && (
+    <View style={styles.compactBooster}>
 
+      <MaterialIcons
+        name="bolt"
+        size={18}
+        color="#FBBF24"
+      />
 
-          <View
-            style={styles.currentPlanInfo}
-          >
+      <View style={styles.compactBoosterInfo}>
 
-            <Text
-              style={styles.currentPlanLabel}
-            >
-              CURRENT PLAN
-            </Text>
+        <Text style={styles.compactBoosterTitle}>
+          {boosterTitle(
+            plan.lastBoosterCode
+          )}
+        </Text>
 
-            <Text
-              style={styles.currentPlanName}
-            >
-              {currentPlanName}
-            </Text>
-
-          </View>
-
-
-          <View
-            style={styles.activeBadge}
-          >
-
-            <View
-              style={styles.activeDot}
-            />
-
-            <Text
-              style={styles.activeText}
-            >
-              ACTIVE
-            </Text>
-
-          </View>
-
-        </View>
-
-
-        <View
-          style={styles.planDivider}
-        />
-
-
-        {/* BILLING INFORMATION */}
-
-        <View
-          style={styles.planDetailsRow}
-        >
-
-          <View
-            style={styles.detailColumn}
-          >
-
-            <Text
-              style={styles.detailLabel}
-            >
-              Billing
-            </Text>
-
-            <Text
-              style={styles.detailValue}
-            >
-              {currentPlan.monthly === 0
-                ? "Free"
-                : currentBillingCycle === "annual"
-                ? `₹${currentPlan.annual}/mo`
-                : `₹${currentPlan.monthly}/mo`}
-            </Text>
-
-            {currentPlan.monthly > 0 &&
-              currentBillingCycle === "annual" && (
-
-                <Text
-                  style={styles.detailSubValue}
-                >
-                  ₹{getAnnualPrice(currentPlan)}/year
-                </Text>
-
-              )}
-
-          </View>
-
-
-          <View
-            style={styles.detailColumn}
-          >
-
-            <Text
-              style={styles.detailLabel}
-            >
-              Renewal
-            </Text>
-
-            <Text
-              style={styles.detailValue}
-            >
-              {plan?.renewalDate ||
-                "—"}
-            </Text>
-
-          </View>
-
-
-          <View
-            style={styles.detailColumn}
-          >
-
-            <Text
-              style={styles.detailLabel}
-            >
-              Days left
-            </Text>
-
-            <Text
-              style={[
-                styles.detailValue,
-                {
-                  color:
-                    (
-                      plan?.daysRemaining ??
-                      0
-                    ) <= 7
-                      ? "#FCA5A5"
-                      : "#34D399"
-                }
-              ]}
-            >
-              {daysRemaining ?? "—"}
-            </Text>
-
-          </View>
-
-        </View>
-
-
-        <View
-          style={styles.planDividerSmall}
-        />
-
-
-        {/* USAGE */}
-
-        <View
-          style={styles.usageHeader}
-        >
-
-          <View
-            style={{
-              flex: 1
-            }}
-          >
-
-            <Text
-              style={styles.usageTitle}
-            >
-              Jobs this month
-            </Text>
-
-            <Text
-              style={styles.usageSubtitle}
-            >
-              Your monthly job card allowance
-            </Text>
-
-          </View>
-
-
-          <View
-            style={styles.usageNumberBox}
-          >
-
-            <Text
-              style={styles.usageNumberDark}
-            >
-              {jobsUsed}
-            </Text>
-
-            <Text
-              style={styles.usageLimitDark}
-            >
-              / {jobsLimit}
-            </Text>
-
-          </View>
-
-        </View>
-
-
-        {jobsLimit !== "Unlimited" && (
-
-          <>
-
-            <View
-              style={
-                styles.progressBackgroundDark
-              }
-            >
-
-              <View
-                style={[
-                  styles.progressFill,
-                  {
-                    width:
-                      `${usagePercentage}%`,
-
-                    backgroundColor:
-                      isLimitReached
-                        ? "#EF4444"
-                        : isNearLimit
-                        ? "#F59E0B"
-                        : "#60A5FA"
-                  }
-                ]}
-              />
-
-            </View>
-
-
-            <View
-              style={styles.usageFooter}
-            >
-
-              <Text
-                style={
-                  styles.usagePercentageDark
-                }
-              >
-                {usagePercentage}% used
-              </Text>
-
-
-              <Text
-                style={[
-                  styles.remainingTextDark,
-                  isLimitReached &&
-                    styles.remainingDangerDark
-                ]}
-              >
-                {isLimitReached
-                  ? "Monthly limit reached"
-                  : `${jobsRemaining} jobs remaining`}
-              </Text>
-
-            </View>
-
-          </>
-
-        )}
-
-
-        {jobsLimit === "Unlimited" && (
-
-          <View
-            style={styles.unlimitedBox}
-          >
-
-            <MaterialIcons
-              name="all-inclusive"
-              size={20}
-              color="#34D399"
-            />
-
-            <Text
-              style={styles.unlimitedText}
-            >
-              Unlimited jobs included in your plan
-            </Text>
-
-          </View>
-
-        )}
+        <Text style={styles.compactBoosterJobs}>
+          +{plan.lastBoosterJobs ?? 0} jobs
+        </Text>
 
       </View>
+
+      <Text style={styles.compactBoosterDate}>
+        {formatRenewalDate(
+          plan.lastBoosterPurchasedAt
+        )}
+      </Text>
+
+    </View>
+  )}
+
+
+  {/* USAGE */}
+
+  <View style={styles.compactUsageHeader}>
+
+    <Text style={styles.compactUsageTitle}>
+      Jobs used
+    </Text>
+
+    <Text style={styles.compactUsageNumber}>
+      {jobsUsed}
+      <Text style={styles.compactUsageLimit}>
+        {" / "}
+        {totalJobsAvailable}
+      </Text>
+    </Text>
+
+  </View>
+
+
+  {totalJobsAvailable !== "Unlimited" && (
+
+    <>
+      <View style={styles.progressBackgroundDark}>
+
+        <View
+          style={[
+            styles.progressFill,
+            {
+              width: `${usagePercentage}%`,
+              backgroundColor:
+                isLimitReached
+                  ? "#EF4444"
+                  : isNearLimit
+                  ? "#F59E0B"
+                  : "#60A5FA"
+            }
+          ]}
+        />
+
+      </View>
+
+      <View style={styles.compactUsageFooter}>
+
+        <Text style={styles.compactUsagePercent}>
+          {usagePercentage}% used
+        </Text>
+
+        <Text
+          style={[
+            styles.compactRemaining,
+            isLimitReached &&
+              styles.remainingDangerDark
+          ]}
+        >
+          {isLimitReached
+            ? "Limit reached"
+            : `${jobsRemaining} remaining`}
+        </Text>
+
+      </View>
+    </>
+
+  )}
+
+</View>
 
 
       {/* BILLING / PLAN SELECTION */}
@@ -2350,7 +2309,7 @@ export default function PlanUsageScreen() {
       </View>
 
 
-      {BOOSTERS.map(
+      {(plan?.availableBoosters ?? []).map(
         booster => (
 
           <View
@@ -2378,7 +2337,7 @@ export default function PlanUsageScreen() {
               <Text
                 style={styles.boosterTitle}
               >
-                {booster.title}
+                {boosterTitle(booster.code)}
               </Text>
 
               <Text
@@ -2390,7 +2349,7 @@ export default function PlanUsageScreen() {
               <Text
                 style={styles.boosterBestFor}
               >
-                Best for: {booster.bestFor}
+                Best for: {boosterBestFor(booster.code)}
               </Text>
 
             </View>
@@ -2409,7 +2368,10 @@ export default function PlanUsageScreen() {
               <Text
                 style={styles.boosterCost}
               >
-                {booster.cost}
+                {boosterCost(
+                  booster.jobs,
+                  booster.price
+                )}
               </Text>
 
 
@@ -2427,7 +2389,19 @@ export default function PlanUsageScreen() {
                     styles.disabledButton
                 ]}
                 onPress={() =>
-                  handleBooster(booster)
+                  handleBooster({
+                    code: booster.code,
+                    title: boosterTitle(booster.code),
+                    jobs: booster.jobs,
+                    price: booster.price,
+                    cost: boosterCost(
+                      booster.jobs,
+                      booster.price
+                    ),
+                    bestFor: boosterBestFor(
+                      booster.code
+                    )
+                  })
                 }
               >
 
@@ -2578,9 +2552,9 @@ const styles = StyleSheet.create({
 
   currentPlanCard: {
     backgroundColor: "#111827",
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 24
+    borderRadius: 18,
+    padding: 15,
+    marginBottom: 18
   },
 
   currentPlanTop: {
@@ -2589,9 +2563,9 @@ const styles = StyleSheet.create({
   },
 
   currentPlanIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     backgroundColor: "#1F2937",
     alignItems: "center",
     justifyContent: "center"
@@ -2599,14 +2573,14 @@ const styles = StyleSheet.create({
 
   currentPlanInfo: {
     flex: 1,
-    marginLeft: 13
+    marginLeft: 10
   },
 
   currentPlanLabel: {
     color: "#9CA3AF",
-    fontSize: 10,
+    fontSize: 8,
     fontWeight: "800",
-    letterSpacing: 1
+    letterSpacing: 0.8
   },
 
   currentPlanName: {
@@ -2620,23 +2594,136 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#064E3B",
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 20
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 15
   },
 
   activeDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: "#34D399",
-    marginRight: 5
+    marginRight: 4
   },
 
   activeText: {
     color: "#A7F3D0",
-    fontSize: 10,
+    fontSize: 8,
     fontWeight: "800"
+  },
+
+  compactDetailsRow: {
+    flexDirection: "row",
+    marginTop: 13,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#374151"
+  },
+
+  compactDetail: {
+    flex: 1
+  },
+
+  compactDetailLabel: {
+    color: "#6B7280",
+    fontSize: 9,
+    marginBottom: 3
+  },
+
+  compactDetailValue: {
+    color: "white",
+    fontSize: 12,
+    fontWeight: "700"
+  },
+
+  compactBooster: {
+    marginTop: 12,
+    padding: 9,
+    borderRadius: 11,
+    backgroundColor: "#1F2937",
+    flexDirection: "row",
+    alignItems: "center"
+  },
+
+  compactBoosterInfo: {
+    flex: 1,
+    marginLeft: 7
+  },
+
+  compactBoosterTitle: {
+    color: "white",
+    fontSize: 11,
+    fontWeight: "700"
+  },
+
+  compactBoosterJobs: {
+    color: "#FBBF24",
+    fontSize: 10,
+    fontWeight: "700",
+    marginTop: 1
+  },
+
+  compactBoosterDate: {
+    color: "#9CA3AF",
+    fontSize: 9,
+    fontWeight: "600"
+  },
+
+  compactUsageHeader: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    marginTop: 13
+  },
+
+  compactUsageTitle: {
+    color: "#D1D5DB",
+    fontSize: 12,
+    fontWeight: "600"
+  },
+
+  compactUsageNumber: {
+    color: "white",
+    fontSize: 20,
+    fontWeight: "800"
+  },
+
+  compactUsageLimit: {
+    color: "#9CA3AF",
+    fontSize: 11,
+    fontWeight: "500"
+  },
+
+  progressBackgroundDark: {
+    height: 7,
+    backgroundColor: "#374151",
+    borderRadius: 20,
+    overflow: "hidden",
+    marginTop: 9
+  },
+
+  progressFill: {
+    height: "100%",
+    borderRadius: 20
+  },
+
+  compactUsageFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 6
+  },
+
+  compactUsagePercent: {
+    color: "#9CA3AF",
+    fontSize: 9,
+    fontWeight: "600"
+  },
+
+  compactRemaining: {
+    color: "#34D399",
+    fontSize: 9,
+    fontWeight: "700"
   },
 
   planDivider: {
@@ -2712,19 +2799,6 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
     fontSize: 13,
     marginLeft: 2
-  },
-
-  progressBackgroundDark: {
-    height: 11,
-    backgroundColor: "#374151",
-    borderRadius: 20,
-    overflow: "hidden",
-    marginTop: 18
-  },
-
-  progressFill: {
-    height: "100%",
-    borderRadius: 20
   },
 
   usageFooter: {
@@ -3240,6 +3314,66 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     fontSize: 12,
     marginTop: 4
-  }
+  },
+
+  lastBoosterCard: {
+    backgroundColor: "#1F2937",
+    borderRadius: 16,
+    padding: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 2
+  },
+
+  lastBoosterIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#451A03",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+
+  lastBoosterInfo: {
+    flex: 1,
+    marginLeft: 11
+  },
+
+  lastBoosterLabel: {
+    color: "#9CA3AF",
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.8
+  },
+
+  lastBoosterTitle: {
+    color: "white",
+    fontSize: 14,
+    fontWeight: "800",
+    marginTop: 2
+  },
+
+  lastBoosterJobs: {
+    color: "#FBBF24",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 2
+  },
+
+  lastBoosterDate: {
+    alignItems: "flex-end"
+  },
+
+  lastBoosterDateLabel: {
+    color: "#6B7280",
+    fontSize: 9
+  },
+
+  lastBoosterDateValue: {
+    color: "#D1D5DB",
+    fontSize: 10,
+    fontWeight: "700",
+    marginTop: 3
+  },
 
 })
