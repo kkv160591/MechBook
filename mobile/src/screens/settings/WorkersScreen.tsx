@@ -1,265 +1,280 @@
 import {
   View,
   Text,
-  FlatList,
-  TouchableOpacity,
   StyleSheet,
-  ActivityIndicator
+  TouchableOpacity,
+  FlatList,
+  ActivityIndicator,
+  Alert
 } from "react-native"
+import { MaterialIcons, Ionicons } from "@expo/vector-icons"
+import { useEffect, useState, useCallback } from "react"
+import { useFocusEffect } from "@react-navigation/native"
+import { getWorkers } from "../../services/workerService"
+import { useTranslation } from "../../context/LanguageContext"
 
-import { MaterialIcons } from "@expo/vector-icons"
-import { 
-  useNavigation,
-  useFocusEffect
-} from "@react-navigation/native"
+interface Worker {
+  workerId: string
+  garageId: string
+  name: string
+  role: string
+  phone: string
+  active: boolean
+  createdAt: string
+}
 
-import {
-  useEffect,
-  useState,
-  useCallback
-} from "react"
+export default function WorkersScreen({ navigation }: any) {
+  const { t } = useTranslation()
+  const [workers, setWorkers] = useState<Worker[]>([])
+  const [loading, setLoading] = useState<boolean>(true)
+  const [refreshing, setRefreshing] = useState<boolean>(false)
 
-import {
-  getWorkers
-} from "../../services/workerService"
-
-export default function WorkersScreen() {
-  const navigation: any = useNavigation()
-  const [workers, setWorkers] =
-  useState<any[]>([])
-
+  // Refetch list whenever screen comes into focus (e.g. returning from WorkerDetails or AddWorker)
   useFocusEffect(
     useCallback(() => {
-
       loadWorkers()
-
     }, [])
   )
 
-  const [loading, setLoading] =
-  useState(true)
-
-  const loadWorkers =
-  async () => {
-
+  const loadWorkers = async () => {
     try {
-
-      setLoading(true)
-      const response =
-        await getWorkers()
-
-      setWorkers(
-        response.workers || []
+      const response = await getWorkers()
+      // Handles response structure: { success: true, workers: [...] }
+      if (response?.success && Array.isArray(response.workers)) {
+        setWorkers(response.workers)
+      } else if (Array.isArray(response)) {
+        setWorkers(response)
+      } else {
+        setWorkers([])
+      }
+    } catch (error) {
+      console.error("Failed to load workers:", error)
+      Alert.alert(
+        t("common.errorTitle") || "Error",
+        t("workers.addError") || "Failed to fetch workers list"
       )
-
-    }
-
-    catch (error) {
-
-      console.log(error)
-
-    }
-    finally {
-
+    } finally {
       setLoading(false)
-
+      setRefreshing(false)
     }
-
-  
   }
 
-  if (loading) {
+  const handleRefresh = () => {
+    setRefreshing(true)
+    loadWorkers()
+  }
+
+  const renderWorkerCard = ({ item }: { item: Worker }) => {
+    const workerId = item.workerId || (item as any)._id || (item as any).id
 
     return (
-
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center"
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={0.7}
+        onPress={() => {
+          if (workerId) {
+            navigation.navigate("WorkerDetails", { workerId })
+          } else {
+            console.warn("Worker item is missing a valid identifier:", item)
+          }
         }}
       >
+        <View style={styles.avatarContainer}>
+          <Ionicons name="person" size={24} color="#2563EB" />
+        </View>
 
-        <ActivityIndicator
-          size="large"
-          color="#2563EB"
-        />
+        <View style={styles.workerInfo}>
+          <Text style={styles.workerName}>{item.name}</Text>
+          <Text style={styles.workerRole}>{item.role}</Text>
+          <Text style={styles.workerPhone}>{item.phone}</Text>
+        </View>
 
-        <Text
-          style={{
-            marginTop: 12,
-            color: "#6B7280"
-          }}
-        >
-          Loading workers...
-        </Text>
-
-      </View>
-
-    )
-
-  }
-  
-  return (
-
-    <View style={styles.container}>
-
-      <FlatList
-        ListEmptyComponent={() => (
-
+        <View style={styles.badgeAndArrow}>
           <View
-            style={{
-              marginTop: 80,
-              alignItems: "center"
-            }}
+            style={[
+              styles.statusBadge,
+              { backgroundColor: item.active ? "#DCFCE7" : "#FEE2E2" }
+            ]}
           >
-
-            <MaterialIcons
-              name="people-outline"
-              size={60}
-              color="#9CA3AF"
-            />
-
             <Text
               style={{
-                marginTop: 12,
-                fontSize: 16,
-                color: "#6B7280"
+                color: item.active ? "#16A34A" : "#DC2626",
+                fontWeight: "700",
+                fontSize: 11
               }}
             >
-              No workers found
+              {item.active
+                ? t("workers.active") || "ACTIVE"
+                : t("workers.inactive") || "INACTIVE"}
             </Text>
-
           </View>
-
-        )}
-        data={workers}
-        keyExtractor={(item) => item.workerId}
-        renderItem={({ item }) => (
-
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() =>
-              navigation.navigate(
-              "WorkerDetails",
-              {
-                workerId:
-                  item.workerId
-              }
-            )
-            }
-          >
-
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name}>
-                {item.name}
-              </Text>
-
-              <Text style={styles.role}>
-                {item.role}
-              </Text>
-            </View>
-
-            <View
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor: item.active
-                    ? "#DCFCE7"
-                    : "#FEE2E2"
-                }
-              ]}
-            >
-              <Text
-                style={{
-                  color: item.active
-                    ? "#16A34A"
-                    : "#DC2626",
-                  fontWeight: "bold"
-                }}
-              >
-                {item.active
-                  ? "ACTIVE"
-                  : "INACTIVE"}
-              </Text>
-            </View>
-
-          </TouchableOpacity>
-
-        )}
-      />
-
-      <TouchableOpacity
-        style={styles.addBtn}
-        onPress={() =>
-          navigation.navigate("AddWorker")
-        }
-      >
-
-        <MaterialIcons
-          name="person-add"
-          size={22}
-          color="white"
-        />
-
-        <Text style={styles.addText}>
-          Add Worker
-        </Text>
-
+          <MaterialIcons name="chevron-right" size={24} color="#9CA3AF" />
+        </View>
       </TouchableOpacity>
+    )
+  }
 
+  return (
+    <View style={styles.container}>
+      {/* Top Header / Add Button */}
+      <View style={styles.headerContainer}>
+        <View>
+          <Text style={styles.headerTitle}>
+            {t("workers.title") || "Worker Management"}
+          </Text>
+          <Text style={styles.headerSubtitle}>
+            {workers.length} {workers.length === 1 ? "Worker" : "Workers"}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.addBtn}
+          activeOpacity={0.8}
+          onPress={() => navigation.navigate("AddWorker")}
+        >
+          <MaterialIcons name="add" size={20} color="white" />
+          <Text style={styles.addBtnText}>
+            {t("workers.addWorker") || "Add Worker"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Main List */}
+      {loading ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#2563EB" />
+          <Text style={styles.loadingText}>
+            {t("workers.loading") || "Loading workers..."}
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={workers}
+          keyExtractor={(item, index) =>
+            item.workerId || (item as any)._id || index.toString()
+          }
+          renderItem={renderWorkerCard}
+          contentContainerStyle={styles.listContent}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <MaterialIcons name="people-outline" size={60} color="#9CA3AF" />
+              <Text style={styles.emptyText}>
+                {t("workers.noWorkers") || "No workers found"}
+              </Text>
+            </View>
+          }
+        />
+      )}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-
   container: {
     flex: 1,
     backgroundColor: "#F3F4F6",
-    padding: 18
+    paddingHorizontal: 16,
+    paddingTop: 16
   },
-
-  card: {
-    backgroundColor: "white",
-    borderRadius: 18,
-    padding: 18,
+  headerContainer: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12
+    marginBottom: 16
   },
-
-  name: {
-    fontSize: 16,
-    fontWeight: "bold",
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "700",
     color: "#111827"
   },
-
-  role: {
+  headerSubtitle: {
+    fontSize: 13,
     color: "#6B7280",
-    marginTop: 4
+    marginTop: 2
   },
-
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20
-  },
-
   addBtn: {
     backgroundColor: "#2563EB",
-    borderRadius: 18,
-    padding: 18,
     flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12
+  },
+  addBtnText: {
+    color: "white",
+    fontWeight: "600",
+    marginLeft: 4,
+    fontSize: 14
+  },
+  listContent: {
+    paddingBottom: 24
+  },
+  card: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center"
+  },
+  avatarContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#EFF6FF",
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 10
+    marginRight: 12
   },
-
-  addText: {
-    color: "white",
-    fontWeight: "bold",
-    marginLeft: 8
+  workerInfo: {
+    flex: 1
+  },
+  workerName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827"
+  },
+  workerRole: {
+    fontSize: 13,
+    color: "#4B5563",
+    marginTop: 2
+  },
+  workerPhone: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    marginTop: 2
+  },
+  badgeAndArrow: {
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    height: 44
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center"
+  },
+  loadingText: {
+    marginTop: 10,
+    color: "#6B7280"
+  },
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60
+  },
+  emptyText: {
+    marginTop: 12,
+    color: "#6B7280",
+    fontSize: 15,
+    fontWeight: "500"
   }
-
 })

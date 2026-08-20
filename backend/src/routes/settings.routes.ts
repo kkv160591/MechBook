@@ -5,6 +5,8 @@ import {
 import * as settingsController
 from "../controllers/settings.controller"
 
+import { validateGSTSettings } from "../validators/settings.validator"
+
 const router =
   Router()
 
@@ -15,6 +17,7 @@ router.get(
 
 router.put(
   "/gst",
+  validateGSTSettings,
   settingsController.updateGST
 )
 

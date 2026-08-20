@@ -8,15 +8,20 @@ import {
   deleteServiceType
 } from "../controllers/service.controller"
 
+import { verifyToken } from "../middleware/auth.middleware"
+
 import {
-  verifyToken
-} from "../middleware/auth.middleware"
+  createServiceTypeValidationRules,
+  updateServiceTypeValidationRules,
+  serviceTypeIdParamValidation
+} from "../validators/service.validator"
 
 const router = Router()
 
 router.post(
   "/",
   verifyToken,
+  createServiceTypeValidationRules,
   createServiceType
 )
 
@@ -29,18 +34,21 @@ router.get(
 router.get(
   "/:serviceTypeId",
   verifyToken,
+  serviceTypeIdParamValidation,
   getServiceTypeById
 )
 
 router.put(
   "/:serviceTypeId",
   verifyToken,
+  updateServiceTypeValidationRules,
   updateServiceType
 )
 
 router.delete(
   "/:serviceTypeId",
   verifyToken,
+  serviceTypeIdParamValidation,
   deleteServiceType
 )
 

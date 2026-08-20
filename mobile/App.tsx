@@ -32,14 +32,14 @@ if (Platform.OS === "web") {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <LanguageProvider>
+    <LanguageProvider>
+      <AuthProvider>
         <SafeAreaProvider>
           <NavigationContainer>
             <AppNavigator />
           </NavigationContainer>
         </SafeAreaProvider>
-      </LanguageProvider>
-    </AuthProvider>
+      </AuthProvider>
+    </LanguageProvider>
   )
 }

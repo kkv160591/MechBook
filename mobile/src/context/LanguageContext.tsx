@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from "react"
+import React, { createContext, useContext, useState, useEffect } from "react"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { translations } from "../i18n/translations"
 import { getLanguageSettings } from "../services/settingsService"
@@ -15,15 +15,29 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType>({} as LanguageContextType)
 
 export const LanguageProvider = ({ children }: { children: React.ReactNode }) => {
-  // Always default to "en" for pre-login screens
   const [language, setLanguage] = useState<LanguageKey>("en")
 
-  // Call this ONLY post-login / post-auth initialization
+  // 1. AUTO-RUN ON MOUNT: Load saved local language immediately when app boots
+  useEffect(() => {
+    const loadInitialLanguage = async () => {
+      try {
+        const savedLang = await AsyncStorage.getItem("user_language")
+        if (savedLang && translations[savedLang as LanguageKey]) {
+          setLanguage(savedLang as LanguageKey)
+        }
+      } catch (error) {
+        console.log("Error reading initial local storage language:", error)
+      }
+    }
+
+    loadInitialLanguage()
+  }, [])
+
+  // 2. Explicitly sync with DB post-login
   const fetchUserLanguage = async () => {
     try {
       const response = await getLanguageSettings()
       
-      // 1. Check if DB returns a valid language setting
       if (response?.language && translations[response.language as LanguageKey]) {
         const remoteLang = response.language as LanguageKey
         setLanguage(remoteLang)
@@ -34,7 +48,6 @@ export const LanguageProvider = ({ children }: { children: React.ReactNode }) =>
       console.log("DB language fetch failed, falling back to local storage:", error)
     }
 
-    // 2. Fallback: Read local storage if DB has no setting or request failed
     try {
       const savedLang = await AsyncStorage.getItem("user_language")
       if (savedLang && translations[savedLang as LanguageKey]) {
@@ -45,11 +58,9 @@ export const LanguageProvider = ({ children }: { children: React.ReactNode }) =>
       console.log("Error reading local storage language:", error)
     }
 
-    // 3. Fallback: Default to "en"
     setLanguage("en")
   }
 
-  // Purely updates UI state & local storage (used by dropdowns or manual switches)
   const changeLanguage = (lang: LanguageKey) => {
     setLanguage(lang)
     AsyncStorage.setItem("user_language", lang)

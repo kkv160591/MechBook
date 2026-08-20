@@ -24,11 +24,10 @@ export default function LoginScreen() {
   const [pin, setPin] = useState("")
   const [loading, setLoading] = useState(false)
 
-  // Error States
+  // Field-level inline errors
   const [phoneError, setPhoneError] = useState("")
   const [pinError, setPinError] = useState("")
 
-  // Input Sanitizers & Clear Errors on Change
   const handlePhoneChange = (text: string) => {
     const cleaned = text.replace(/[^0-9]/g, "")
     setPhone(cleaned)
@@ -47,7 +46,7 @@ export default function LoginScreen() {
 
     let hasError = false
 
-    // Validate Phone
+    // Field Validations (Inline Red Text)
     if (!trimmedPhone) {
       setPhoneError(t("login.validation.enterPhone"))
       hasError = true
@@ -56,7 +55,6 @@ export default function LoginScreen() {
       hasError = true
     }
 
-    // Validate PIN
     if (!trimmedPin) {
       setPinError(t("login.validation.enterPin"))
       hasError = true
@@ -78,6 +76,7 @@ export default function LoginScreen() {
       const data = response.data
 
       if (!data.success) {
+        // Server Error Response -> Popup Alert
         Alert.alert(
           t("login.error.title"),
           data.message || t("login.error.default")
@@ -90,6 +89,7 @@ export default function LoginScreen() {
 
       navigation.replace("Dashboard")
     } catch (error: any) {
+      // API / Network Error -> Popup Alert
       Alert.alert(
         t("login.error.title"),
         error?.response?.data?.message || t("login.error.default")
@@ -108,7 +108,7 @@ export default function LoginScreen() {
       <Text style={styles.logo}>{t("common.appName")}</Text>
       <Text style={styles.subtitle}>{t("login.subtitle")}</Text>
 
-      {/* Phone Input */}
+      {/* Phone Input Wrapper */}
       <View style={styles.inputWrapper}>
         <TextInput
           placeholder={t("login.phonePlaceholder")}
@@ -121,7 +121,7 @@ export default function LoginScreen() {
         {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
       </View>
 
-      {/* PIN Input */}
+      {/* PIN Input Wrapper */}
       <View style={styles.inputWrapper}>
         <TextInput
           placeholder={t("login.pinPlaceholder")}
@@ -190,11 +190,11 @@ const styles = StyleSheet.create({
     padding: 16
   },
   inputError: {
-    borderColor: "#EF4444", // Red border on error
+    borderColor: "#EF4444",
     backgroundColor: "#FEF2F2"
   },
   errorText: {
-    color: "#DC2626", // Red error message
+    color: "#DC2626",
     fontSize: 12,
     fontWeight: "500",
     marginTop: 4,

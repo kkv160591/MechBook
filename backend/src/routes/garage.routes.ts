@@ -9,6 +9,8 @@ import {
   verifyToken
 } from "../middleware/auth.middleware"
 
+import { validateGarageProfile } from "../validators/garage.validation"
+
 const router =
   express.Router()
 
@@ -21,6 +23,7 @@ router.get(
 router.put(
   "/profile",
   verifyToken,
+  validateGarageProfile,
   updateProfile
 )
 

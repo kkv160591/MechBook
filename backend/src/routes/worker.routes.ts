@@ -13,12 +13,20 @@ import {
   verifyToken
 } from "../middleware/auth.middleware"
 
+import {
+  validateCreateWorker,
+  validateUpdateWorker,
+  validateUpdateWorkerStatus,
+  validateResetWorkerPin
+} from "../validators/worker.validation"
+
 const router =
   express.Router()
 
 router.post(
   "/",
   verifyToken,
+  validateCreateWorker,
   createWorkerController
 )
 
@@ -37,18 +45,21 @@ router.get(
 router.put(
   "/:workerId",
   verifyToken,
+  validateUpdateWorker,
   updateWorkerController
 )
 
 router.patch(
   "/:workerId/status",
   verifyToken,
+  validateUpdateWorkerStatus,
   updateWorkerStatusController
 )
 
 router.patch(
   "/:workerId/reset-pin",
   verifyToken,
+  validateResetWorkerPin,
   resetWorkerPinController
 )
 

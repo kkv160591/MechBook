@@ -1,3 +1,4 @@
+import { useState, useRef } from "react"
 import {
   View,
   Text,
@@ -9,7 +10,6 @@ import {
   ActivityIndicator
 } from "react-native"
 
-import { useState } from "react"
 import { useNavigation } from "@react-navigation/native"
 import { registerGarage } from "../../services/authService"
 import { useTranslation } from "../../context/LanguageContext"
@@ -18,6 +18,9 @@ import LanguageSelector from "../../components/LanguageSelector"
 export default function RegisterScreen() {
   const { t } = useTranslation()
   const navigation: any = useNavigation()
+
+  // ScrollView Ref to enable smooth auto-scrolling
+  const scrollViewRef = useRef<ScrollView>(null)
 
   const [loading, setLoading] = useState(false)
   const [ownerName, setOwnerName] = useState("")
@@ -34,7 +37,7 @@ export default function RegisterScreen() {
   const [pincode, setPincode] = useState("")
   const [country, setCountry] = useState("India")
 
-  // Inline Validation Errors
+  // Field errors state object
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
 
   const clearError = (field: string) => {
@@ -88,12 +91,14 @@ export default function RegisterScreen() {
       newErrors.state = t("register.validation.cityStateReq")
     }
 
+    // Validation Failed -> Update state & scroll back to top smoothly
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true })
       return
     }
 
-    // Clear all errors if validation passes
+    // Clear previous errors
     setErrors({})
 
     try {
@@ -126,6 +131,7 @@ export default function RegisterScreen() {
         )
       }
     } catch (error: any) {
+      // Backend Error Response -> Popup Alert
       Alert.alert(
         t("register.error.title"),
         error?.response?.data?.message || t("common.somethingWentWrong")
@@ -137,10 +143,10 @@ export default function RegisterScreen() {
 
   return (
     <ScrollView
+      ref={scrollViewRef}
       style={styles.container}
       showsVerticalScrollIndicator={false}
     >
-      {/* Header with Language Selector */}
       <View style={styles.headerRow}>
         <LanguageSelector />
       </View>
