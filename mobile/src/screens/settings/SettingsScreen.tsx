@@ -78,13 +78,13 @@ export default function SettingsScreen() {
     {
       title: t("settings.sections.dataAccount") || "Data & Account",
       items: [
-        {
-          title: t("settings.items.backup.title") || "Data Backup",
-          subtitle:
-            t("settings.items.backup.subtitle") || "Cloud backup management",
-          icon: "cloud-upload",
-          screen: "Backup"
-        },
+        // {
+        //   title: t("settings.items.backup.title") || "Data Backup",
+        //   subtitle:
+        //     t("settings.items.backup.subtitle") || "Cloud backup management",
+        //   icon: "cloud-upload",
+        //   screen: "Backup"
+        // },
         {
           title: t("settings.items.plan.title") || "Plan & Usage",
           subtitle:

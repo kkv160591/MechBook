@@ -48,3 +48,8 @@ export const getLowStockItems =
 
     return response.data
   }
+
+export const removeInventory = async (partId: string) => {
+  const response = await api.delete(`/api/inventory/${partId}`)
+  return response.data
+}

@@ -10,6 +10,8 @@ import {
 
 } from "../controllers/customer.controller"
 
+import { createCustomerValidationRules, validateRequest } from "../validators/customer.validator"
+
 import {
   verifyToken
 } from "../middleware/auth.middleware"
@@ -19,6 +21,7 @@ const router = Router()
 router.post(
   "/",
   verifyToken,
+  createCustomerValidationRules,
   addCustomer
 )
 

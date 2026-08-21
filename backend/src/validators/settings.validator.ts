@@ -206,79 +206,63 @@ export const validateLanguageSettings =
 // INVOICE SETTINGS
 // ==========================================
 
-export const validateInvoiceSettings =
-  (
-    body: any
-  ) => {
+export const validateInvoiceSettings = (body: any) => {
+  const errors: Record<string, string> = {}
 
-    const errors:
-      Record<string, string> = {}
-
-
-    if (
-      !body ||
-      typeof body !== "object" ||
-      Array.isArray(body)
-    ) {
-
-      return {
-        valid: false,
-        errors: {
-          body:
-            "Invalid invoice settings payload"
-        }
-      }
-
-    }
-
-
-    /*
-     * Adjust these fields to match the
-     * actual invoice settings your app uses.
-     */
-
-    const invoicePrefix =
-      String(
-        body.invoicePrefix ?? ""
-      ).trim()
-
-
-    if (
-      invoicePrefix.length > 30
-    ) {
-
-      errors.invoicePrefix =
-        "Invoice prefix must not exceed 30 characters"
-
-    }
-
-
-    if (
-      Object.keys(errors).length > 0
-    ) {
-
-      return {
-        valid: false,
-        errors
-      }
-
-    }
-
-
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
     return {
-
-      valid: true,
-
-      errors: {},
-
-      data: {
-        ...body,
-        invoicePrefix
-      }
-
+      valid: false,
+      errors: { body: "Invalid invoice settings payload" }
     }
-
   }
+
+  // 1. Boolean Display Toggles Validation
+  const booleanFields = [
+    "showGarageLogo",
+    "showGSTNumber",
+    "showGarageAddress",
+    "showCustomerAddress",
+    "showVehicleDetails",
+    "showPaymentDetails"
+  ]
+
+  for (const field of booleanFields) {
+    if (body[field] !== undefined && typeof body[field] !== "boolean") {
+      errors[field] = `${field} must be a boolean value`
+    }
+  }
+
+  // 2. Footer Note Length Constraints
+  const footerNote = String(body.footerNote ?? "").trim()
+  if (footerNote.length > 250) {
+    errors.footerNote = "Footer note must not exceed 250 characters"
+  }
+
+  // 3. Terms & Conditions Length Constraints
+  const terms = String(body.terms ?? "").trim()
+  if (terms.length > 1000) {
+    errors.terms = "Terms & conditions must not exceed 1000 characters"
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return { valid: false, errors }
+  }
+
+  return {
+    valid: true,
+    errors: {},
+    data: {
+      showGarageLogo: Boolean(body.showGarageLogo),
+      showGSTNumber: Boolean(body.showGSTNumber),
+      showGarageAddress: Boolean(body.showGarageAddress),
+      showCustomerAddress: Boolean(body.showCustomerAddress),
+      showVehicleDetails: Boolean(body.showVehicleDetails),
+      showPaymentDetails: Boolean(body.showPaymentDetails),
+      footerNote,
+      terms
+    }
+  }
+}
 
 
 // ==========================================

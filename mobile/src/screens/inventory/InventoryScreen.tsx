@@ -1,283 +1,184 @@
-// InventoryScreen.tsx
-
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  TextInput
+  TextInput,
+  Alert
 } from "react-native"
 
-import {
-  useEffect,
-  useMemo,
-  useState
-} from "react"
-
-import {
-  MaterialIcons,
-  Ionicons
-} from "@expo/vector-icons"
-
+import { useEffect, useMemo, useState } from "react"
+import { MaterialIcons, Ionicons } from "@expo/vector-icons"
 import { useNavigation } from "@react-navigation/native"
 
 import InventoryCard from "../../components/InventoryCard"
-
-import {
-  getInventory
-} from "../../services/inventoryService"
+import { getInventory } from "../../services/inventoryService"
+import { useTranslation } from "../../context/LanguageContext"
 
 export default function InventoryScreen() {
-
   const navigation: any = useNavigation()
+  const { t } = useTranslation()
 
   const [search, setSearch] = useState("")
-
-  const [parts, setParts] =
-  useState<any[]>([])
+  const [parts, setParts] = useState<any[]>([])
 
   useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      loadInventory()
+    })
+    return unsubscribe
+  }, [navigation])
 
-    loadInventory()
-
-  }, [])
-
-  const loadInventory =
-  async () => {
-
+  const loadInventory = async () => {
     try {
-
-      const response =
-        await getInventory()
-
-      setParts(
-        response.parts || []
+      const response = await getInventory()
+      setParts(response.parts || [])
+    } catch (error: any) {
+      Alert.alert(
+        t("common.errorTitle"),
+        error?.response?.data?.message || t("common.somethingWentWrong")
       )
-
     }
-
-    catch (error) {
-
-      console.log(error)
-
-    }
-
   }
 
   const filteredParts = useMemo(() => {
-
     return parts.filter((item) => {
-
       const text = search.toLowerCase()
-
       return (
         item.name?.toLowerCase().includes(text) ||
         item.sku?.toLowerCase().includes(text) ||
         item.category?.toLowerCase().includes(text)
       )
-
     })
-
   }, [search, parts])
 
-  const lowStockCount = parts.filter(
-    item => item.stock <= item.minStock
-  ).length
+  const lowStockCount = parts.filter((item) => item.stock <= item.minStock).length
 
   return (
-
     <View style={styles.container}>
-
       {/* HEADER */}
-
       <View style={styles.headerRow}>
-
         <View>
-
-          <Text style={styles.title}>
-            Inventory
-          </Text>
-
-          <Text style={styles.subtitle}>
-            Spare parts & stock management
-          </Text>
-
+          <Text style={styles.title}>{t("inventory.title")}</Text>
+          <Text style={styles.subtitle}>{t("inventory.subtitle")}</Text>
         </View>
 
         <TouchableOpacity
           style={styles.addBtn}
           onPress={() =>
-            navigation.navigate(
-              "AddEditPart",
-              {
-                mode: "add"
-              }
-            )
+            navigation.navigate("AddEditPart", { mode: "add" })
           }
         >
-
-          <MaterialIcons
-            name="add"
-            size={26}
-            color="white"
-          />
-
+          <MaterialIcons name="add" size={26} color="white" />
         </TouchableOpacity>
-
       </View>
 
       {/* SUMMARY */}
-
       <View style={styles.summaryRow}>
-
         <View style={styles.summaryCard}>
-
-          <Text style={styles.summaryValue}>
-            {parts.length}
-          </Text>
-
-          <Text style={styles.summaryLabel}>
-            Total Parts
-          </Text>
-
+          <Text style={styles.summaryValue}>{parts.length}</Text>
+          <Text style={styles.summaryLabel}>{t("inventory.totalParts")}</Text>
         </View>
 
         <TouchableOpacity
           style={styles.summaryCard}
-          onPress={() =>
-            navigation.navigate("LowStock")
-          }
+          onPress={() => navigation.navigate("LowStock")}
         >
-
-          <Text
-            style={[
-              styles.summaryValue,
-              { color: "#DC2626" }
-            ]}
-          >
+          <Text style={[styles.summaryValue, { color: "#DC2626" }]}>
             {lowStockCount}
           </Text>
-
-          <Text style={styles.summaryLabel}>
-            Low Stock
-          </Text>
-
+          <Text style={styles.summaryLabel}>{t("inventory.lowStock")}</Text>
         </TouchableOpacity>
-
       </View>
 
       {/* SEARCH */}
-
       <View style={styles.searchBox}>
-
-        <Ionicons
-          name="search"
-          size={20}
-          color="#6B7280"
-        />
-
+        <Ionicons name="search" size={20} color="#6B7280" />
         <TextInput
-          placeholder="Search spare parts..."
+          placeholder={t("inventory.searchPlaceholder")}
           placeholderTextColor="#9CA3AF"
           style={styles.searchInput}
           value={search}
           onChangeText={setSearch}
         />
-
       </View>
 
       {/* LIST */}
-
       <FlatList
         data={filteredParts}
-        keyExtractor={(item) => item.partId}
+        keyExtractor={(item) => item.partId || item.inventoryId}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           paddingBottom: 120,
-          paddingTop: 14
+          paddingTop: 14,
         }}
         renderItem={({ item }) => (
-
           <InventoryCard
             item={item}
             onPress={() =>
-              navigation.navigate(
-                "PartDetails",
-                {
-                  part: item
-                }
-              )
+              navigation.navigate("PartDetails", { part: item })
             }
           />
-
         )}
+        ListEmptyComponent={
+          <View style={{ alignItems: "center", marginTop: 40 }}>
+            <Text style={{ color: "#9CA3AF" }}>{t("inventory.noPartsFound")}</Text>
+          </View>
+        }
       />
-
     </View>
-
   )
-
 }
 
 const styles = StyleSheet.create({
-
   container: {
     flex: 1,
     backgroundColor: "#F3F4F6",
-    padding: 18
+    padding: 18,
   },
-
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center"
+    alignItems: "center",
   },
-
   title: {
     fontSize: 30,
     fontWeight: "bold",
-    color: "#111827"
+    color: "#111827",
   },
-
   subtitle: {
     color: "#6B7280",
-    marginTop: 4
+    marginTop: 4,
   },
-
   addBtn: {
     width: 50,
     height: 50,
     borderRadius: 16,
     backgroundColor: "#2563EB",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
-
   summaryRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 22
+    marginTop: 22,
   },
-
   summaryCard: {
     width: "48%",
     backgroundColor: "white",
     borderRadius: 18,
-    padding: 18
+    padding: 18,
   },
-
   summaryValue: {
     fontSize: 28,
     fontWeight: "bold",
-    color: "#111827"
+    color: "#111827",
   },
-
   summaryLabel: {
     marginTop: 6,
-    color: "#6B7280"
+    color: "#6B7280",
   },
-
   searchBox: {
     backgroundColor: "white",
     borderRadius: 16,
@@ -286,13 +187,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     marginTop: 18,
     borderWidth: 1,
-    borderColor: "#E5E7EB"
+    borderColor: "#E5E7EB",
   },
-
   searchInput: {
     flex: 1,
     paddingVertical: 14,
-    paddingLeft: 10
-  }
-
+    paddingLeft: 10,
+  },
 })
