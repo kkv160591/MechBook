@@ -4,6 +4,7 @@ import AppNavigator from "./src/navigation/AppNavigator"
 
 import { AuthProvider } from "./src/context/AuthContext"
 import { LanguageProvider } from "./src/context/LanguageContext"
+import { SettingsProvider } from "./src/context/SettingsContext"
 import { SafeAreaProvider } from "react-native-safe-area-context"
 
 // Polyfill using Object.defineProperty for React Native Web compatibility
@@ -34,11 +35,13 @@ export default function App() {
   return (
     <LanguageProvider>
       <AuthProvider>
-        <SafeAreaProvider>
-          <NavigationContainer>
-            <AppNavigator />
-          </NavigationContainer>
-        </SafeAreaProvider>
+        <SettingsProvider>
+          <SafeAreaProvider>
+            <NavigationContainer>
+              <AppNavigator />
+            </NavigationContainer>
+          </SafeAreaProvider>
+        </SettingsProvider>
       </AuthProvider>
     </LanguageProvider>
   )

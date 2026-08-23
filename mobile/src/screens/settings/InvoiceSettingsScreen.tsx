@@ -1,4 +1,3 @@
-// InvoiceSettingsScreen.tsx
 import {
   View,
   Text,
@@ -24,21 +23,27 @@ interface InvoiceSettings {
   showPaymentDetails?: boolean
   footerNote?: string
   terms?: string
+  defaultLaborCost?: string
+  defaultDiscount?: string
+  defaultDiscountType?: "percentage" | "fixed"
+  defaultWarranty?: string
 }
 
 interface FormErrors {
+  defaultLaborCost?: string
+  defaultDiscount?: string
+  defaultWarranty?: string
   footerNote?: string
   terms?: string
 }
 
-// Sensible constraints for PDF generation layout
 const MAX_FOOTER_LENGTH = 250
 const MAX_TERMS_LENGTH = 1000
+const MAX_WARRANTY_LENGTH = 300
 
 export default function InvoiceSettingsScreen() {
   const { t } = useTranslation()
 
-  // ScrollView Reference & Section Positions
   const scrollViewRef = useRef<ScrollView>(null)
   const sectionPositions = useRef<{ [key in keyof FormErrors]?: number }>({})
 
@@ -50,7 +55,11 @@ export default function InvoiceSettingsScreen() {
     showVehicleDetails: true,
     showPaymentDetails: true,
     footerNote: "",
-    terms: ""
+    terms: "",
+    defaultLaborCost: "",
+    defaultDiscount: "",
+    defaultDiscountType: "percentage",
+    defaultWarranty: ""
   })
 
   const [loading, setLoading] = useState(true)
@@ -64,8 +73,19 @@ export default function InvoiceSettingsScreen() {
     try {
       const data = await getInvoiceSettings()
       if (data) {
-        setSettings(data)
+        setSettings({
+          ...data,
+          defaultLaborCost: data.defaultLaborCost !== undefined && data.defaultLaborCost !== null ? data.defaultLaborCost.toString() : "",
+          defaultDiscount: data.defaultDiscount !== undefined && data.defaultDiscount !== null ? data.defaultDiscount.toString() : "",
+          defaultDiscountType: data.defaultDiscountType || "percentage",
+          defaultWarranty: data.defaultWarranty ?? ""
+        })
       }
+    } catch (err: any) {
+      console.log("Error loading invoice settings", err)
+      const serverMsg =
+        err?.response?.data?.message || err?.message || t("invoiceSettings.errorMsg")
+      Alert.alert(t("common.errorTitle"), serverMsg)
     } finally {
       setLoading(false)
     }
@@ -83,7 +103,13 @@ export default function InvoiceSettingsScreen() {
   }
 
   const scrollToFirstError = (newErrors: FormErrors) => {
-    const errorKeys: (keyof FormErrors)[] = ["footerNote", "terms"]
+    const errorKeys: (keyof FormErrors)[] = [
+      "defaultLaborCost",
+      "defaultDiscount",
+      "defaultWarranty",
+      "footerNote",
+      "terms"
+    ]
 
     for (const key of errorKeys) {
       if (newErrors[key] && sectionPositions.current[key] !== undefined) {
@@ -96,15 +122,91 @@ export default function InvoiceSettingsScreen() {
     }
   }
 
+  // Helper to sanitize numeric inputs on keystroke
+  const sanitizeNumericInput = (text: string) => {
+    let cleaned = text.replace(/[^0-9.]/g, "")
+    const parts = cleaned.split(".")
+    if (parts.length > 2) {
+      cleaned = parts[0] + "." + parts.slice(1).join("")
+    }
+    return cleaned
+  }
+
+  const handleLaborCostChange = (text: string) => {
+    const sanitized = sanitizeNumericInput(text)
+    setSettings((prev) => ({ ...prev, defaultLaborCost: sanitized }))
+
+    if (sanitized !== text && text !== "") {
+      setErrors((prev) => ({
+        ...prev,
+        defaultLaborCost: t("invoiceSettings.validation.invalidNumber")
+      }))
+    } else {
+      setErrors((prev) => ({ ...prev, defaultLaborCost: undefined }))
+    }
+  }
+
+  const handleDiscountChange = (text: string, type = settings.defaultDiscountType) => {
+    const sanitized = sanitizeNumericInput(text)
+    const numVal = Number(sanitized)
+
+    let errorMsg: string | undefined = undefined
+
+    if (sanitized !== text && text !== "") {
+      errorMsg = t("invoiceSettings.validation.invalidNumber")
+    } else if (type === "percentage" && numVal > 100) {
+      errorMsg = t("invoiceSettings.validation.invalidPercentage")
+    }
+
+    setSettings((prev) => ({ ...prev, defaultDiscount: sanitized }))
+    setErrors((prev) => ({ ...prev, defaultDiscount: errorMsg }))
+  }
+
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {}
 
-    // 1. Footer Note Validation
-    if (settings.footerNote && settings.footerNote.trim().length > MAX_FOOTER_LENGTH) {
+    // 1. Labor Cost Validation (Optional - only validate format if provided)
+    if (settings.defaultLaborCost && settings.defaultLaborCost.trim() !== "") {
+      const laborVal = Number(settings.defaultLaborCost)
+      if (isNaN(laborVal)) {
+        newErrors.defaultLaborCost = t("invoiceSettings.validation.invalidNumber")
+      } else if (laborVal < 0) {
+        newErrors.defaultLaborCost = t("invoiceSettings.validation.negativeNotAllowed")
+      }
+    }
+
+    // 2. Discount Validation (Optional - only validate format if provided)
+    if (settings.defaultDiscount && settings.defaultDiscount.trim() !== "") {
+      const discountVal = Number(settings.defaultDiscount)
+      if (isNaN(discountVal)) {
+        newErrors.defaultDiscount = t("invoiceSettings.validation.invalidNumber")
+      } else if (discountVal < 0) {
+        newErrors.defaultDiscount = t("invoiceSettings.validation.negativeNotAllowed")
+      } else if (
+        settings.defaultDiscountType === "percentage" &&
+        discountVal > 100
+      ) {
+        newErrors.defaultDiscount = t("invoiceSettings.validation.invalidPercentage")
+      }
+    }
+
+    // 3. Warranty Notes Validation
+    if (
+      settings.defaultWarranty &&
+      settings.defaultWarranty.trim().length > MAX_WARRANTY_LENGTH
+    ) {
+      newErrors.defaultWarranty = t("invoiceSettings.validation.warrantyTooLong")
+    }
+
+    // 4. Footer Note Validation
+    if (
+      settings.footerNote &&
+      settings.footerNote.trim().length > MAX_FOOTER_LENGTH
+    ) {
       newErrors.footerNote = t("invoiceSettings.validation.footerNoteTooLong")
     }
 
-    // 2. Terms & Conditions Validation
+    // 5. Terms Validation
     if (settings.terms && settings.terms.trim().length > MAX_TERMS_LENGTH) {
       newErrors.terms = t("invoiceSettings.validation.termsTooLong")
     }
@@ -119,22 +221,23 @@ export default function InvoiceSettingsScreen() {
     return true
   }
 
-  const clearFieldError = (field: keyof FormErrors) => {
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: undefined }))
-    }
-  }
-
   const saveSettings = async () => {
     if (!validateForm()) {
       return
     }
 
     try {
-      await updateInvoiceSettings(settings)
+      await updateInvoiceSettings({
+        ...settings,
+        defaultLaborCost: Number(settings.defaultLaborCost || 0),
+        defaultDiscount: Number(settings.defaultDiscount || 0)
+      })
       Alert.alert(t("common.successTitle"), t("invoiceSettings.successMsg"))
-    } catch {
-      Alert.alert(t("common.errorTitle"), t("invoiceSettings.errorMsg"))
+    } catch (err: any) {
+      console.log("Error saving settings", err)
+      const serverMsg =
+        err?.response?.data?.message || err?.message || t("invoiceSettings.errorMsg")
+      Alert.alert(t("common.errorTitle"), serverMsg)
     }
   }
 
@@ -153,7 +256,93 @@ export default function InvoiceSettingsScreen() {
       style={styles.container}
       showsVerticalScrollIndicator={false}
     >
-      {/* PDF Toggle Options */}
+      {/* BILLING DEFAULTS */}
+      <Text style={styles.sectionTitle}>{t("invoiceSettings.billingDefaults")}</Text>
+
+      <View style={styles.card}>
+        {/* Labor Cost */}
+        <View onLayout={(e) => handleLayout("defaultLaborCost", e.nativeEvent.layout.y)}>
+          <Text style={styles.inputLabel}>{t("invoiceSettings.defaultLaborCost")}</Text>
+          <TextInput
+            keyboardType="decimal-pad"
+            value={settings.defaultLaborCost}
+            onChangeText={handleLaborCostChange}
+            placeholder="0"
+            style={[styles.textInput, errors.defaultLaborCost ? styles.inputError : null]}
+          />
+          {errors.defaultLaborCost && (
+            <Text style={styles.errorText}>{errors.defaultLaborCost}</Text>
+          )}
+        </View>
+
+        {/* Discount */}
+        <View
+          style={{ marginTop: 16 }}
+          onLayout={(e) => handleLayout("defaultDiscount", e.nativeEvent.layout.y)}
+        >
+          <Text style={styles.inputLabel}>{t("invoiceSettings.defaultDiscount")}</Text>
+          <View style={styles.discountRow}>
+            <TextInput
+              keyboardType="decimal-pad"
+              value={settings.defaultDiscount}
+              onChangeText={(text) => handleDiscountChange(text)}
+              placeholder="0"
+              style={[
+                styles.textInput,
+                { flex: 1, marginRight: 10 },
+                errors.defaultDiscount ? styles.inputError : null
+              ]}
+            />
+
+            <View style={styles.toggleGroup}>
+              <TouchableOpacity
+                style={[
+                  styles.toggleBtn,
+                  settings.defaultDiscountType === "percentage" && styles.toggleBtnActive
+                ]}
+                onPress={() => {
+                  setSettings((prev) => ({ ...prev, defaultDiscountType: "percentage" }))
+                  handleDiscountChange(settings.defaultDiscount || "", "percentage")
+                }}
+              >
+                <Text
+                  style={[
+                    styles.toggleText,
+                    settings.defaultDiscountType === "percentage" && styles.toggleTextActive
+                  ]}
+                >
+                  %
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.toggleBtn,
+                  settings.defaultDiscountType === "fixed" && styles.toggleBtnActive
+                ]}
+                onPress={() => {
+                  setSettings((prev) => ({ ...prev, defaultDiscountType: "fixed" }))
+                  handleDiscountChange(settings.defaultDiscount || "", "fixed")
+                }}
+              >
+                <Text
+                  style={[
+                    styles.toggleText,
+                    settings.defaultDiscountType === "fixed" && styles.toggleTextActive
+                  ]}
+                >
+                  ₹
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          {errors.defaultDiscount && (
+            <Text style={styles.errorText}>{errors.defaultDiscount}</Text>
+          )}
+        </View>
+      </View>
+
+      {/* PDF TOGGLES */}
       <Text style={styles.sectionTitle}>{t("invoiceSettings.pdfFields")}</Text>
 
       <View style={styles.card}>
@@ -189,7 +378,39 @@ export default function InvoiceSettingsScreen() {
         />
       </View>
 
-      {/* Footer Note */}
+      {/* WARRANTY SETTINGS */}
+      <Text style={styles.sectionTitle}>{t("invoiceSettings.warrantyTitle")}</Text>
+
+      <View
+        style={styles.card}
+        onLayout={(e) => handleLayout("defaultWarranty", e.nativeEvent.layout.y)}
+      >
+        <TextInput
+          multiline
+          maxLength={MAX_WARRANTY_LENGTH}
+          value={settings.defaultWarranty}
+          onChangeText={(text) => {
+            setSettings((prev) => ({ ...prev, defaultWarranty: text }))
+            if (errors.defaultWarranty) {
+              setErrors((prev) => ({ ...prev, defaultWarranty: undefined }))
+            }
+          }}
+          placeholder={t("invoiceSettings.defaultWarrantyPlaceholder")}
+          style={[styles.textArea, errors.defaultWarranty ? styles.inputError : null]}
+        />
+        <View style={styles.metaRow}>
+          {errors.defaultWarranty ? (
+            <Text style={styles.errorText}>{errors.defaultWarranty}</Text>
+          ) : (
+            <View />
+          )}
+          <Text style={styles.charCounter}>
+            {(settings.defaultWarranty || "").length}/{MAX_WARRANTY_LENGTH}
+          </Text>
+        </View>
+      </View>
+
+      {/* FOOTER NOTE */}
       <Text style={styles.sectionTitle}>{t("invoiceSettings.footerNote")}</Text>
 
       <View
@@ -198,10 +419,13 @@ export default function InvoiceSettingsScreen() {
       >
         <TextInput
           multiline
+          maxLength={MAX_FOOTER_LENGTH}
           value={settings.footerNote}
           onChangeText={(text) => {
             setSettings((prev) => ({ ...prev, footerNote: text }))
-            clearFieldError("footerNote")
+            if (errors.footerNote) {
+              setErrors((prev) => ({ ...prev, footerNote: undefined }))
+            }
           }}
           placeholder={t("invoiceSettings.footerNotePlaceholder")}
           style={[styles.textArea, errors.footerNote ? styles.inputError : null]}
@@ -218,7 +442,7 @@ export default function InvoiceSettingsScreen() {
         </View>
       </View>
 
-      {/* Terms & Conditions */}
+      {/* TERMS & CONDITIONS */}
       <Text style={styles.sectionTitle}>{t("invoiceSettings.terms")}</Text>
 
       <View
@@ -227,10 +451,13 @@ export default function InvoiceSettingsScreen() {
       >
         <TextInput
           multiline
+          maxLength={MAX_TERMS_LENGTH}
           value={settings.terms}
           onChangeText={(text) => {
             setSettings((prev) => ({ ...prev, terms: text }))
-            clearFieldError("terms")
+            if (errors.terms) {
+              setErrors((prev) => ({ ...prev, terms: undefined }))
+            }
           }}
           placeholder={t("invoiceSettings.termsPlaceholder")}
           style={[styles.textArea, errors.terms ? styles.inputError : null]}
@@ -247,7 +474,6 @@ export default function InvoiceSettingsScreen() {
         </View>
       </View>
 
-      {/* Save Button */}
       <TouchableOpacity style={styles.saveBtn} onPress={saveSettings}>
         <Text style={styles.saveText}>{t("invoiceSettings.saveBtn")}</Text>
       </TouchableOpacity>
@@ -315,6 +541,49 @@ const styles = StyleSheet.create({
     color: "#111827",
     fontWeight: "600"
   },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 6
+  },
+  textInput: {
+    height: 48,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    fontSize: 15,
+    color: "#111827",
+    backgroundColor: "#FAFAFA"
+  },
+  discountRow: {
+    flexDirection: "row",
+    alignItems: "center"
+  },
+  toggleGroup: {
+    flexDirection: "row",
+    backgroundColor: "#E5E7EB",
+    borderRadius: 12,
+    padding: 3,
+    height: 48,
+    alignItems: "center"
+  },
+  toggleBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10
+  },
+  toggleBtnActive: {
+    backgroundColor: "#2563EB"
+  },
+  toggleText: {
+    fontWeight: "700",
+    color: "#4B5563"
+  },
+  toggleTextActive: {
+    color: "white"
+  },
   textArea: {
     minHeight: 120,
     textAlignVertical: "top",
@@ -323,10 +592,12 @@ const styles = StyleSheet.create({
     borderColor: "#E5E7EB",
     borderRadius: 12,
     padding: 12,
-    color: "#111827"
+    color: "#111827",
+    backgroundColor: "#FAFAFA"
   },
   inputError: {
-    borderColor: "#DC2626"
+    borderColor: "#DC2626",
+    backgroundColor: "#FEF2F2"
   },
   metaRow: {
     flexDirection: "row",
@@ -336,7 +607,9 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: "#DC2626",
-    fontSize: 12
+    fontSize: 12,
+    marginTop: 4,
+    fontWeight: "500"
   },
   charCounter: {
     fontSize: 12,

@@ -203,7 +203,7 @@ export const validateLanguageSettings =
 
 
 // ==========================================
-// INVOICE SETTINGS
+// INVOICE SETTINGS VALIDATOR
 // ==========================================
 
 export const validateInvoiceSettings = (body: any) => {
@@ -232,13 +232,51 @@ export const validateInvoiceSettings = (body: any) => {
     }
   }
 
-  // 2. Footer Note Length Constraints
+  // 2. Billing Defaults Validation (Labor Cost & Discount)
+  let laborCost = 0
+  if (body.defaultLaborCost !== undefined && body.defaultLaborCost !== null && String(body.defaultLaborCost).trim() !== "") {
+    laborCost = Number(body.defaultLaborCost)
+    if (isNaN(laborCost)) {
+      errors.defaultLaborCost = "Default labor cost must be a valid number"
+    } else if (laborCost < 0) {
+      errors.defaultLaborCost = "Default labor cost cannot be negative"
+    }
+  }
+
+  let discountType: "percentage" | "fixed" = "percentage"
+  if (body.defaultDiscountType !== undefined) {
+    if (body.defaultDiscountType !== "percentage" && body.defaultDiscountType !== "fixed") {
+      errors.defaultDiscountType = "Discount type must be either 'percentage' or 'fixed'"
+    } else {
+      discountType = body.defaultDiscountType
+    }
+  }
+
+  let discount = 0
+  if (body.defaultDiscount !== undefined && body.defaultDiscount !== null && String(body.defaultDiscount).trim() !== "") {
+    discount = Number(body.defaultDiscount)
+    if (isNaN(discount)) {
+      errors.defaultDiscount = "Default discount must be a valid number"
+    } else if (discount < 0) {
+      errors.defaultDiscount = "Default discount cannot be negative"
+    } else if (discountType === "percentage" && discount > 100) {
+      errors.defaultDiscount = "Percentage discount cannot exceed 100%"
+    }
+  }
+
+  // 3. Warranty Terms Length Constraints
+  const defaultWarranty = String(body.defaultWarranty ?? "").trim()
+  if (defaultWarranty.length > 300) {
+    errors.defaultWarranty = "Warranty terms must not exceed 300 characters"
+  }
+
+  // 4. Footer Note Length Constraints
   const footerNote = String(body.footerNote ?? "").trim()
   if (footerNote.length > 250) {
     errors.footerNote = "Footer note must not exceed 250 characters"
   }
 
-  // 3. Terms & Conditions Length Constraints
+  // 5. Terms & Conditions Length Constraints
   const terms = String(body.terms ?? "").trim()
   if (terms.length > 1000) {
     errors.terms = "Terms & conditions must not exceed 1000 characters"
@@ -258,6 +296,10 @@ export const validateInvoiceSettings = (body: any) => {
       showCustomerAddress: Boolean(body.showCustomerAddress),
       showVehicleDetails: Boolean(body.showVehicleDetails),
       showPaymentDetails: Boolean(body.showPaymentDetails),
+      defaultLaborCost: laborCost,
+      defaultDiscount: discount,
+      defaultDiscountType: discountType,
+      defaultWarranty,
       footerNote,
       terms
     }

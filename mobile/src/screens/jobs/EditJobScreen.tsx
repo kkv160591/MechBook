@@ -19,7 +19,10 @@ import { getWorkers } from "../../services/workerService"
 import { getServiceTypes } from "../../services/serviceTypesService"
 import { updateJob, getJobById } from "../../services/jobService"
 
+import { useTranslation } from "../../context/LanguageContext"
+
 export default function EditJobScreen({ route, navigation }: any) {
+  const { t } = useTranslation()
   const { job } = route.params
 
   const [submitted, setSubmitted] = useState(false)
@@ -78,12 +81,23 @@ export default function EditJobScreen({ route, navigation }: any) {
 
   const paymentMethods = ["Cash", "UPI", "Card", "Bank Transfer"]
 
+  const getPaymentMethodLabel = (method: string) => {
+    switch (method) {
+      case "Cash": return t("jobs.methodCash")
+      case "UPI": return t("jobs.methodUPI")
+      case "Card": return t("jobs.methodCard")
+      case "Bank Transfer": return t("jobs.methodBankTransfer")
+      default: return method
+    }
+  }
+
   const searchedPaymentMethods = useMemo(() => {
     if (!paymentMethod.trim()) return paymentMethods
     return paymentMethods.filter(method =>
-      method.toLowerCase().includes(paymentMethod.toLowerCase())
+      method.toLowerCase().includes(paymentMethod.toLowerCase()) ||
+      getPaymentMethodLabel(method).toLowerCase().includes(paymentMethod.toLowerCase())
     )
-  }, [paymentMethod])
+  }, [paymentMethod, t])
 
   /* Services */
   const [selectedServices, setSelectedServices] = useState<any[]>([])
@@ -135,7 +149,7 @@ export default function EditJobScreen({ route, navigation }: any) {
       setNotes(latestJob.notes || "")
       setSelectedServices(latestJob.services || [])
     } catch (err: any) {
-      Alert.alert("Error", err?.response?.data?.message || "Unable to load job details.")
+      Alert.alert(t("jobs.alertErrorTitle"), err?.response?.data?.message || t("jobs.unableToLoadJobDetails"))
     } finally {
       setLoading(false)
     }
@@ -225,11 +239,11 @@ export default function EditJobScreen({ route, navigation }: any) {
     const cleanVehNum = vehicleNumber.trim()
     const cleanVehModel = vehicleModel.trim()
 
-    if (!cleanName) missingFields.push("Customer Name")
-    if (!cleanPhone || cleanPhone.length !== 10) missingFields.push("Valid 10-digit Phone Number")
-    if (!cleanVehNum) missingFields.push("Vehicle Number")
-    if (!cleanVehModel) missingFields.push("Vehicle Model")
-    if (selectedServices.length === 0) missingFields.push("At least one Service")
+    if (!cleanName) missingFields.push(t("jobs.customerName"))
+    if (!cleanPhone || cleanPhone.length !== 10) missingFields.push(t("jobs.valErrPhoneLen"))
+    if (!cleanVehNum) missingFields.push(t("jobs.vehicleNumber"))
+    if (!cleanVehModel) missingFields.push(t("jobs.vehicleModel"))
+    if (selectedServices.length === 0) missingFields.push(t("jobs.atLeastOneService"))
 
     if (missingFields.length > 0) {
       if (!cleanName) {
@@ -246,7 +260,7 @@ export default function EditJobScreen({ route, navigation }: any) {
         setTimeout(() => vehicleModelRef.current?.focus(), 300)
       }
 
-      Alert.alert("Validation Error", "Please correct the following fields:\n• " + missingFields.join("\n• "))
+      Alert.alert(t("jobs.alertValidationTitle"), t("jobs.alertValidationMsg") + missingFields.join("\n• "))
       return
     }
 
@@ -272,10 +286,10 @@ export default function EditJobScreen({ route, navigation }: any) {
         services: selectedServices
       })
 
-      Alert.alert("Success", "Job Updated successfully!")
+      Alert.alert(t("jobs.alertSuccessTitle"), t("jobs.jobUpdatedSuccess"))
       navigation.goBack()
     } catch (err: any) {
-      Alert.alert("Error", err?.response?.data?.message || "Unable to update job. Please try again.")
+      Alert.alert(t("jobs.alertErrorTitle"), err?.response?.data?.message || t("jobs.unableToUpdateJob"))
     } finally {
       setSaving(false)
     }
@@ -305,6 +319,24 @@ export default function EditJobScreen({ route, navigation }: any) {
     </Text>
   )
 
+  const getPriorityLabel = (p: string) => {
+    switch (p) {
+      case "Low": return t("jobs.priorityLow")
+      case "Normal": return t("jobs.priorityNormal")
+      case "High": return t("jobs.priorityHigh")
+      default: return p
+    }
+  }
+
+  const getPaymentStatusLabel = (s: string) => {
+    switch (s) {
+      case "Pending": return t("jobs.paymentPending")
+      case "Advance": return t("jobs.paymentAdvance")
+      case "Paid": return t("jobs.paymentPaid")
+      default: return s
+    }
+  }
+
   return (
     <ScrollView
       ref={scrollRef}
@@ -313,9 +345,9 @@ export default function EditJobScreen({ route, navigation }: any) {
       onScrollBeginDrag={closeDropdowns}
     >
       {/* CUSTOMER */}
-      <Text style={styles.heading}>Customer Details</Text>
+      <Text style={styles.heading}>{t("jobs.customerDetails")}</Text>
 
-      <RequiredLabel text="Customer Name" />
+      <RequiredLabel text={t("jobs.customerName")} />
       <View onLayout={e => (customerNameY.current = e.nativeEvent.layout.y)}>
         <TextInput
           ref={customerNameRef}
@@ -325,11 +357,11 @@ export default function EditJobScreen({ route, navigation }: any) {
           onFocus={closeDropdowns}
         />
         {submitted && !customerName.trim() && (
-          <Text style={styles.errorText}>Customer Name is required.</Text>
+          <Text style={styles.errorText}>{t("jobs.valErrName")}</Text>
         )}
       </View>
 
-      <RequiredLabel text="Phone Number" />
+      <RequiredLabel text={t("jobs.phoneNumber")} />
       <View onLayout={e => (phoneY.current = e.nativeEvent.layout.y)}>
         <TextInput
           ref={phoneRef}
@@ -344,14 +376,14 @@ export default function EditJobScreen({ route, navigation }: any) {
           onFocus={closeDropdowns}
         />
         {submitted && !phone.trim() && (
-          <Text style={styles.errorText}>Phone Number is required.</Text>
+          <Text style={styles.errorText}>{t("jobs.valErrPhoneReq")}</Text>
         )}
         {submitted && phone.trim().length > 0 && phone.trim().length !== 10 && (
-          <Text style={styles.errorText}>Phone Number must be exactly 10 digits.</Text>
+          <Text style={styles.errorText}>{t("jobs.valErrPhoneLen")}</Text>
         )}
       </View>
 
-      <Text style={styles.label}>Customer Address</Text>
+      <Text style={styles.label}>{t("jobs.customerAddress")}</Text>
       <TextInput
         style={styles.input}
         value={customerAddress}
@@ -360,9 +392,9 @@ export default function EditJobScreen({ route, navigation }: any) {
       />
 
       {/* VEHICLE */}
-      <Text style={styles.heading}>Vehicle Details</Text>
+      <Text style={styles.heading}>{t("jobs.vehicleDetails")}</Text>
 
-      <RequiredLabel text="Vehicle Number" />
+      <RequiredLabel text={t("jobs.vehicleNumber")} />
       <View onLayout={e => (vehicleNumberY.current = e.nativeEvent.layout.y)}>
         <TextInput
           ref={vehicleNumberRef}
@@ -372,11 +404,11 @@ export default function EditJobScreen({ route, navigation }: any) {
           onFocus={closeDropdowns}
         />
         {submitted && !vehicleNumber.trim() && (
-          <Text style={styles.errorText}>Vehicle Number is required.</Text>
+          <Text style={styles.errorText}>{t("jobs.valErrVehNum")}</Text>
         )}
       </View>
 
-      <Text style={styles.label}>Vehicle Brand</Text>
+      <Text style={styles.label}>{t("jobs.vehicleBrand")}</Text>
       <TextInput
         style={styles.input}
         value={vehicleBrand}
@@ -384,7 +416,7 @@ export default function EditJobScreen({ route, navigation }: any) {
         onFocus={closeDropdowns}
       />
 
-      <RequiredLabel text="Vehicle Model" />
+      <RequiredLabel text={t("jobs.vehicleModel")} />
       <View onLayout={e => (vehicleModelY.current = e.nativeEvent.layout.y)}>
         <TextInput
           ref={vehicleModelRef}
@@ -394,11 +426,11 @@ export default function EditJobScreen({ route, navigation }: any) {
           onFocus={closeDropdowns}
         />
         {submitted && !vehicleModel.trim() && (
-          <Text style={styles.errorText}>Vehicle Model is required.</Text>
+          <Text style={styles.errorText}>{t("jobs.valErrVehModel")}</Text>
         )}
       </View>
 
-      <Text style={styles.label}>Current Odometer</Text>
+      <Text style={styles.label}>{t("jobs.odometer")}</Text>
       <TextInput
         keyboardType="numeric"
         style={styles.input}
@@ -407,28 +439,28 @@ export default function EditJobScreen({ route, navigation }: any) {
         onFocus={closeDropdowns}
       />
 
-      <RequiredLabel text="Vehicle Type" />
+      <RequiredLabel text={t("jobs.vehicleType")} />
       <View style={styles.typeRow}>
         <TouchableOpacity
           style={[styles.typeButton, vehicleType === "2 Wheeler" && styles.selectedType]}
           onPress={() => setVehicleType("2 Wheeler")}
         >
-          <Text>🏍 2 Wheeler</Text>
+          <Text>🏍 {t("jobs.twoWheeler")}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.typeButton, vehicleType === "4 Wheeler" && styles.selectedType]}
           onPress={() => setVehicleType("4 Wheeler")}
         >
-          <Text>🚗 4 Wheeler</Text>
+          <Text>🚗 {t("jobs.fourWheeler")}</Text>
         </TouchableOpacity>
       </View>
 
       {/* WORKER */}
-      <Text style={styles.heading}>Assign Worker</Text>
+      <Text style={styles.heading}>{t("jobs.assignWorker")}</Text>
       <View style={styles.inputWrapper}>
         <TextInput
-          placeholder="Select Worker"
+          placeholder={t("jobs.selectWorker")}
           style={styles.input}
           value={workerName}
           onFocus={() => {
@@ -466,8 +498,8 @@ export default function EditJobScreen({ route, navigation }: any) {
       </View>
 
       {/* JOB DETAILS */}
-      <Text style={styles.heading}>Job Details</Text>
-      <Text style={styles.label}>Priority</Text>
+      <Text style={styles.heading}>{t("jobs.jobDetails")}</Text>
+      <Text style={styles.label}>{t("jobs.priority")}</Text>
       <View style={styles.priorityRow}>
         {["Low", "Normal", "High"].map(item => (
           <TouchableOpacity
@@ -476,22 +508,22 @@ export default function EditJobScreen({ route, navigation }: any) {
             onPress={() => setPriority(item)}
           >
             <Text style={{ color: priority === item ? "white" : "#111827", fontWeight: "600" }}>
-              {item}
+              {getPriorityLabel(item)}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <Text style={styles.label}>Expected Delivery Date</Text>
+      <Text style={styles.label}>{t("jobs.expectedDelivery")}</Text>
       <TouchableOpacity style={styles.input} onPress={() => setShowDatePicker(true)}>
         <Text style={{ color: deliveryDate ? "#111827" : "#9CA3AF" }}>
-          {deliveryDate ? formatDate(deliveryDate) : "Delivery Date"}
+          {deliveryDate ? formatDate(deliveryDate) : t("jobs.deliveryDate")}
         </Text>
       </TouchableOpacity>
 
       {/* SERVICES */}
-      <Text style={styles.heading}>Services</Text>
-      <RequiredLabel text="Service" />
+      <Text style={styles.heading}>{t("jobs.services")}</Text>
+      <RequiredLabel text={t("jobs.service")} />
       <View style={styles.inputWrapper}>
         <TextInput
           style={styles.input}
@@ -532,7 +564,7 @@ export default function EditJobScreen({ route, navigation }: any) {
 
       <View style={styles.row}>
         <View style={{ flex: 2 }}>
-          <Text style={styles.label}>Estimate Price</Text>
+          <Text style={styles.label}>{t("jobs.estimatePrice")}</Text>
           <TextInput
             onFocus={closeDropdowns}
             keyboardType="numeric"
@@ -543,7 +575,7 @@ export default function EditJobScreen({ route, navigation }: any) {
         </View>
 
         <View style={{ flex: 1 }}>
-          <Text style={styles.label}>Quantity</Text>
+          <Text style={styles.label}>{t("jobs.quantity")}</Text>
           <TextInput
             onFocus={closeDropdowns}
             keyboardType="numeric"
@@ -555,16 +587,16 @@ export default function EditJobScreen({ route, navigation }: any) {
       </View>
 
       <TouchableOpacity style={styles.addServiceBtn} onPress={addCurrentService}>
-        <Text style={styles.addServiceText}>Add Service</Text>
+        <Text style={styles.addServiceText}>{t("jobs.addService")}</Text>
       </TouchableOpacity>
 
       {/* SELECTED SERVICES */}
-      <Text style={styles.heading}>Selected Services</Text>
+      <Text style={styles.heading}>{t("jobs.selectedServices")}</Text>
 
       {selectedServices.length === 0 ? (
         <View style={styles.emptyCard}>
           <Text style={[styles.emptyText, submitted && { color: "#DC2626", fontWeight: "600" }]}>
-            At least one service is required.
+            {t("jobs.atLeastOneService")}
           </Text>
         </View>
       ) : (
@@ -579,7 +611,7 @@ export default function EditJobScreen({ route, navigation }: any) {
 
             <View style={styles.servicePricingRow}>
               <View style={styles.serviceField}>
-                <Text style={styles.smallLabel}>Qty</Text>
+                <Text style={styles.smallLabel}>{t("jobs.qty")}</Text>
                 <TextInput
                   onFocus={closeDropdowns}
                   style={styles.smallInput}
@@ -590,7 +622,7 @@ export default function EditJobScreen({ route, navigation }: any) {
               </View>
 
               <View style={styles.serviceField}>
-                <Text style={styles.smallLabel}>Estimated</Text>
+                <Text style={styles.smallLabel}>{t("jobs.estimated")}</Text>
                 <View style={styles.readOnlyPrice}>
                   <Text style={styles.readOnlyPriceText}>₹ {Number(service.estimatedPrice || 0)}</Text>
                 </View>
@@ -598,13 +630,13 @@ export default function EditJobScreen({ route, navigation }: any) {
 
               <View style={styles.serviceField}>
                 <Text style={styles.smallLabel}>
-                  Actual Price <Text style={styles.optionalText}>(optional)</Text>
+                  {t("jobs.actualPrice")} <Text style={styles.optionalText}>({t("jobs.optional")})</Text>
                 </Text>
                 <TextInput
                   onFocus={closeDropdowns}
                   style={styles.smallInput}
                   keyboardType="numeric"
-                  placeholder="Use estimate"
+                  placeholder={t("jobs.useEstimate")}
                   value={
                     service.actualPrice === null || service.actualPrice === undefined
                       ? ""
@@ -616,7 +648,7 @@ export default function EditJobScreen({ route, navigation }: any) {
             </View>
 
             <View style={styles.totalRow}>
-              <Text style={styles.totalServiceText}>Subtotal</Text>
+              <Text style={styles.totalServiceText}>{t("jobs.subtotal")}</Text>
               <Text style={styles.totalServicePrice}>
                 ₹{" "}
                 {Number(service.quantity || 0) *
@@ -631,33 +663,33 @@ export default function EditJobScreen({ route, navigation }: any) {
 
       {/* GRAND TOTAL */}
       <View style={styles.totalCard}>
-        <Text style={styles.totalLabel}>Total Amount</Text>
+        <Text style={styles.totalLabel}>{t("jobs.totalAmount")}</Text>
         <Text style={styles.totalAmount}>₹ {total}</Text>
       </View>
 
       {/* COMPLAINT & INSPECTION */}
-      <Text style={styles.heading}>Customer Complaint</Text>
+      <Text style={styles.heading}>{t("jobs.customerComplaint")}</Text>
       <TextInput
         style={styles.notes}
         multiline
-        placeholder="Customer complaint..."
+        placeholder={t("jobs.customerComplaintPlaceholder")}
         value={complaint}
         onChangeText={setComplaint}
         onFocus={closeDropdowns}
       />
 
-      <Text style={styles.heading}>Inspection Notes</Text>
+      <Text style={styles.heading}>{t("jobs.inspectionNotes")}</Text>
       <TextInput
         style={styles.notes}
         multiline
-        placeholder="Inspection notes..."
+        placeholder={t("jobs.inspectionNotesPlaceholder")}
         value={inspectionNotes}
         onChangeText={setInspectionNotes}
         onFocus={closeDropdowns}
       />
 
       {/* PAYMENT */}
-      <Text style={styles.heading}>Payment Status</Text>
+      <Text style={styles.heading}>{t("jobs.paymentStatus")}</Text>
       <View style={styles.priorityRow}>
         {["Pending", "Advance", "Paid"].map(item => (
           <TouchableOpacity
@@ -665,15 +697,17 @@ export default function EditJobScreen({ route, navigation }: any) {
             style={[styles.priorityButton, paymentStatus === item && styles.selectedPriority]}
             onPress={() => setPaymentStatus(item)}
           >
-            <Text style={{ color: paymentStatus === item ? "white" : "#111827" }}>{item}</Text>
+            <Text style={{ color: paymentStatus === item ? "white" : "#111827" }}>
+              {getPaymentStatusLabel(item)}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
 
       <View style={styles.inputWrapper}>
-        <Text style={styles.label}>Payment Method</Text>
+        <Text style={styles.label}>{t("jobs.paymentMethod")}</Text>
         <TextInput
-          placeholder="Select Payment Method"
+          placeholder={t("jobs.selectPaymentMethod")}
           style={styles.input}
           value={paymentMethod}
           onFocus={() => {
@@ -698,7 +732,7 @@ export default function EditJobScreen({ route, navigation }: any) {
                   setShowPaymentSuggestions(false)
                 }}
               >
-                <Text style={styles.cardTitle}>{method}</Text>
+                <Text style={styles.cardTitle}>{getPaymentMethodLabel(method)}</Text>
                 <Ionicons name="card-outline" size={22} color="#2563EB" />
               </TouchableOpacity>
             ))}
@@ -726,11 +760,11 @@ export default function EditJobScreen({ route, navigation }: any) {
       )}
 
       {/* NOTES */}
-      <Text style={styles.heading}>Notes</Text>
+      <Text style={styles.heading}>{t("jobs.notes")}</Text>
       <TextInput
         style={styles.notes}
         multiline
-        placeholder="Additional notes..."
+        placeholder={t("jobs.additionalNotesPlaceholder")}
         value={notes}
         onChangeText={setNotes}
         onFocus={closeDropdowns}
@@ -741,7 +775,7 @@ export default function EditJobScreen({ route, navigation }: any) {
         {saving ? (
           <ActivityIndicator color="white" />
         ) : (
-          <Text style={styles.saveText}>Update Job</Text>
+          <Text style={styles.saveText}>{t("jobs.updateJob")}</Text>
         )}
       </TouchableOpacity>
 

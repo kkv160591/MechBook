@@ -38,13 +38,14 @@ import {
   PlanUsageResponse
 } from "../../services/subscriptionService"
 
+import { useSettings } from "../../context/SettingsContext"
+import { useTranslation } from "../../context/LanguageContext"
 import DateTimePicker from "@react-native-community/datetimepicker"
 
-export default function AddJobScreen({
-  navigation
-}: any) {
-
+export default function AddJobScreen({ navigation }: any) {
   const [submitted, setSubmitted] = useState(false)
+  const { settings } = useSettings()
+  const { t } = useTranslation();
 
   const scrollRef = useRef<ScrollView>(null)
   const customerNameRef = useRef<TextInput>(null)
@@ -77,7 +78,7 @@ export default function AddJobScreen({
   const [vehicleNumber, setVehicleNumber] = useState("")
   const [vehicleBrand, setVehicleBrand] = useState("")
   const [vehicleModel, setVehicleModel] = useState("")
-  const [vehicleType, setVehicleType] = useState("2 Wheeler")
+  const [vehicleType, setVehicleType] = useState(t("jobs.twoWheeler"))
   const [complaint, setComplaint] = useState("")
   const [odometer, setOdometer] = useState("")
 
@@ -86,20 +87,24 @@ export default function AddJobScreen({
   const [workerName, setWorkerName] = useState("")
   const [showWorkerSuggestions, setShowWorkerSuggestions] = useState(false)
 
-  // PAYMENT
+  // PAYMENT & BILLING
   const [showPaymentSuggestions, setShowPaymentSuggestions] = useState(false)
-  const [paymentStatus, setPaymentStatus] = useState("Pending")
+  const [paymentStatus, setPaymentStatus] = useState(t("jobs.paymentPending"))
   const [paymentMethod, setPaymentMethod] = useState("")
+  
+  // LABOR & DISCOUNT (State initialized from Invoice Settings Context)
+  const [laborCost, setLaborCost] = useState<string>("")
+  const [discount, setDiscount] = useState<string>("")
 
   const paymentMethods = [
-    "Cash",
-    "UPI",
-    "Card",
-    "Bank Transfer"
+    t("jobs.methodCash"),
+    t("jobs.methodUPI"),
+    t("jobs.methodCard"),
+    t("jobs.methodBankTransfer")
   ]
 
   // JOB
-  const [priority, setPriority] = useState("Normal")
+  const [priority, setPriority] = useState(t("jobs.priorityNormal"))
   const [deliveryDate, setDeliveryDate] = useState<Date | null>(null)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [showTimePicker, setShowTimePicker] = useState(false)
@@ -113,6 +118,18 @@ export default function AddJobScreen({
   const [serviceQty, setServiceQty] = useState("1")
   const [showSuggestions, setShowSuggestions] = useState(false)
 
+  // Set default labor cost and discount when settings context loads
+  useEffect(() => {
+    if (settings?.invoice) {
+      if (settings.invoice.defaultLaborCost !== undefined) {
+        setLaborCost(String(settings.invoice.defaultLaborCost))
+      }
+      if (settings.invoice.defaultDiscount !== undefined) {
+        setDiscount(String(settings.invoice.defaultDiscount))
+      }
+    }
+  }, [settings?.invoice])
+
   const closeDropdowns = () => {
     Keyboard.dismiss()
     setShowSuggestions(false)
@@ -125,7 +142,7 @@ export default function AddJobScreen({
     return paymentMethods.filter(method =>
       method.toLowerCase().includes(paymentMethod.toLowerCase())
     )
-  }, [paymentMethod])
+  }, [paymentMethod, paymentMethods])
 
   const searchedWorkers = useMemo(() => {
     if (!workerName.trim()) return workers
@@ -163,8 +180,8 @@ export default function AddJobScreen({
     } catch (err: any) {
       setPlanUsageError(true)
       Alert.alert(
-        "Error",
-        err?.response?.data?.message || "Unable to load workers, services or plan information."
+        t("jobs.alertErrorTitle"),
+        err?.response?.data?.message || t("jobs.unableToLoadData")
       )
     } finally {
       setLoading(false)
@@ -174,31 +191,18 @@ export default function AddJobScreen({
 
   const jobsUsed = Number(planUsage?.jobsUsed ?? 0)
   const jobsLimitRaw = planUsage?.jobsLimit
-  const isUnlimited = String(jobsLimitRaw ?? "").toLowerCase() === "unlimited"
+
+  const isUnlimited =
+    Number(jobsLimitRaw) === -1 ||
+    String(jobsLimitRaw ?? "").toLowerCase() === "unlimited"
+
   const jobsLimit = isUnlimited ? null : Number(jobsLimitRaw ?? 0)
-  const hasReachedJobLimit = !isUnlimited && jobsLimit !== null && jobsUsed >= jobsLimit
 
-  const usagePercentage = isUnlimited
-    ? 0
-    : jobsLimit !== null && jobsLimit > 0
-    ? Math.min(Math.round((jobsUsed / jobsLimit) * 100), 100)
-    : 0
-
-  const addService = (service: any) => {
-    const exists = selectedServices.find(x => x.serviceId === service.serviceTypeId)
-    if (exists) return
-
-    setSelectedServices(prev => [
-      ...prev,
-      {
-        serviceId: service.serviceTypeId,
-        name: service.name,
-        quantity: 1,
-        estimatedPrice: Number(service.defaultPrice) || 0,
-        actualPrice: Number(service.defaultPrice) || 0,
-      }
-    ])
-  }
+  const hasReachedJobLimit =
+    !isUnlimited &&
+    jobsLimit !== null &&
+    jobsLimit > 0 &&
+    jobsUsed >= jobsLimit
 
   const removeService = (index: number) => {
     setSelectedServices(prev => prev.filter((_, i) => i !== index))
@@ -232,9 +236,42 @@ export default function AddJobScreen({
     closeDropdowns()
   }
 
-  const total = useMemo(() => {
+  // BILLING CALCULATIONS
+  const servicesSubtotal = useMemo(() => {
     return selectedServices.reduce((sum, item) => sum + (Number(item.estimatedPrice) * Number(item.quantity)), 0)
   }, [selectedServices])
+
+  const parsedLabor = useMemo(() => {
+    const val = parseFloat(laborCost)
+    return isNaN(val) || val < 0 ? 0 : val
+  }, [laborCost])
+
+  const parsedDiscount = useMemo(() => {
+    const val = parseFloat(discount)
+    return isNaN(val) || val < 0 ? 0 : val
+  }, [discount])
+
+  const discountAmount = useMemo(() => {
+    const rawTotal = servicesSubtotal + parsedLabor
+    return (rawTotal * Math.min(parsedDiscount, 100)) / 100
+  }, [servicesSubtotal, parsedLabor, parsedDiscount])
+
+  const grandTotal = useMemo(() => {
+    const sub = servicesSubtotal + parsedLabor
+    return Math.max(0, sub - discountAmount)
+  }, [servicesSubtotal, parsedLabor, discountAmount])
+
+  const isLaborInvalid = useMemo(() => {
+    if (!laborCost.trim()) return false
+    const val = Number(laborCost)
+    return isNaN(val) || val < 0
+  }, [laborCost])
+
+  const isDiscountInvalid = useMemo(() => {
+    if (!discount.trim()) return false
+    const val = Number(discount)
+    return isNaN(val) || val < 0 || val > 100
+  }, [discount])
 
   const onDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(false)
@@ -257,19 +294,21 @@ export default function AddJobScreen({
 
   const saveJob = async () => {
     if (planUsageLoading) {
-      Alert.alert("Please wait", "Checking your plan usage...")
+      Alert.alert(t("jobs.pleaseWait"), t("jobs.checkingPlanUsage"))
       return
     }
 
     if (planUsageError || !planUsage) {
-      Alert.alert("Unable to Verify Plan", "We could not verify your current plan usage. Please try again.")
+      Alert.alert(t("jobs.unableToVerifyPlanTitle"), t("jobs.unableToVerifyPlanMsg"))
       return
     }
 
     if (hasReachedJobLimit) {
+      const plan = planUsage?.planName || t("jobs.current")
+      
       Alert.alert(
-        "Job Limit Reached",
-        `Your ${planUsage?.planName || "current"} plan allows ${jobsLimit} jobs.\n\nYou have already used ${jobsUsed} jobs.\n\nPlease upgrade your plan to create more jobs.`
+        t("jobs.jobLimitReachedTitle"),
+        `${t("jobs.jobLimitReachedMsg")}\n(${plan}: ${jobsUsed}/${jobsLimit})`
       )
       return
     }
@@ -282,11 +321,15 @@ export default function AddJobScreen({
     const cleanVehNum = vehicleNumber.trim()
     const cleanVehModel = vehicleModel.trim()
 
-    if (!cleanName) missingFields.push("Customer Name")
-    if (!cleanPhone || cleanPhone.length !== 10) missingFields.push("Valid 10-digit Phone Number")
-    if (!cleanVehNum) missingFields.push("Vehicle Number")
-    if (!cleanVehModel) missingFields.push("Vehicle Model")
-    if (selectedServices.length === 0) missingFields.push("At least one Service")
+    if (!cleanName) missingFields.push(t("jobs.customerName"))
+    if (!cleanPhone || cleanPhone.length !== 10) missingFields.push(t("jobs.validPhone"))
+    if (!cleanVehNum) missingFields.push(t("jobs.vehicleNumber"))
+    if (!cleanVehModel) missingFields.push(t("jobs.vehicleModel"))
+    if (selectedServices.length === 0) missingFields.push(t("jobs.atLeastOneServiceField"))
+
+    // Billing Validation
+    if (isLaborInvalid) missingFields.push(t("jobs.errNonNegativeLabor"))
+    if (isDiscountInvalid) missingFields.push(t("jobs.errValidDiscount"))
 
     if (missingFields.length > 0) {
       if (!cleanName) {
@@ -303,7 +346,7 @@ export default function AddJobScreen({
         setTimeout(() => vehicleModelRef.current?.focus(), 300)
       }
 
-      Alert.alert("Validation Error", "Please correct the following fields:\n• " + missingFields.join("\n• "))
+      Alert.alert(t("jobs.alertValidationTitle"), t("jobs.validationErrorMsgList") + missingFields.join("\n• "))
       return
     }
 
@@ -325,29 +368,26 @@ export default function AddJobScreen({
         deliveryDate: deliveryDate ? deliveryDate.toISOString() : "",
         paymentStatus,
         paymentMethod,
+        laborCost: parsedLabor,
+        discount: parsedDiscount,
+        totalAmount: grandTotal,
         notes,
         services: selectedServices
       })
 
-      Alert.alert("Success", "Job Created successfully!")
+      Alert.alert(t("jobs.alertSuccessTitle"), t("jobs.alertSuccessMsg"))
       navigation.goBack()
     } catch (err: any) {
       const status = err?.response?.status
       if (status === 403) {
         Alert.alert(
-          "Job Limit Reached",
-          err?.response?.data?.message || "Your garage has reached the job limit for the current plan. Please upgrade your plan."
+          t("jobs.jobLimitReachedTitle"),
+          err?.response?.data?.message || t("jobs.jobLimitReachedGarageMsg")
         )
-        try {
-          const latestUsage = await getPlanUsage()
-          setPlanUsage(latestUsage)
-        } catch (refreshError) {
-          console.log("Failed to refresh plan usage:", refreshError)
-        }
         return
       }
 
-      Alert.alert("Error", err?.response?.data?.message || "Unable to create job. Please try again.")
+      Alert.alert(t("jobs.alertErrorTitle"), err?.response?.data?.message || t("jobs.unableToCreateJob"))
     } finally {
       setSaving(false)
     }
@@ -384,55 +424,11 @@ export default function AddJobScreen({
       keyboardShouldPersistTaps="handled"
       onScrollBeginDrag={closeDropdowns}
     >
-      {/* PLAN USAGE */}
-      <View style={styles.planUsageCard}>
-        <View style={styles.planUsageHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.planUsageTitle}>
-              {planUsage?.planName || planUsage?.planCode || "Current Plan"}
-            </Text>
-            <Text style={styles.planUsageSubtitle}>Job usage for this garage</Text>
-          </View>
-          <Text style={[styles.planUsageCount, hasReachedJobLimit && { color: "#DC2626" }]}>
-            {isUnlimited ? `${jobsUsed} / Unlimited` : `${jobsUsed} / ${jobsLimit}`}
-          </Text>
-        </View>
-
-        {!isUnlimited && jobsLimit !== null && (
-          <View style={styles.usageBarBackground}>
-            <View
-              style={[
-                styles.usageBar,
-                {
-                  width: `${usagePercentage}%`,
-                  backgroundColor: hasReachedJobLimit
-                    ? "#DC2626"
-                    : usagePercentage >= 80
-                    ? "#F59E0B"
-                    : "#2563EB"
-                }
-              ]}
-            />
-          </View>
-        )}
-
-        {hasReachedJobLimit && (
-          <Text style={styles.limitWarning}>
-            Job limit reached. Upgrade your plan to create another job.
-          </Text>
-        )}
-
-        {planUsageError && (
-          <Text style={styles.limitWarning}>
-            Unable to verify your plan. Please try again.
-          </Text>
-        )}
-      </View>
 
       {/* CUSTOMER DETAILS */}
-      <Text style={styles.heading}>Customer Details</Text>
+      <Text style={styles.heading}>{t("jobs.customerDetails")}</Text>
 
-      <RequiredLabel text="Customer Name" />
+      <RequiredLabel text={t("jobs.customerName")} />
       <View onLayout={e => (customerNameY.current = e.nativeEvent.layout.y)}>
         <TextInput
           ref={customerNameRef}
@@ -442,11 +438,11 @@ export default function AddJobScreen({
           onChangeText={setCustomerName}
         />
         {submitted && !customerName.trim() && (
-          <Text style={styles.errorText}>Customer Name is required.</Text>
+          <Text style={styles.errorText}>{t("jobs.valErrName")}</Text>
         )}
       </View>
 
-      <RequiredLabel text="Phone Number" />
+      <RequiredLabel text={t("jobs.phoneNumber")} />
       <View onLayout={e => (phoneY.current = e.nativeEvent.layout.y)}>
         <TextInput
           ref={phoneRef}
@@ -461,14 +457,14 @@ export default function AddJobScreen({
           onChangeText={setPhone}
         />
         {submitted && !phone.trim() && (
-          <Text style={styles.errorText}>Phone Number is required.</Text>
+          <Text style={styles.errorText}>{t("jobs.valErrPhoneReq")}</Text>
         )}
         {submitted && phone.trim().length > 0 && phone.trim().length !== 10 && (
-          <Text style={styles.errorText}>Phone Number must be exactly 10 digits.</Text>
+          <Text style={styles.errorText}>{t("jobs.valErrPhoneLen")}</Text>
         )}
       </View>
 
-      <Text style={styles.label}>Customer Address</Text>
+      <Text style={styles.label}>{t("jobs.customerAddress")}</Text>
       <TextInput
         onFocus={closeDropdowns}
         style={styles.input}
@@ -477,9 +473,9 @@ export default function AddJobScreen({
       />
 
       {/* VEHICLE DETAILS */}
-      <Text style={styles.heading}>Vehicle Details</Text>
+      <Text style={styles.heading}>{t("jobs.vehicleDetails")}</Text>
 
-      <RequiredLabel text="Vehicle Number" />
+      <RequiredLabel text={t("jobs.vehicleNumber")} />
       <View onLayout={e => (vehicleNumberY.current = e.nativeEvent.layout.y)}>
         <TextInput
           ref={vehicleNumberRef}
@@ -489,11 +485,11 @@ export default function AddJobScreen({
           onChangeText={text => setVehicleNumber(text.toUpperCase())}
         />
         {submitted && !vehicleNumber.trim() && (
-          <Text style={styles.errorText}>Vehicle Number is required.</Text>
+          <Text style={styles.errorText}>{t("jobs.valErrVehNum")}</Text>
         )}
       </View>
 
-      <Text style={styles.label}>Vehicle Brand</Text>
+      <Text style={styles.label}>{t("jobs.vehicleBrand")}</Text>
       <TextInput
         onFocus={closeDropdowns}
         style={styles.input}
@@ -501,7 +497,7 @@ export default function AddJobScreen({
         onChangeText={setVehicleBrand}
       />
 
-      <RequiredLabel text="Vehicle Model" />
+      <RequiredLabel text={t("jobs.vehicleModel")} />
       <View onLayout={e => (vehicleModelY.current = e.nativeEvent.layout.y)}>
         <TextInput
           ref={vehicleModelRef}
@@ -511,11 +507,11 @@ export default function AddJobScreen({
           onChangeText={setVehicleModel}
         />
         {submitted && !vehicleModel.trim() && (
-          <Text style={styles.errorText}>Vehicle Model is required.</Text>
+          <Text style={styles.errorText}>{t("jobs.valErrVehModel")}</Text>
         )}
       </View>
 
-      <Text style={styles.label}>Current Odometer</Text>
+      <Text style={styles.label}>{t("jobs.odometer")}</Text>
       <TextInput
         onFocus={closeDropdowns}
         keyboardType="numeric"
@@ -525,29 +521,29 @@ export default function AddJobScreen({
         onChangeText={setOdometer}
       />
 
-      <RequiredLabel text="Vehicle Type" />
+      <RequiredLabel text={t("jobs.vehicleType")} />
       <View style={styles.typeRow}>
         <TouchableOpacity
-          style={[styles.typeButton, vehicleType === "2 Wheeler" && styles.selectedType]}
-          onPress={() => setVehicleType("2 Wheeler")}
+          style={[styles.typeButton, vehicleType === t("jobs.twoWheeler") && styles.selectedType]}
+          onPress={() => setVehicleType(t("jobs.twoWheeler"))}
         >
-          <Text>🏍 2 Wheeler</Text>
+          <Text>🏍 {t("jobs.twoWheeler")}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.typeButton, vehicleType === "4 Wheeler" && styles.selectedType]}
-          onPress={() => setVehicleType("4 Wheeler")}
+          style={[styles.typeButton, vehicleType === t("jobs.fourWheeler") && styles.selectedType]}
+          onPress={() => setVehicleType(t("jobs.fourWheeler"))}
         >
-          <Text>🚗 4 Wheeler</Text>
+          <Text>🚗 {t("jobs.fourWheeler")}</Text>
         </TouchableOpacity>
       </View>
 
       {/* WORKER */}
-      <Text style={styles.heading}>Worker</Text>
-      <Text style={styles.label}>Assign Worker</Text>
-      <View style={styles.inputWrapper}>
+      <Text style={styles.heading}>{t("jobs.worker")}</Text>
+      <Text style={styles.label}>{t("jobs.assignWorker")}</Text>
+      <View style={[styles.inputWrapper, { zIndex: 10 }]}>
         <TextInput
-          placeholder="Select Worker"
+          placeholder={t("jobs.selectWorker")}
           style={styles.input}
           value={workerName}
           onFocus={() => {
@@ -585,10 +581,10 @@ export default function AddJobScreen({
       </View>
 
       {/* JOB DETAILS */}
-      <Text style={styles.heading}>Job Details</Text>
-      <Text style={styles.label}>Priority</Text>
+      <Text style={styles.heading}>{t("jobs.jobDetails")}</Text>
+      <Text style={styles.label}>{t("jobs.priority")}</Text>
       <View style={styles.priorityRow}>
-        {["Low", "Normal", "High"].map(item => (
+        {[t("jobs.priorityLow"), t("jobs.priorityNormal"), t("jobs.priorityHigh")].map(item => (
           <TouchableOpacity
             key={item}
             style={[styles.priorityButton, priority === item && styles.selectedPriority]}
@@ -601,17 +597,17 @@ export default function AddJobScreen({
         ))}
       </View>
 
-      <Text style={styles.label}>Expected Delivery Date</Text>
+      <Text style={styles.label}>{t("jobs.expectedDelivery")}</Text>
       <TouchableOpacity style={styles.input} onPress={() => setShowDatePicker(true)}>
         <Text style={{ color: deliveryDate ? "#111827" : "#9CA3AF" }}>
-          {deliveryDate ? formatDate(deliveryDate) : "Delivery Date"}
+          {deliveryDate ? formatDate(deliveryDate) : t("jobs.deliveryDate")}
         </Text>
       </TouchableOpacity>
 
       {/* SERVICES */}
-      <Text style={styles.heading}>Services</Text>
-      <RequiredLabel text="Service" />
-      <View style={styles.inputWrapper}>
+      <Text style={styles.heading}>{t("jobs.services")}</Text>
+      <RequiredLabel text={t("jobs.service")} />
+      <View style={[styles.inputWrapper, { zIndex: 10 }]}>
         <TextInput
           style={styles.input}
           value={serviceName}
@@ -651,19 +647,19 @@ export default function AddJobScreen({
 
       <View style={styles.row}>
         <View style={{ flex: 2 }}>
-          <Text style={styles.label}>Estimate Price</Text>
+          <Text style={styles.label}>{t("jobs.estimatePrice")}</Text>
           <TextInput
             onFocus={closeDropdowns}
             keyboardType="numeric"
             style={styles.input}
             value={servicePrice}
             onChangeText={setServicePrice}
-            placeholder="Enter estimate"
+            placeholder={t("jobs.enterEstimate")}
           />
         </View>
 
         <View style={{ flex: 1 }}>
-          <Text style={styles.label}>Quantity</Text>
+          <Text style={styles.label}>{t("jobs.quantity")}</Text>
           <TextInput
             onFocus={closeDropdowns}
             keyboardType="numeric"
@@ -675,16 +671,16 @@ export default function AddJobScreen({
       </View>
 
       <TouchableOpacity style={styles.addServiceBtn} onPress={addCurrentService}>
-        <Text style={styles.addServiceText}>Add Service</Text>
+        <Text style={styles.addServiceText}>{t("jobs.addService")}</Text>
       </TouchableOpacity>
 
       {/* SELECTED SERVICES */}
-      <Text style={styles.heading}>Selected Services</Text>
+      <Text style={styles.heading}>{t("jobs.selectedServices")}</Text>
 
       {selectedServices.length === 0 ? (
         <View style={styles.emptyCard}>
           <Text style={[styles.emptyText, submitted && { color: "#DC2626", fontWeight: "600" }]}>
-            At least one service is required.
+            {t("jobs.atLeastOneService")}
           </Text>
         </View>
       ) : (
@@ -699,7 +695,7 @@ export default function AddJobScreen({
 
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.smallLabel}>Quantity</Text>
+                <Text style={styles.smallLabel}>{t("jobs.quantity")}</Text>
                 <TextInput
                   onFocus={closeDropdowns}
                   style={styles.smallInput}
@@ -710,7 +706,7 @@ export default function AddJobScreen({
               </View>
 
               <View style={{ flex: 1 }}>
-                <Text style={styles.smallLabel}>Estimate Price</Text>
+                <Text style={styles.smallLabel}>{t("jobs.estimatePrice")}</Text>
                 <TextInput
                   onFocus={closeDropdowns}
                   style={styles.smallInput}
@@ -722,7 +718,7 @@ export default function AddJobScreen({
             </View>
 
             <View style={styles.totalRow}>
-              <Text style={styles.totalServiceText}>Subtotal</Text>
+              <Text style={styles.totalServiceText}>{t("jobs.subtotal")}</Text>
               <Text style={styles.totalServicePrice}>
                 ₹ {Number(service.quantity) * Number(service.estimatedPrice)}
               </Text>
@@ -731,14 +727,66 @@ export default function AddJobScreen({
         ))
       )}
 
-      {/* GRAND TOTAL */}
+      {/* LABOR & DISCOUNT BILLING SECTION */}
+      <Text style={styles.heading}>{t("jobs.laborAndAdditionalCharges")}</Text>
+      
+      <View style={styles.row}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.label}>{t("jobs.laborCharge")}</Text>
+          <TextInput
+            onFocus={closeDropdowns}
+            keyboardType="numeric"
+            style={[styles.input, submitted && isLaborInvalid && styles.inputError]}
+            value={laborCost}
+            onChangeText={setLaborCost}
+            placeholder="0"
+          />
+          {submitted && isLaborInvalid && (
+            <Text style={styles.errorText}>{t("jobs.errNonNegativeLabor")}</Text>
+          )}
+        </View>
+
+        <View style={{ flex: 1 }}>
+          <Text style={styles.label}>{t("jobs.discountPercent")}</Text>
+          <TextInput
+            onFocus={closeDropdowns}
+            keyboardType="numeric"
+            style={[styles.input, submitted && isDiscountInvalid && styles.inputError]}
+            value={discount}
+            onChangeText={setDiscount}
+            placeholder="0"
+          />
+          {submitted && isDiscountInvalid && (
+            <Text style={styles.errorText}>{t("jobs.errValidDiscount")}</Text>
+          )}
+        </View>
+      </View>
+
+      {/* GRAND TOTAL SUMMARY CARD */}
       <View style={styles.totalCard}>
-        <Text style={styles.totalLabel}>Estimated Bill</Text>
-        <Text style={styles.totalAmount}>₹ {total}</Text>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>{t("jobs.servicesSubtotal")}</Text>
+          <Text style={styles.summaryValue}>₹ {servicesSubtotal}</Text>
+        </View>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>{t("jobs.laborFee")}</Text>
+          <Text style={styles.summaryValue}>+ ₹ {parsedLabor}</Text>
+        </View>
+        {parsedDiscount > 0 && (
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>{t("jobs.discountLabel")} ({parsedDiscount}%):</Text>
+            <Text style={[styles.summaryValue, { color: "#059669" }]}>- ₹ {discountAmount.toFixed(2)}</Text>
+          </View>
+        )}
+        <View style={styles.divider} />
+        <View style={styles.summaryRow}>
+          <Text style={styles.totalLabel}>{t("jobs.estimatedBill")}</Text>
+          <Text style={styles.totalAmount}>₹ {grandTotal.toFixed(2)}</Text>
+        </View>
       </View>
 
       {/* NOTES & COMPLAINTS */}
-      <Text style={styles.heading}>Customer Complaint</Text>
+      <Text style={styles.heading}>{t("jobs.customerComplaint")}</Text>
       <TextInput
         onFocus={closeDropdowns}
         multiline
@@ -747,7 +795,7 @@ export default function AddJobScreen({
         onChangeText={setComplaint}
       />
 
-      <Text style={styles.heading}>Inspection Notes</Text>
+      <Text style={styles.heading}>{t("jobs.inspectionNotes")}</Text>
       <TextInput
         onFocus={closeDropdowns}
         multiline
@@ -756,10 +804,10 @@ export default function AddJobScreen({
         onChangeText={setInspectionNotes}
       />
 
-      {/* PAYMENT STATUS */}
-      <Text style={styles.heading}>Payment Status</Text>
+      {/* PAYMENT STATUS & METHOD */}
+      <Text style={styles.heading}>{t("jobs.paymentStatus")}</Text>
       <View style={styles.priorityRow}>
-        {["Pending", "Advance", "Paid"].map(item => (
+        {[t("jobs.paymentPending"), t("jobs.paymentAdvance"), t("jobs.paymentPaid")].map(item => (
           <TouchableOpacity
             key={item}
             style={[styles.priorityButton, paymentStatus === item && styles.selectedPriority]}
@@ -770,10 +818,10 @@ export default function AddJobScreen({
         ))}
       </View>
 
-      <View style={styles.inputWrapper}>
-        <Text style={styles.label}>Payment Method</Text>
+      <View style={[styles.inputWrapper, { zIndex: 100 }]}>
+        <Text style={styles.label}>{t("jobs.paymentMethod")}</Text>
         <TextInput
-          placeholder="Select Payment Method"
+          placeholder={t("jobs.selectPaymentMethod")}
           style={styles.input}
           value={paymentMethod}
           onFocus={() => {
@@ -788,7 +836,7 @@ export default function AddJobScreen({
         />
 
         {showPaymentSuggestions && (
-          <View style={styles.suggestionContainer}>
+          <View style={[styles.suggestionContainer, styles.paymentDropdown]}>
             {searchedPaymentMethods.map(method => (
               <TouchableOpacity
                 key={method}
@@ -838,64 +886,61 @@ export default function AddJobScreen({
         {saving || planUsageLoading ? (
           <ActivityIndicator color="white" />
         ) : hasReachedJobLimit ? (
-          <Text style={styles.saveText}>Job Limit Reached</Text>
+          <Text style={styles.saveText}>{t("jobs.jobLimitReachedBtn")}</Text>
         ) : planUsageError ? (
-          <Text style={styles.saveText}>Unable to Verify Plan</Text>
+          <Text style={styles.saveText}>{t("jobs.unableToVerifyBtn")}</Text>
         ) : (
-          <Text style={styles.saveText}>Create Job</Text>
+          <Text style={styles.saveText}>{t("jobs.createJob")}</Text>
         )}
       </TouchableOpacity>
 
-      <View style={{ height: 50 }} />
+      <View style={{ height: 60 }} />
     </ScrollView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F3F4F6", padding: 16 },
+  container: { flex: 1, padding: 16, backgroundColor: "#F9FAFB" },
   loader: { flex: 1, justifyContent: "center", alignItems: "center" },
-  planUsageCard: { backgroundColor: "#FFFFFF", borderRadius: 18, padding: 16, marginBottom: 8, borderWidth: 1, borderColor: "#E5E7EB" },
-  planUsageHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  planUsageTitle: { fontSize: 15, fontWeight: "700", color: "#111827" },
-  planUsageSubtitle: { fontSize: 12, color: "#6B7280", marginTop: 3 },
-  planUsageCount: { fontSize: 16, fontWeight: "700", color: "#2563EB" },
-  usageBarBackground: { height: 7, backgroundColor: "#E5E7EB", borderRadius: 10, overflow: "hidden", marginTop: 14 },
-  usageBar: { height: "100%", borderRadius: 10 },
-  limitWarning: { color: "#DC2626", fontSize: 12, fontWeight: "600", marginTop: 10, lineHeight: 18 },
-  heading: { fontSize: 18, fontWeight: "700", color: "#111827", marginTop: 20, marginBottom: 12 },
-  label: { fontWeight: "600", color: "#374151", marginBottom: 10 },
-  input: { backgroundColor: "white", borderRadius: 16, paddingHorizontal: 16, paddingVertical: 18, marginBottom: 14 },
-  notes: { backgroundColor: "white", borderRadius: 18, paddingHorizontal: 16, paddingVertical: 16, minHeight: 120, textAlignVertical: "top" },
-  typeRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
-  typeButton: { width: "48%", backgroundColor: "white", borderRadius: 16, padding: 15, alignItems: "center" },
-  selectedType: { borderWidth: 2, borderColor: "#2563EB", backgroundColor: "#EFF6FF" },
-  priorityRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 16 },
-  priorityButton: { width: "31%", backgroundColor: "white", paddingVertical: 14, borderRadius: 14, alignItems: "center" },
-  selectedPriority: { backgroundColor: "#2563EB" },
-  cardTitle: { fontSize: 16, fontWeight: "600", color: "#111827" },
-  cardSubtitle: { color: "#6B7280", marginTop: 4 },
-  addServiceBtn: { flexDirection: "row", backgroundColor: "#2563EB", borderRadius: 16, justifyContent: "center", alignItems: "center", padding: 16, marginTop: 12, marginBottom: 20 },
-  addServiceText: { color: "white", fontWeight: "700", marginLeft: 8 },
-  selectedServiceCard: { backgroundColor: "white", borderRadius: 18, padding: 16, marginBottom: 14 },
-  selectedHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
-  row: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
-  smallLabel: { fontSize: 13, color: "#6B7280", marginBottom: 6 },
-  smallInput: { backgroundColor: "#F9FAFB", borderRadius: 12, padding: 12, textAlign: "center" },
-  totalRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#F3F4F6" },
-  totalServiceText: { fontWeight: "600", color: "#374151" },
-  totalServicePrice: { fontWeight: "700", color: "#16A34A", fontSize: 16 },
-  totalCard: { backgroundColor: "#111827", borderRadius: 18, padding: 20, marginTop: 8, marginBottom: 20 },
-  totalLabel: { color: "#D1D5DB", fontSize: 15 },
-  totalAmount: { color: "white", fontSize: 28, fontWeight: "700", marginTop: 8 },
-  emptyCard: { backgroundColor: "white", padding: 24, borderRadius: 18, alignItems: "center" },
+  heading: { fontSize: 18, fontWeight: "700", marginVertical: 12, color: "#111827" },
+  label: { fontSize: 14, fontWeight: "600", color: "#374151", marginBottom: 6 },
+  smallLabel: { fontSize: 12, color: "#6B7280", marginBottom: 4 },
+  input: { backgroundColor: "white", borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 10, padding: 12, marginBottom: 12 },
+  smallInput: { backgroundColor: "#F3F4F6", borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 8, padding: 8 },
+  inputError: { borderColor: "#EF4444", backgroundColor: "#FEF2F2" },
+  errorText: { color: "#DC2626", fontSize: 12, marginTop: -8, marginBottom: 8, marginLeft: 4 },
+  row: { flexDirection: "row", gap: 12 },
+  typeRow: { flexDirection: "row", gap: 12, marginBottom: 12 },
+  typeButton: { flex: 1, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: "#E5E7EB", alignItems: "center", backgroundColor: "white" },
+  selectedType: { backgroundColor: "#DBEAFE", borderColor: "#2563EB" },
+  inputWrapper: { position: "relative", marginBottom: 8 },
+  suggestionContainer: { backgroundColor: "white", borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 10, position: "absolute", top: 72, left: 0, right: 0, zIndex: 1000, elevation: 10, maxHeight: 200, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8 },
+  paymentDropdown: { top: 76, maxHeight: 180 },
+  suggestionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: "#F3F4F6", flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  workerSuggestion: { padding: 12, borderBottomWidth: 1, borderBottomColor: "#F3F4F6", flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  cardTitle: { fontWeight: "600", color: "#111827" },
+  cardSubtitle: { fontSize: 12, color: "#6B7280" },
+  suggestionPrice: { fontWeight: "700", color: "#059669" },
+  priorityRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  priorityButton: { flex: 1, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: "#E5E7EB", alignItems: "center", backgroundColor: "white" },
+  selectedPriority: { backgroundColor: "#2563EB", borderColor: "#2563EB" },
+  addServiceBtn: { backgroundColor: "#2563EB", padding: 12, borderRadius: 10, alignItems: "center", marginVertical: 12 },
+  addServiceText: { color: "white", fontWeight: "600" },
+  emptyCard: { padding: 16, backgroundColor: "#F3F4F6", borderRadius: 10, alignItems: "center", marginBottom: 12 },
   emptyText: { color: "#6B7280" },
-  saveBtn: { backgroundColor: "#2563EB", padding: 18, borderRadius: 18, alignItems: "center", marginTop: 10 },
-  saveText: { color: "white", fontWeight: "700", fontSize: 16 },
-  suggestionContainer: { position: "absolute", top: 58, left: 0, right: 0, backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: "#E5E7EB", maxHeight: 220, zIndex: 1000, elevation: 20, overflow: "hidden" },
-  suggestionItem: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
-  suggestionPrice: { fontWeight: "700", color: "#2563EB", fontSize: 15 },
-  workerSuggestion: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
-  inputWrapper: { position: "relative", zIndex: 100, marginBottom: 0 },
-  inputError: { borderWidth: 2, borderColor: "#EF4444" },
-  errorText: { color: "#DC2626", fontSize: 13, marginTop: -8, marginBottom: 12, marginLeft: 4 }
+  selectedServiceCard: { backgroundColor: "white", padding: 12, borderRadius: 10, borderBottomWidth: 1, borderColor: "#E5E7EB", marginBottom: 12 },
+  selectedHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  totalRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 8 },
+  totalServiceText: { fontSize: 12, color: "#6B7280" },
+  totalServicePrice: { fontWeight: "600", color: "#111827" },
+  totalCard: { backgroundColor: "#1E293B", padding: 16, borderRadius: 12, marginVertical: 12 },
+  summaryRow: { flexDirection: "row", justifyContent: "space-between", marginVertical: 2 },
+  summaryLabel: { color: "#94A3B8", fontSize: 14 },
+  summaryValue: { color: "white", fontSize: 14, fontWeight: "600" },
+  divider: { height: 1, backgroundColor: "#334155", marginVertical: 8 },
+  totalLabel: { color: "white", fontSize: 16, fontWeight: "600" },
+  totalAmount: { color: "#38BDF8", fontSize: 20, fontWeight: "700" },
+  notes: { backgroundColor: "white", borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 10, padding: 12, height: 80, textAlignVertical: "top", marginBottom: 12 },
+  saveBtn: { backgroundColor: "#2563EB", padding: 16, borderRadius: 12, alignItems: "center", marginTop: 24, zIndex: 1, elevation: 1 },
+  saveText: { color: "white", fontSize: 16, fontWeight: "700" }
 })
