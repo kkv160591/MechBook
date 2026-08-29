@@ -2,7 +2,7 @@ import axios from "axios"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 
 const API_URL =
-  "http://localhost:5000/api"
+  "http://localhost:3001/api"
 
 export const getCustomers =
   async () => {

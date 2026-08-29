@@ -21,914 +21,388 @@ import { getJobById } from "../../services/jobService"
 
 import { getGarageProfile } from "../../services/garageService"
 
+import { getWorkers } from "../../services/workerService"
+
 import {
   getGSTSettings,
   getInvoiceSettings
 } from "../../services/settingsService"
 
 export default function InvoiceScreen() {
-
   const route = useRoute<any>()
-
   const { jobId } = route.params
 
   const [loading, setLoading] = useState(true)
-
   const [job, setJob] = useState<any>(null)
-
   const [garage, setGarage] = useState<any>(null)
-
-  const [gstSettings, setGSTSettings] =
-    useState<any>(null)
-
-  const [invoiceSettings, setInvoiceSettings] =
-    useState<any>(null)
+  const [gstSettings, setGSTSettings] = useState<any>(null)
+  const [invoiceSettings, setInvoiceSettings] = useState<any>(null)
+  const [workers, setWorkers] = useState<any[]>([])
 
   useEffect(() => {
-
     loadAll()
-
   }, [])
 
   const loadAll = async () => {
-
     try {
-
-      const [
-
-        jobRes,
-
-        garageRes,
-
-        gst,
-
-        invoice
-
-      ] = await Promise.all([
-
+      const [jobRes, garageRes, gst, invoice, workersRes] = await Promise.all([
         getJobById(jobId),
-
         getGarageProfile(),
-
         getGSTSettings(),
-
-        getInvoiceSettings()
-
+        getInvoiceSettings(),
+        getWorkers(),
       ])
 
       setJob(jobRes.job)
-
       setGarage(garageRes.garage)
-
       setGSTSettings(gst)
-
       setInvoiceSettings(invoice)
-
-    }
-
-    catch (err) {
-
+      setWorkers(workersRes.workers || [])
+    } catch (err) {
       console.log(err)
-
-    }
-
-    finally {
-
+    } finally {
       setLoading(false)
-
     }
-
   }
 
-  const partsTotal = useMemo(() => {
-
-    if (!job) return 0
-
-    return job.services.reduce(
-
-      (sum: number, item: any) =>
-
-        sum +
-
-        Number(item.actualPrice || 0) *
-
-        Number(item.quantity || 1),
-
-      0
-
+  // Find worker details matching JobDetailScreen logic
+  const assignedWorker = useMemo(() => {
+    if (!job?.workerId || !workers.length) return null
+    return workers.find(
+      (worker: any) => String(worker.workerId) === String(job.workerId)
     )
+  }, [job, workers])
 
+  // 1. Calculate Services/Parts Subtotal (Matching JobDetailScreen logic)
+  const partsTotal = useMemo(() => {
+    if (!job?.services) return 0
+    return job.services.reduce((sum: number, item: any) => {
+      const quantity = Number(item.quantity || 0)
+      const estimatedPrice = Number(item.estimatedPrice || 0)
+      const actualPrice =
+        item.actualPrice !== null &&
+        item.actualPrice !== undefined &&
+        item.actualPrice !== ""
+          ? Number(item.actualPrice)
+          : estimatedPrice
+
+      return sum + actualPrice * quantity
+    }, 0)
   }, [job])
 
-  const labourCharge = job?.labourCharge || 0
+  // 2. Labor Cost (Property: laborCost)
+  const laborFee = Number(job?.laborCost ?? invoiceSettings?.defaultLaborCost ?? 0)
 
-  const discount = job?.discount || 0
+  // 3. Raw Subtotal before Discount & GST
+  const subTotal = partsTotal + laborFee
 
-  const gstPercent =
+  // 4. Discount Calculation
+  const discountType = job?.discountType || invoiceSettings?.defaultDiscountType || "percentage"
+  const rawDiscountValue = Number(job?.discount ?? invoiceSettings?.defaultDiscount ?? 0)
 
-  gstSettings?.enabled
+  const discountAmount = useMemo(() => {
+    if (discountType === "percentage") {
+      return (subTotal * Math.min(rawDiscountValue, 100)) / 100
+    }
+    return Math.min(rawDiscountValue, subTotal)
+  }, [subTotal, discountType, rawDiscountValue])
 
-  ? gstSettings.defaultRate
+  // 5. Taxable Base & GST Calculations
+  const taxableAmount = Math.max(0, subTotal - discountAmount)
+  const gstPercent = gstSettings?.enabled ? Number(gstSettings.defaultRate || 0) : 0
+  const gstAmount = (taxableAmount * gstPercent) / 100
 
-  : 0
+  // 6. Final Bill & Rounding
+  const rawGrandTotal = taxableAmount + gstAmount
+  const grandTotal = Math.round(rawGrandTotal)
+  const roundOff = grandTotal - rawGrandTotal
 
-  const subTotal = partsTotal + labourCharge
-
-  const gstAmount =
-    (subTotal - discount) *
-    gstPercent / 100
-
-  const roundOff =
-    Math.round(subTotal - discount + gstAmount) -
-    (subTotal - discount + gstAmount)
-
-  const grandTotal =
-    Math.round(
-      subTotal -
-      discount +
-      gstAmount
-    )
-
-  if (
-
-  loading ||
-
-  !garage ||
-
-  !gstSettings ||
-
-  !invoiceSettings ||
-
-  !job
-
-  ) {
-
+  if (loading || !garage || !gstSettings || !invoiceSettings || !job) {
     return (
-
       <View style={styles.loader}>
-
-        <ActivityIndicator
-          size="large"
-          color="#2563EB"
-        />
-
+        <ActivityIndicator size="large" color="#2563EB" />
       </View>
-
     )
-
   }
 
   return (
-
-<ScrollView
-style={styles.container}
-showsVerticalScrollIndicator={false}
->
-
-{/* GARAGE HEADER */}
-
-<View style={styles.header}>
-{
-
-invoiceSettings.showGarageLogo && (
-<View style={styles.logoContainer}>
-
-{
-
-garage.logo ?
-
-<Image
-
-source={{ uri: garage.logo }}
-
-style={styles.logo}
-
-/>
-
-:
-
-<MaterialCommunityIcons
-
-name="garage"
-
-size={50}
-
-color="#2563EB"
-
-/>
-
-}
-
-</View>
-)
-}
-
-<Text style={styles.garageName}>
-{garage.garageName}
-</Text>
-
-<Text style={styles.garageSubtitle}>
-Owner : {garage.ownerName}
-</Text>
-
-{
-
-invoiceSettings.showGarageAddress && (
-<Text style={styles.garageAddress}>
-{garage.address}
-
-{garage.city}, {garage.state}
-
-{garage.pincode}
-</Text>
-)
-
-}
-{
-
-invoiceSettings.showGarageAddress && (
-<Text style={styles.garagePhone}>
-{garage.phone}
-</Text>
-)
-
-}
-
-{
-
-invoiceSettings.showGSTNumber &&
-
-gstSettings.enabled && (
-
-<Text style={styles.gst}>
-GSTIN : {garage.gstNumber}
-</Text>
-)
-
-}
-
-<View style={styles.invoiceStrip}>
-
-<View>
-
-<Text style={styles.invoiceLabel}>
-Invoice No
-</Text>
-
-<Text style={styles.invoiceValue}>
-INV-{job.jobId.slice(0,8).toUpperCase()}
-</Text>
-
-</View>
-
-<View>
-
-<Text style={styles.invoiceLabel}>
-Invoice Date
-</Text>
-
-<Text style={styles.invoiceValue}>
-{new Date(job.createdAt).toLocaleDateString()}
-</Text>
-
-</View>
-
-</View>
-
-</View>
-
-{/* CUSTOMER */}
-
-<View style={styles.card}>
-
-<Text style={styles.cardTitle}>
-Customer Details
-</Text>
-
-{
-
-invoiceSettings.showCustomerAddress && (
-<View style={styles.infoRow}>
-
-<Ionicons
-name="person-outline"
-size={18}
-color="#2563EB"
-/>
-
-<Text style={styles.infoText}>
-{job.customerName}
-</Text>
-
-</View>
-)
-
-}
-
-<View style={styles.infoRow}>
-
-<Ionicons
-name="call-outline"
-size={18}
-color="#2563EB"
-/>
-
-<Text style={styles.infoText}>
-{job.phone}
-</Text>
-
-</View>
-
-<View style={styles.infoRow}>
-
-<Ionicons
-name="location-outline"
-size={18}
-color="#2563EB"
-/>
-
-<Text style={styles.infoText}>
-{job.customerAddress || "-"}
-</Text>
-
-</View>
-
-</View>
-
-{/* VEHICLE */}
-
-{
-
-invoiceSettings.showVehicleDetails && (
-<View style={styles.card}>
-
-<Text style={styles.cardTitle}>
-Vehicle Details
-</Text>
-
-<View style={styles.vehicleHeader}>
-
-<MaterialCommunityIcons
-
-name={
-job.vehicleType === "2 Wheeler"
-?
-"motorbike"
-:
-"car"
-}
-
-size={42}
-
-color="#2563EB"
-
-/>
-
-<View style={{marginLeft:15}}>
-
-<Text style={styles.vehicleNumber}>
-{job.vehicleNumber}
-</Text>
-
-<Text style={styles.vehicleModel}>
-{job.vehicleBrand} {job.vehicleModel}
-</Text>
-
-</View>
-
-</View>
-
-<View style={styles.divider}/>
-
-<View style={styles.grid}>
-
-<View style={styles.gridItem}>
-
-<Text style={styles.label}>
-Vehicle Type
-</Text>
-
-<Text style={styles.value}>
-{job.vehicleType}
-</Text>
-
-</View>
-
-<View style={styles.gridItem}>
-
-<Text style={styles.label}>
-Odometer
-</Text>
-
-<Text style={styles.value}>
-{job.odometer || "-"} KM
-</Text>
-
-</View>
-
-<View style={styles.gridItem}>
-
-<Text style={styles.label}>
-Assigned Worker
-</Text>
-
-<Text style={styles.value}>
-{job.workerName || "-"}
-</Text>
-
-</View>
-
-<View style={styles.gridItem}>
-
-<Text style={styles.label}>
-Priority
-</Text>
-
-<Text style={styles.value}>
-{job.priority || "Normal"}
-</Text>
-
-</View>
-
-</View>
-
-</View>
-)
-
-}
-
-{/* JOB DETAILS */}
-
-<View style={styles.card}>
-
-<Text style={styles.cardTitle}>
-Job Information
-</Text>
-
-<Text style={styles.sectionLabel}>
-Complaint
-</Text>
-
-<Text style={styles.description}>
-{job.complaint || "-"}
-</Text>
-
-<View style={{height:15}}/>
-
-<Text style={styles.sectionLabel}>
-Inspection Notes
-</Text>
-
-<Text style={styles.description}>
-{job.inspectionNotes || "-"}
-</Text>
-
-</View>
-
-<View style={styles.card}>
-
-<Text style={styles.cardTitle}>
-Services Performed
-</Text>
-
-{/* TABLE HEADER */}
-
-<View style={styles.tableHeader}>
-
-<Text style={[styles.tableCell,{flex:3,fontWeight:"700"}]}>
-Service
-</Text>
-
-<Text style={styles.tableCell}>
-Qty
-</Text>
-
-<Text style={styles.tableCell}>
-Rate
-</Text>
-
-<Text style={styles.tableCell}>
-Amount
-</Text>
-
-</View>
-
-{
-
-job.services.map((service:any,index:number)=>(
-
-<View
-key={index}
-style={styles.tableRow}
->
-
-<Text
-style={[
-styles.tableCell,
-{flex:3}
-]}
->
-
-{service.name}
-
-</Text>
-
-<Text style={styles.tableCell}>
-
-{service.quantity}
-
-</Text>
-
-<Text style={styles.tableCell}>
-
-₹{service.actualPrice}
-
-</Text>
-
-<Text style={styles.tableCell}>
-
-₹{service.quantity * service.actualPrice}
-
-</Text>
-
-</View>
-
-))
-
-}
-
-</View>
-
-{/* BILL SUMMARY */}
-
-<View style={styles.card}>
-
-<Text style={styles.cardTitle}>
-Bill Summary
-</Text>
-
-<View style={styles.summaryRow}>
-
-<Text style={styles.summaryLabel}>
-Parts Total
-</Text>
-
-<Text style={styles.summaryValue}>
-₹{partsTotal}
-</Text>
-
-</View>
-
-<View style={styles.summaryRow}>
-
-<Text style={styles.summaryLabel}>
-Labour Charge
-</Text>
-
-<Text style={styles.summaryValue}>
-₹{labourCharge}
-</Text>
-
-</View>
-
-<View style={styles.summaryRow}>
-
-<Text style={styles.summaryLabel}>
-Subtotal
-</Text>
-
-<Text style={styles.summaryValue}>
-₹{subTotal}
-</Text>
-
-</View>
-
-<View style={styles.summaryRow}>
-
-<Text style={styles.summaryLabel}>
-Discount
-</Text>
-
-<Text style={styles.summaryValue}>
-- ₹{discount}
-</Text>
-
-</View>
-
-<View style={styles.summaryRow}>
-
-<Text style={styles.summaryLabel}>
-GST ({gstPercent}%)
-</Text>
-
-<Text style={styles.summaryValue}>
-₹{gstAmount.toFixed(2)}
-</Text>
-
-</View>
-
-<View style={styles.summaryRow}>
-
-<Text style={styles.summaryLabel}>
-Round Off
-</Text>
-
-<Text style={styles.summaryValue}>
-₹{roundOff.toFixed(2)}
-</Text>
-
-</View>
-
-<View style={styles.divider}/>
-
-<View style={styles.summaryRow}>
-
-<Text style={styles.grandLabel}>
-Grand Total
-</Text>
-
-<Text style={styles.grandValue}>
-₹{grandTotal}
-</Text>
-
-</View>
-
-</View>
-
-{/* PAYMENT */}
-{
-
-invoiceSettings.showPaymentDetails && (
-<View style={styles.card}>
-
-<Text style={styles.cardTitle}>
-Payment Details
-</Text>
-
-<View style={styles.infoRow}>
-
-<Ionicons
-name="wallet-outline"
-size={18}
-color="#2563EB"
-/>
-
-<Text style={styles.infoText}>
-Status : {job.paymentStatus || "Pending"}
-</Text>
-
-</View>
-
-<View style={styles.infoRow}>
-
-<Ionicons
-name="card-outline"
-size={18}
-color="#2563EB"
-/>
-
-<Text style={styles.infoText}>
-Method : {job.paymentMethod || "-"}
-</Text>
-
-</View>
-
-<View style={styles.infoRow}>
-
-<Ionicons
-name="cash-outline"
-size={18}
-color="#2563EB"
-/>
-
-<Text style={styles.infoText}>
-Amount Paid : ₹{job.amountPaid || 0}
-</Text>
-
-</View>
-
-<View style={styles.infoRow}>
-
-<Ionicons
-name="cash"
-size={18}
-color="#DC2626"
-/>
-
-<Text
-style={{
-fontWeight:"700",
-color:"#DC2626",
-marginLeft:10
-}}
->
-
-Balance :
-₹{grandTotal-(job.amountPaid||0)}
-
-</Text>
-
-</View>
-
-</View>
-)
-
-}
-
-{/* WARRANTY */}
-
-<View style={styles.card}>
-
-<Text style={styles.cardTitle}>
-Warranty
-</Text>
-
-<Text style={styles.description}>
-
-• Labour warranty : 30 Days
-
-</Text>
-
-<Text style={styles.description}>
-
-• Genuine spare warranty depends on manufacturer.
-
-</Text>
-
-<Text style={styles.description}>
-
-• Warranty void if vehicle is repaired elsewhere.
-
-</Text>
-
-</View>
-
-{/* TERMS */}
-
-<View style={styles.card}>
-
-<Text style={styles.cardTitle}>
-Terms & Conditions
-</Text>
-
-<Text style={styles.description}>
-
-{invoiceSettings.terms}
-
-</Text>
-
-<Text style={styles.description}>
-
-• Please verify your vehicle before delivery.
-
-</Text>
-
-<Text style={styles.description}>
-
-• Garage is not responsible for valuables left inside vehicle.
-
-</Text>
-
-<Text style={styles.description}>
-
-• Thank you for choosing our garage.
-
-</Text>
-
-</View>
-
-{
-
-invoiceSettings.footerNote && (
-
-<View style={styles.card}>
-
-<Text
-style={{
-textAlign:"center",
-color:"#6B7280"
-}}
->
-
-{invoiceSettings.footerNote}
-
-</Text>
-
-</View>
-
-)
-
-}
-
-{/* SIGNATURES */}
-
-<View style={styles.card}>
-
-<View
-style={{
-flexDirection:"row",
-justifyContent:"space-between"
-}}
->
-
-<View style={{alignItems:"center"}}>
-
-<View style={styles.signatureLine}/>
-
-<Text style={styles.signatureText}>
-Customer Signature
-</Text>
-
-</View>
-
-<View style={{alignItems:"center"}}>
-
-<View style={styles.signatureLine}/>
-
-<Text style={styles.signatureText}>
-Authorized Signatory
-</Text>
-
-</View>
-
-</View>
-
-</View>
-
-{/* ACTION BUTTONS */}
-
-<TouchableOpacity
-
-disabled={job.status !== "completed"}
-
-style={[
-
-styles.primaryButton,
-
-job.status !== "completed" &&
-
-styles.disabledButton
-
-]}
-
->
-
-<Ionicons
-
-name="document-text-outline"
-
-size={22}
-
-color="white"
-
-/>
-
-<Text style={styles.primaryButtonText}>
-
-Generate PDF Invoice
-
-</Text>
-
-</TouchableOpacity>
-
-<TouchableOpacity
-style={styles.secondaryButton}
->
-
-<Ionicons
-name="share-social-outline"
-size={22}
-color="#2563EB"
-/>
-
-<Text style={styles.secondaryButtonText}>
-Share Invoice
-</Text>
-
-</TouchableOpacity>
-
-<TouchableOpacity
-style={styles.secondaryButton}
->
-
-<Ionicons
-name="print-outline"
-size={22}
-color="#2563EB"
-/>
-
-<Text style={styles.secondaryButtonText}>
-Print Invoice
-</Text>
-
-</TouchableOpacity>
-
-<View style={{height:40}}/>
-
-</ScrollView>
-
-)
-
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* GARAGE HEADER */}
+      <View style={styles.header}>
+        {invoiceSettings.showGarageLogo && (
+          <View style={styles.logoContainer}>
+            {garage.logo ? (
+              <Image source={{ uri: garage.logo }} style={styles.logo} />
+            ) : (
+              <MaterialCommunityIcons name="garage" size={50} color="#2563EB" />
+            )}
+          </View>
+        )}
+
+        <Text style={styles.garageName}>{garage.garageName}</Text>
+        <Text style={styles.garageSubtitle}>Owner : {garage.ownerName}</Text>
+
+        {invoiceSettings.showGarageAddress && (
+          <>
+            <Text style={styles.garageAddress}>
+              {garage.address} {garage.city}, {garage.state} {garage.pincode}
+            </Text>
+            <Text style={styles.garagePhone}>{garage.phone}</Text>
+          </>
+        )}
+
+        {invoiceSettings.showGSTNumber && gstSettings.enabled && (
+          <Text style={styles.gst}>GSTIN : {gstSettings.gstNumber}</Text>
+        )}
+
+        <View style={styles.invoiceStrip}>
+          <View>
+            <Text style={styles.invoiceLabel}>Invoice No</Text>
+            <Text style={styles.invoiceValue}>
+              INV-{(job._id || job.jobId || "").slice(0, 8).toUpperCase()}
+            </Text>
+          </View>
+          <View>
+            <Text style={styles.invoiceLabel}>Invoice Date</Text>
+            <Text style={styles.invoiceValue}>
+              {new Date(job.createdAt || Date.now()).toLocaleDateString()}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* CUSTOMER */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Customer Details</Text>
+        <View style={styles.infoRow}>
+          <Ionicons name="person-outline" size={18} color="#2563EB" />
+          <Text style={styles.infoText}>{job.customerName}</Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Ionicons name="call-outline" size={18} color="#2563EB" />
+          <Text style={styles.infoText}>{job.phone}</Text>
+        </View>
+        {invoiceSettings.showCustomerAddress && (
+          <View style={styles.infoRow}>
+            <Ionicons name="location-outline" size={18} color="#2563EB" />
+            <Text style={styles.infoText}>{job.customerAddress || "-"}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* VEHICLE DETAILS */}
+      {invoiceSettings.showVehicleDetails && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Vehicle Details</Text>
+          <View style={styles.vehicleHeader}>
+            <MaterialCommunityIcons
+              name={job.vehicleType === "2 Wheeler" ? "motorbike" : "car"}
+              size={42}
+              color="#2563EB"
+            />
+            <View style={{ marginLeft: 15 }}>
+              <Text style={styles.vehicleNumber}>{job.vehicleNumber}</Text>
+              <Text style={styles.vehicleModel}>
+                {job.vehicleBrand} {job.vehicleModel}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.grid}>
+            <View style={styles.gridItem}>
+              <Text style={styles.label}>Vehicle Type</Text>
+              <Text style={styles.value}>{job.vehicleType || "-"}</Text>
+            </View>
+            <View style={styles.gridItem}>
+              <Text style={styles.label}>Odometer</Text>
+              <Text style={styles.value}>
+                {job.odometer ? `${job.odometer} KM` : "-"}
+              </Text>
+            </View>
+            <View style={styles.gridItem}>
+              <Text style={styles.label}>Assigned Worker</Text>
+              <Text style={styles.value}>
+                {job.workerName || assignedWorker?.name || "-"}
+              </Text>
+            </View>
+            <View style={styles.gridItem}>
+              <Text style={styles.label}>Priority</Text>
+              <Text style={styles.value}>{job.priority || "Normal"}</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* JOB INFORMATION */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Job Information</Text>
+        <Text style={styles.sectionLabel}>Complaint</Text>
+        <Text style={styles.description}>{job.complaint || "-"}</Text>
+
+        <View style={{ height: 12 }} />
+
+        <Text style={styles.sectionLabel}>Inspection Notes</Text>
+        <Text style={styles.description}>{job.inspectionNotes || "-"}</Text>
+
+        {job.deliveryDate && (
+          <>
+            <View style={{ height: 12 }} />
+            <Text style={styles.sectionLabel}>Estimated Delivery</Text>
+            <Text style={styles.description}>
+              {new Date(job.deliveryDate).toLocaleString()}
+            </Text>
+          </>
+        )}
+      </View>
+
+      {/* SERVICES PERFORMED */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Services Performed</Text>
+        <View style={styles.tableHeader}>
+          <Text style={[styles.tableCell, { flex: 3, fontWeight: "700" }]}>Service</Text>
+          <Text style={styles.tableCell}>Qty</Text>
+          <Text style={styles.tableCell}>Rate</Text>
+          <Text style={styles.tableCell}>Amount</Text>
+        </View>
+
+        {(job.services || []).map((service: any, index: number) => {
+          const quantity = Number(service.quantity || 0)
+          const estimatedPrice = Number(service.estimatedPrice || 0)
+          const actualPrice =
+            service.actualPrice !== null &&
+            service.actualPrice !== undefined &&
+            service.actualPrice !== ""
+              ? Number(service.actualPrice)
+              : estimatedPrice
+          const itemTotal = quantity * actualPrice
+
+          return (
+            <View key={index} style={styles.tableRow}>
+              <Text style={[styles.tableCell, { flex: 3 }]}>{service.name}</Text>
+              <Text style={styles.tableCell}>{quantity}</Text>
+              <Text style={styles.tableCell}>₹{actualPrice}</Text>
+              <Text style={styles.tableCell}>₹{itemTotal.toFixed(2)}</Text>
+            </View>
+          )
+        })}
+      </View>
+
+      {/* BILL SUMMARY */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Bill Summary</Text>
+
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Services Subtotal</Text>
+          <Text style={styles.summaryValue}>₹{partsTotal.toFixed(2)}</Text>
+        </View>
+
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Labor Fee</Text>
+          <Text style={styles.summaryValue}>+ ₹{laborFee.toFixed(2)}</Text>
+        </View>
+
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Subtotal</Text>
+          <Text style={styles.summaryValue}>₹{subTotal.toFixed(2)}</Text>
+        </View>
+
+        {discountAmount > 0 && (
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>
+              Discount {discountType === "percentage" ? `(${rawDiscountValue}%)` : "(Fixed)"}
+            </Text>
+            <Text style={[styles.summaryValue, { color: "#059669" }]}>
+              - ₹{discountAmount.toFixed(2)}
+            </Text>
+          </View>
+        )}
+
+        {gstSettings.enabled && (
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>GST ({gstPercent}%)</Text>
+            <Text style={styles.summaryValue}>+ ₹{gstAmount.toFixed(2)}</Text>
+          </View>
+        )}
+
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Round Off</Text>
+          <Text style={styles.summaryValue}>₹{roundOff.toFixed(2)}</Text>
+        </View>
+
+        <View style={styles.divider} />
+
+        <View style={styles.summaryRow}>
+          <Text style={styles.grandLabel}>Grand Total</Text>
+          <Text style={styles.grandValue}>₹{grandTotal}</Text>
+        </View>
+      </View>
+
+      {/* WARRANTY */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Warranty Terms</Text>
+        <Text style={styles.description}>
+          {invoiceSettings.defaultWarranty || "• Genuine spare warranty depends on manufacturer terms."}
+        </Text>
+      </View>
+
+      {/* TERMS & CONDITIONS */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Terms & Conditions</Text>
+        <Text style={styles.description}>
+          {invoiceSettings.terms || "• Please inspect your vehicle before taking delivery."}
+        </Text>
+      </View>
+
+      {/* FOOTER NOTE */}
+      {invoiceSettings.footerNote ? (
+        <View style={styles.card}>
+          <Text style={{ textAlign: "center", color: "#6B7280" }}>
+            {invoiceSettings.footerNote}
+          </Text>
+        </View>
+      ) : null}
+
+      {/* SIGNATURES */}
+      <View style={styles.card}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+          <View style={{ alignItems: "center" }}>
+            <View style={styles.signatureLine} />
+            <Text style={styles.signatureText}>Customer Signature</Text>
+          </View>
+          <View style={{ alignItems: "center" }}>
+            <View style={styles.signatureLine} />
+            <Text style={styles.signatureText}>Authorized Signatory</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* ACTIONS */}
+      <TouchableOpacity
+        disabled={job.status !== "completed"}
+        style={[
+          styles.primaryButton,
+          job.status !== "completed" && styles.disabledButton,
+        ]}
+      >
+        <Ionicons name="document-text-outline" size={22} color="white" />
+        <Text style={styles.primaryButtonText}>Generate PDF Invoice</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.secondaryButton}>
+        <Ionicons name="share-social-outline" size={22} color="#2563EB" />
+        <Text style={styles.secondaryButtonText}>Share Invoice</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.secondaryButton}>
+        <Ionicons name="print-outline" size={22} color="#2563EB" />
+        <Text style={styles.secondaryButtonText}>Print Invoice</Text>
+      </TouchableOpacity>
+
+      <View style={{ height: 40 }} />
+    </ScrollView>
+  )
 }
 
 const styles = StyleSheet.create({

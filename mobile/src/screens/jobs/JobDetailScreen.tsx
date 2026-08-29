@@ -22,10 +22,7 @@ import {
   deleteJob
 } from "../../services/jobService"
 
-export default function JobDetailScreen({
-  route,
-  navigation
-}: any) {
+export default function JobDetailScreen({ route, navigation }: any) {
   const { t } = useTranslation()
   const { jobId } = route.params
 
@@ -120,7 +117,7 @@ export default function JobDetailScreen({
     )
   }
 
-  if (loading) {
+  if (loading || !job) {
     return (
       <View style={styles.loader}>
         <ActivityIndicator size="large" color="#2563EB" />
@@ -128,24 +125,47 @@ export default function JobDetailScreen({
     )
   }
 
-  const estimatedTotal = (job.services || []).reduce((sum: number, item: any) => {
-    const quantity = Number(item.quantity || 0)
-    const estimatedPrice = Number(item.estimatedPrice || 0)
-    return sum + estimatedPrice * quantity
-  }, 0)
+  /* Services Calculations */
+  const servicesEstimatedSubtotal = (job.services || []).reduce(
+    (sum: number, item: any) => {
+      const quantity = Number(item.quantity || 0)
+      const estimatedPrice = Number(item.estimatedPrice || 0)
+      return sum + estimatedPrice * quantity
+    },
+    0
+  )
 
-  const actualTotal = (job.services || []).reduce((sum: number, item: any) => {
-    const quantity = Number(item.quantity || 0)
-    const estimatedPrice = Number(item.estimatedPrice || 0)
-    const actualPrice =
-      item.actualPrice !== null &&
-      item.actualPrice !== undefined &&
-      item.actualPrice !== ""
-        ? Number(item.actualPrice)
-        : estimatedPrice
+  const servicesActualSubtotal = (job.services || []).reduce(
+    (sum: number, item: any) => {
+      const quantity = Number(item.quantity || 0)
+      const estimatedPrice = Number(item.estimatedPrice || 0)
+      const actualPrice =
+        item.actualPrice !== null &&
+        item.actualPrice !== undefined &&
+        item.actualPrice !== ""
+          ? Number(item.actualPrice)
+          : estimatedPrice
 
-    return sum + actualPrice * quantity
-  }, 0)
+      return sum + actualPrice * quantity
+    },
+    0
+  )
+
+  /* Labor & Discount Calculations */
+  const laborCost = Number(job.laborCost || 0)
+  const discountPercent = Number(job.discount || 0)
+
+  // Estimated Grand Total
+  const rawEstimatedTotal = servicesEstimatedSubtotal + laborCost
+  const estimatedDiscountAmount = (rawEstimatedTotal * Math.min(discountPercent, 100)) / 100
+  const estimatedGrandTotal = Math.max(0, rawEstimatedTotal - estimatedDiscountAmount)
+
+  // Actual / Current Grand Total
+  const rawActualTotal = servicesActualSubtotal + laborCost
+  const actualDiscountAmount = (rawActualTotal * Math.min(discountPercent, 100)) / 100
+  const actualGrandTotal = job.totalAmount !== undefined && job.totalAmount !== null
+    ? Number(job.totalAmount)
+    : Math.max(0, rawActualTotal - actualDiscountAmount)
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -280,54 +300,54 @@ export default function JobDetailScreen({
 
               <View style={styles.priceRow}>
                 <Text style={styles.priceLabel}>{t("jobs.estimatedPrice")}</Text>
-                <Text style={styles.estimatedPrice}>₹{estimatedPrice}</Text>
+                <Text style={styles.estimatedPrice}>₹{estimatedPrice * quantity}</Text>
               </View>
 
               <View style={styles.priceRow}>
                 <Text style={styles.priceLabel}>{t("jobs.actualPrice")}</Text>
-                <Text style={styles.actualPrice}>₹{actualPrice}</Text>
+                <Text style={styles.actualPrice}>₹{actualPrice * quantity}</Text>
               </View>
             </View>
           )
         })}
       </View>
 
-      {/* BILL */}
+      {/* BILLING SUMMARY CARD */}
       <View style={styles.totalCard}>
-        <Text style={styles.totalLabel}>{t("jobs.estimatedBill")}</Text>
-        <Text style={styles.totalAmount}>₹{estimatedTotal}</Text>
+        <Text style={styles.sectionTitle}>{t("jobs.billingSummary")}</Text>
+
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>{t("jobs.servicesSubtotal")}</Text>
+          <Text style={styles.summaryValue}>₹{servicesActualSubtotal}</Text>
+        </View>
+
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>{t("jobs.laborFee")}</Text>
+          <Text style={styles.summaryValue}>+ ₹{laborCost}</Text>
+        </View>
+
+        {discountPercent > 0 && (
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>
+              {t("jobs.discountLabel")} ({discountPercent}%):
+            </Text>
+            <Text style={[styles.summaryValue, { color: "#059669" }]}>
+              - ₹{actualDiscountAmount.toFixed(2)}
+            </Text>
+          </View>
+        )}
 
         <View style={styles.actualTotalDivider} />
 
+        <View style={styles.summaryRow}>
+          <Text style={styles.totalLabel}>{t("jobs.estimatedBill")}</Text>
+          <Text style={styles.estimatedTotalAmount}>₹{estimatedGrandTotal.toFixed(2)}</Text>
+        </View>
+
         <View style={styles.actualTotalRow}>
           <Text style={styles.actualTotalLabel}>{t("jobs.currentActualTotal")}</Text>
-          <Text style={styles.actualTotalAmount}>₹{actualTotal}</Text>
+          <Text style={styles.actualTotalAmount}>₹{actualGrandTotal.toFixed(2)}</Text>
         </View>
-      </View>
-
-      {/* PAYMENT */}
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>{t("jobs.payment")}</Text>
-
-        <View style={styles.detailRow}>
-          <Text style={styles.label}>{t("jobs.status")}</Text>
-          <Text style={styles.value}>
-            {job.paymentStatus || t("jobs.pending")}
-          </Text>
-        </View>
-
-        <View style={styles.detailRow}>
-          <Text style={styles.label}>{t("jobs.method")}</Text>
-          <Text style={styles.value}>{job.paymentMethod || "-"}</Text>
-        </View>
-      </View>
-
-      {/* NOTES */}
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>{t("jobs.notes")}</Text>
-        <Text style={styles.notesText}>
-          {job.notes || t("jobs.noNotesAdded")}
-        </Text>
       </View>
 
       {/* ACTION BUTTONS */}
@@ -423,12 +443,6 @@ const styles = StyleSheet.create({
     padding: 18,
     marginBottom: 16
   },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    marginBottom: 16,
-    color: "#111827"
-  },
   infoRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -455,12 +469,6 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: "right",
     marginLeft: 20
-  },
-  totalCard: {
-    backgroundColor: "#111827",
-    borderRadius: 18,
-    padding: 22,
-    marginBottom: 18
   },
   totalLabel: {
     color: "#D1D5DB"
@@ -546,24 +554,82 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 15
   },
+
+  totalCard: {
+    backgroundColor: "#1E293B", // Deep slate background for strong contrast
+    borderRadius: 16,
+    padding: 20,
+    marginVertical: 12,
+    borderWidth: 1,
+    borderColor: "#334155",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#F8FAFC",
+    marginBottom: 16,
+    letterSpacing: 0.3,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginVertical: 6,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: "#94A3B8", // Readable muted light gray
+    fontWeight: "500",
+  },
+  summaryValue: {
+    fontSize: 15,
+    color: "#F1F5F9", // Crisp white text
+    fontWeight: "600",
+  },
+  discountLabel: {
+    color: "#34D399",
+    fontWeight: "600",
+  },
+  discountValue: {
+    fontSize: 15,
+    color: "#34D399", // Vivid mint green for discount
+    fontWeight: "700",
+  },
   actualTotalDivider: {
     height: 1,
-    backgroundColor: "#374151",
-    marginTop: 16,
-    marginBottom: 14
+    backgroundColor: "#334155",
+    marginVertical: 14,
+  },
+  estimatedTotalAmount: {
+    fontSize: 15,
+    color: "#64748B",
+    fontWeight: "500",
+    textDecorationLine: "line-through",
   },
   actualTotalRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center"
+    alignItems: "center",
+    marginTop: 8,
+    paddingTop: 12,
+    backgroundColor: "rgba(16, 185, 129, 0.08)", // Subtle green background highlight
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
   },
   actualTotalLabel: {
-    color: "#D1D5DB",
-    fontSize: 14
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#F8FAFC",
   },
   actualTotalAmount: {
-    color: "#22C55E",
-    fontSize: 20,
-    fontWeight: "700"
-  }
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#10B981", // Bright emerald green grand total
+  },
 })

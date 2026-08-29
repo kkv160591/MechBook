@@ -68,7 +68,7 @@ export default function LoginScreen() {
     try {
       setLoading(true)
 
-      const response = await axios.post("http://localhost:5000/auth/login", {
+      const response = await axios.post("http://localhost:3001/auth/login", {
         phone: trimmedPhone,
         pin: trimmedPin,
       })

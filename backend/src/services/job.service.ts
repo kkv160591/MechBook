@@ -212,6 +212,11 @@ async (
       deliveryDate:
         data.deliveryDate || "",
 
+      discount:
+        data.discount || "",
+
+      laborCost:
+        data.laborCost || "",
 
       // Complaint
       complaint:
@@ -222,24 +227,9 @@ async (
       inspectionNotes:
         data.inspectionNotes || "",
 
-
-      // Payment
-      paymentStatus:
-        data.paymentStatus || "Pending",
-
-      paymentMethod:
-        data.paymentMethod || "",
-
-
-      // Notes
-      notes:
-        data.notes || "",
-
-
       // Services
       services:
         data.services || [],
-
 
       createdAt:
         now,

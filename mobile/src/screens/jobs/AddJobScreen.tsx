@@ -89,19 +89,10 @@ export default function AddJobScreen({ navigation }: any) {
 
   // PAYMENT & BILLING
   const [showPaymentSuggestions, setShowPaymentSuggestions] = useState(false)
-  const [paymentStatus, setPaymentStatus] = useState(t("jobs.paymentPending"))
-  const [paymentMethod, setPaymentMethod] = useState("")
   
   // LABOR & DISCOUNT (State initialized from Invoice Settings Context)
   const [laborCost, setLaborCost] = useState<string>("")
   const [discount, setDiscount] = useState<string>("")
-
-  const paymentMethods = [
-    t("jobs.methodCash"),
-    t("jobs.methodUPI"),
-    t("jobs.methodCard"),
-    t("jobs.methodBankTransfer")
-  ]
 
   // JOB
   const [priority, setPriority] = useState(t("jobs.priorityNormal"))
@@ -136,13 +127,6 @@ export default function AddJobScreen({ navigation }: any) {
     setShowWorkerSuggestions(false)
     setShowPaymentSuggestions(false)
   }
-
-  const searchedPaymentMethods = useMemo(() => {
-    if (!paymentMethod.trim()) return paymentMethods
-    return paymentMethods.filter(method =>
-      method.toLowerCase().includes(paymentMethod.toLowerCase())
-    )
-  }, [paymentMethod, paymentMethods])
 
   const searchedWorkers = useMemo(() => {
     if (!workerName.trim()) return workers
@@ -366,8 +350,6 @@ export default function AddJobScreen({ navigation }: any) {
         workerId,
         priority,
         deliveryDate: deliveryDate ? deliveryDate.toISOString() : "",
-        paymentStatus,
-        paymentMethod,
         laborCost: parsedLabor,
         discount: parsedDiscount,
         totalAmount: grandTotal,
@@ -804,56 +786,6 @@ export default function AddJobScreen({ navigation }: any) {
         onChangeText={setInspectionNotes}
       />
 
-      {/* PAYMENT STATUS & METHOD */}
-      <Text style={styles.heading}>{t("jobs.paymentStatus")}</Text>
-      <View style={styles.priorityRow}>
-        {[t("jobs.paymentPending"), t("jobs.paymentAdvance"), t("jobs.paymentPaid")].map(item => (
-          <TouchableOpacity
-            key={item}
-            style={[styles.priorityButton, paymentStatus === item && styles.selectedPriority]}
-            onPress={() => setPaymentStatus(item)}
-          >
-            <Text style={{ color: paymentStatus === item ? "white" : "#111827" }}>{item}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <View style={[styles.inputWrapper, { zIndex: 100 }]}>
-        <Text style={styles.label}>{t("jobs.paymentMethod")}</Text>
-        <TextInput
-          placeholder={t("jobs.selectPaymentMethod")}
-          style={styles.input}
-          value={paymentMethod}
-          onFocus={() => {
-            setShowPaymentSuggestions(true)
-            setShowSuggestions(false)
-            setShowWorkerSuggestions(false)
-          }}
-          onChangeText={text => {
-            setPaymentMethod(text)
-            setShowPaymentSuggestions(true)
-          }}
-        />
-
-        {showPaymentSuggestions && (
-          <View style={[styles.suggestionContainer, styles.paymentDropdown]}>
-            {searchedPaymentMethods.map(method => (
-              <TouchableOpacity
-                key={method}
-                style={styles.workerSuggestion}
-                onPress={() => {
-                  setPaymentMethod(method)
-                  setShowPaymentSuggestions(false)
-                }}
-              >
-                <Text style={styles.cardTitle}>{method}</Text>
-                <Ionicons name="card-outline" size={22} color="#2563EB" />
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-      </View>
-
       {/* DATE & TIME PICKERS */}
       {showDatePicker && (
         <DateTimePicker
@@ -915,7 +847,6 @@ const styles = StyleSheet.create({
   selectedType: { backgroundColor: "#DBEAFE", borderColor: "#2563EB" },
   inputWrapper: { position: "relative", marginBottom: 8 },
   suggestionContainer: { backgroundColor: "white", borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 10, position: "absolute", top: 72, left: 0, right: 0, zIndex: 1000, elevation: 10, maxHeight: 200, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8 },
-  paymentDropdown: { top: 76, maxHeight: 180 },
   suggestionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: "#F3F4F6", flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   workerSuggestion: { padding: 12, borderBottomWidth: 1, borderBottomColor: "#F3F4F6", flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   cardTitle: { fontWeight: "600", color: "#111827" },

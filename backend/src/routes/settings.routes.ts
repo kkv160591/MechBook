@@ -1,64 +1,32 @@
+import { Router } from "express"
+import * as settingsController from "../controllers/settings.controller"
 import {
-  Router
-} from "express"
+  validateGSTMiddleware,
+  validateInvoiceMiddleware,
+  validateLanguageMiddleware,
+  validateBackupMiddleware,
+} from "../middleware/settings.validator"
 
-import * as settingsController
-from "../controllers/settings.controller"
+const router = Router()
 
-import { validateGSTSettings } from "../validators/settings.validator"
+// GST Settings
+router.get("/gst", settingsController.getGST)
+router.put("/gst", validateGSTMiddleware, settingsController.updateGST)
 
-const router =
-  Router()
+// Invoice Settings
+router.get("/invoice", settingsController.getInvoice)
+router.put("/invoice", validateInvoiceMiddleware, settingsController.updateInvoice)
 
-router.get(
-  "/gst",
-  settingsController.getGST
-)
+// Language Settings
+router.get("/language", settingsController.getLanguage)
+router.put("/language", validateLanguageMiddleware, settingsController.updateLanguage)
 
-router.put(
-  "/gst",
-  validateGSTSettings,
-  settingsController.updateGST
-)
+// Backup Settings
+router.get("/backup", settingsController.getBackup)
+router.put("/backup", validateBackupMiddleware, settingsController.updateBackup)
+router.post("/backup/run", settingsController.runBackup)
 
-router.get(
-  "/invoice",
-  settingsController.getInvoice
-)
-
-router.put(
-  "/invoice",
-  settingsController.updateInvoice
-)
-
-router.get(
-  "/language",
-  settingsController.getLanguage
-)
-
-router.put(
-  "/language",
-  settingsController.updateLanguage
-)
-
-router.get(
-  "/backup",
-  settingsController.getBackup
-)
-
-router.put(
-  "/backup",
-  settingsController.updateBackup
-)
-
-router.post(
-  "/backup/run",
-  settingsController.runBackup
-)
-
-router.get(
-  "/plan",
-  settingsController.getPlan
-)
+// Subscription / Plan
+router.get("/plan", settingsController.getPlan)
 
 export default router

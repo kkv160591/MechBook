@@ -63,6 +63,10 @@ export default function EditJobScreen({ route, navigation }: any) {
   const [workerId, setWorkerId] = useState("")
   const [workerName, setWorkerName] = useState("")
 
+  /* Labor & Discount States */
+  const [laborCost, setLaborCost] = useState<string>("")
+  const [discount, setDiscount] = useState<string>("")
+
   const searchedWorkers = useMemo(() => {
     if (!workerName.trim()) return workers
     return workers.filter(worker =>
@@ -75,29 +79,7 @@ export default function EditJobScreen({ route, navigation }: any) {
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [showTimePicker, setShowTimePicker] = useState(false)
   const [inspectionNotes, setInspectionNotes] = useState("")
-  const [paymentStatus, setPaymentStatus] = useState("Pending")
-  const [paymentMethod, setPaymentMethod] = useState("")
   const [notes, setNotes] = useState("")
-
-  const paymentMethods = ["Cash", "UPI", "Card", "Bank Transfer"]
-
-  const getPaymentMethodLabel = (method: string) => {
-    switch (method) {
-      case "Cash": return t("jobs.methodCash")
-      case "UPI": return t("jobs.methodUPI")
-      case "Card": return t("jobs.methodCard")
-      case "Bank Transfer": return t("jobs.methodBankTransfer")
-      default: return method
-    }
-  }
-
-  const searchedPaymentMethods = useMemo(() => {
-    if (!paymentMethod.trim()) return paymentMethods
-    return paymentMethods.filter(method =>
-      method.toLowerCase().includes(paymentMethod.toLowerCase()) ||
-      getPaymentMethodLabel(method).toLowerCase().includes(paymentMethod.toLowerCase())
-    )
-  }, [paymentMethod, t])
 
   /* Services */
   const [selectedServices, setSelectedServices] = useState<any[]>([])
@@ -144,10 +126,12 @@ export default function EditJobScreen({ route, navigation }: any) {
       setPriority(latestJob.priority || "Normal")
       setDeliveryDate(latestJob.deliveryDate ? new Date(latestJob.deliveryDate) : null)
       setInspectionNotes(latestJob.inspectionNotes || "")
-      setPaymentStatus(latestJob.paymentStatus || "Pending")
-      setPaymentMethod(latestJob.paymentMethod || "")
       setNotes(latestJob.notes || "")
       setSelectedServices(latestJob.services || [])
+
+      // Populate initial billing fields
+      setLaborCost(latestJob.laborCost !== undefined && latestJob.laborCost !== null ? String(latestJob.laborCost) : "0")
+      setDiscount(latestJob.discount !== undefined && latestJob.discount !== null ? String(latestJob.discount) : "0")
     } catch (err: any) {
       Alert.alert(t("jobs.alertErrorTitle"), err?.response?.data?.message || t("jobs.unableToLoadJobDetails"))
     } finally {
@@ -174,7 +158,8 @@ export default function EditJobScreen({ route, navigation }: any) {
     })
   }
 
-  const total = useMemo(() => {
+  /* Billing Calculations */
+  const servicesSubtotal = useMemo(() => {
     return selectedServices.reduce((sum, item) => {
       const estimated = Number(item.estimatedPrice || 0)
       const actual = item.actualPrice !== null && item.actualPrice !== undefined && item.actualPrice !== ""
@@ -183,6 +168,26 @@ export default function EditJobScreen({ route, navigation }: any) {
       return sum + actual * Number(item.quantity || 0)
     }, 0)
   }, [selectedServices])
+
+  const parsedLabor = useMemo(() => {
+    const val = parseFloat(laborCost)
+    return isNaN(val) || val < 0 ? 0 : val
+  }, [laborCost])
+
+  const parsedDiscount = useMemo(() => {
+    const val = parseFloat(discount)
+    return isNaN(val) || val < 0 ? 0 : val
+  }, [discount])
+
+  const discountAmount = useMemo(() => {
+    const rawTotal = servicesSubtotal + parsedLabor
+    return (rawTotal * Math.min(parsedDiscount, 100)) / 100
+  }, [servicesSubtotal, parsedLabor, parsedDiscount])
+
+  const grandTotal = useMemo(() => {
+    const sub = servicesSubtotal + parsedLabor
+    return Math.max(0, sub - discountAmount)
+  }, [servicesSubtotal, parsedLabor, discountAmount])
 
   const searchedServices = useMemo(() => {
     if (!serviceName.trim()) return []
@@ -280,10 +285,11 @@ export default function EditJobScreen({ route, navigation }: any) {
         priority,
         deliveryDate: deliveryDate ? deliveryDate.toISOString() : "",
         inspectionNotes,
-        paymentStatus,
-        paymentMethod,
         notes,
-        services: selectedServices
+        services: selectedServices,
+        laborCost: parsedLabor,
+        discount: parsedDiscount,
+        totalAmount: grandTotal
       })
 
       Alert.alert(t("jobs.alertSuccessTitle"), t("jobs.jobUpdatedSuccess"))
@@ -325,15 +331,6 @@ export default function EditJobScreen({ route, navigation }: any) {
       case "Normal": return t("jobs.priorityNormal")
       case "High": return t("jobs.priorityHigh")
       default: return p
-    }
-  }
-
-  const getPaymentStatusLabel = (s: string) => {
-    switch (s) {
-      case "Pending": return t("jobs.paymentPending")
-      case "Advance": return t("jobs.paymentAdvance")
-      case "Paid": return t("jobs.paymentPaid")
-      default: return s
     }
   }
 
@@ -661,10 +658,58 @@ export default function EditJobScreen({ route, navigation }: any) {
         ))
       )}
 
-      {/* GRAND TOTAL */}
+      {/* LABOR & DISCOUNT BILLING SECTION */}
+      <Text style={styles.heading}>{t("jobs.laborAndAdditionalCharges")}</Text>
+
+      <View style={styles.row}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.label}>{t("jobs.laborCharge")}</Text>
+          <TextInput
+            onFocus={closeDropdowns}
+            keyboardType="numeric"
+            style={styles.input}
+            value={laborCost}
+            onChangeText={setLaborCost}
+            placeholder="0"
+          />
+        </View>
+
+        <View style={{ flex: 1 }}>
+          <Text style={styles.label}>{t("jobs.discountPercent")}</Text>
+          <TextInput
+            onFocus={closeDropdowns}
+            keyboardType="numeric"
+            style={styles.input}
+            value={discount}
+            onChangeText={setDiscount}
+            placeholder="0"
+          />
+        </View>
+      </View>
+
+      {/* GRAND TOTAL SUMMARY CARD */}
       <View style={styles.totalCard}>
-        <Text style={styles.totalLabel}>{t("jobs.totalAmount")}</Text>
-        <Text style={styles.totalAmount}>₹ {total}</Text>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>{t("jobs.servicesSubtotal")}</Text>
+          <Text style={styles.summaryValue}>₹ {servicesSubtotal}</Text>
+        </View>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>{t("jobs.laborFee")}</Text>
+          <Text style={styles.summaryValue}>+ ₹ {parsedLabor}</Text>
+        </View>
+        {parsedDiscount > 0 && (
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>{t("jobs.discountLabel")} ({parsedDiscount}%):</Text>
+            <Text style={[styles.summaryValue, { color: "#059669" }]}>
+              - ₹ {discountAmount.toFixed(2)}
+            </Text>
+          </View>
+        )}
+        <View style={styles.divider} />
+        <View style={styles.summaryRow}>
+          <Text style={styles.totalLabel}>{t("jobs.estimatedBill")}</Text>
+          <Text style={styles.totalAmount}>₹ {grandTotal.toFixed(2)}</Text>
+        </View>
       </View>
 
       {/* COMPLAINT & INSPECTION */}
@@ -688,58 +733,6 @@ export default function EditJobScreen({ route, navigation }: any) {
         onFocus={closeDropdowns}
       />
 
-      {/* PAYMENT */}
-      <Text style={styles.heading}>{t("jobs.paymentStatus")}</Text>
-      <View style={styles.priorityRow}>
-        {["Pending", "Advance", "Paid"].map(item => (
-          <TouchableOpacity
-            key={item}
-            style={[styles.priorityButton, paymentStatus === item && styles.selectedPriority]}
-            onPress={() => setPaymentStatus(item)}
-          >
-            <Text style={{ color: paymentStatus === item ? "white" : "#111827" }}>
-              {getPaymentStatusLabel(item)}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <View style={styles.inputWrapper}>
-        <Text style={styles.label}>{t("jobs.paymentMethod")}</Text>
-        <TextInput
-          placeholder={t("jobs.selectPaymentMethod")}
-          style={styles.input}
-          value={paymentMethod}
-          onFocus={() => {
-            setShowPaymentSuggestions(true)
-            setShowSuggestions(false)
-            setShowWorkerSuggestions(false)
-          }}
-          onChangeText={text => {
-            setPaymentMethod(text)
-            setShowPaymentSuggestions(true)
-          }}
-        />
-
-        {showPaymentSuggestions && (
-          <View style={styles.suggestionContainer}>
-            {searchedPaymentMethods.map(method => (
-              <TouchableOpacity
-                key={method}
-                style={styles.workerSuggestion}
-                onPress={() => {
-                  setPaymentMethod(method)
-                  setShowPaymentSuggestions(false)
-                }}
-              >
-                <Text style={styles.cardTitle}>{getPaymentMethodLabel(method)}</Text>
-                <Ionicons name="card-outline" size={22} color="#2563EB" />
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-      </View>
-
       {showDatePicker && (
         <DateTimePicker
           value={deliveryDate || new Date()}
@@ -758,17 +751,6 @@ export default function EditJobScreen({ route, navigation }: any) {
           onChange={onTimeChange}
         />
       )}
-
-      {/* NOTES */}
-      <Text style={styles.heading}>{t("jobs.notes")}</Text>
-      <TextInput
-        style={styles.notes}
-        multiline
-        placeholder={t("jobs.additionalNotesPlaceholder")}
-        value={notes}
-        onChangeText={setNotes}
-        onFocus={closeDropdowns}
-      />
 
       {/* SAVE */}
       <TouchableOpacity style={styles.saveBtn} onPress={saveChanges} disabled={saving}>
@@ -827,5 +809,9 @@ const styles = StyleSheet.create({
   servicePricingRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
   serviceField: { flex: 1 },
   readOnlyPrice: { backgroundColor: "#F3F4F6", borderRadius: 12, minHeight: 46, paddingHorizontal: 12, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "#E5E7EB" },
-  readOnlyPriceText: { color: "#374151", fontWeight: "600", fontSize: 14 }
+  readOnlyPriceText: { color: "#374151", fontWeight: "600", fontSize: 14 },
+  summaryRow: { flexDirection: "row", justifyContent: "space-between", marginVertical: 2 },
+  summaryLabel: { color: "#94A3B8", fontSize: 14 },
+  summaryValue: { color: "white", fontSize: 14, fontWeight: "600" },
+  divider: { height: 1, backgroundColor: "#334155", marginVertical: 8 },
 })

@@ -19,6 +19,8 @@ export const translations = {
 
     // jobs
     jobs: {
+      alertSuccessMsg: "Job created successfully!",
+      billingSummary: "Billing Summary",
       laborAndAdditionalCharges: "Labor & Additional Charges",
       laborCharge: "Labor / Service Charge (₹)",
       discountPercent: "Discount (%)",
@@ -572,6 +574,8 @@ export const translations = {
 
     // jobs
     jobs: {
+      billingSummary: "बिलिंग विवरण",
+      alertSuccessMsg: "जॉब सफलतापूर्वक बना दिया गया है!",
       laborAndAdditionalCharges: "श्रम और अतिरिक्त शुल्क",
       laborCharge: "मजदूरी / सेवा शुल्क (₹)",
       discountPercent: "छूट (%)",

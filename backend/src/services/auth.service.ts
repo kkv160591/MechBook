@@ -179,7 +179,7 @@ export const loginUser =
       await db.send(
 
         new ScanCommand({
-          TableName: "Worker",
+          TableName: "Workers",
           FilterExpression:
             "phone = :phone",
           ExpressionAttributeValues: {
