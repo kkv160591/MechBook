@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Alert
 } from "react-native"
-
+import { Ionicons } from "@expo/vector-icons"
 import { useState, useRef } from "react"
 import { RouteProp, useNavigation } from "@react-navigation/native"
 import { createInventory, updateInventory } from "../../services/inventoryService"
@@ -126,10 +126,38 @@ export default function AddEditPartScreen({ route }: Props) {
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{ paddingBottom: 50 }}
     >
-      <Text style={styles.title}>
-        {mode === "add" ? t("inventory.addPart") : t("inventory.editPart")}
-      </Text>
+      {/* HEADER BAR */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity 
+            style={styles.backBtn} 
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={24} color="#111827" />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.title}>
+              {mode === "add" ? t("inventory.addPart") : t("inventory.editPart")}
+            </Text>
+            <Text style={styles.subtitle}>
+              {mode === "add" 
+                ? t("inventory.addSubtitle") || "Add new item to inventory" 
+                : t("inventory.editSubtitle") || "Update inventory details"}
+            </Text>
+          </View>
+        </View>
 
+        <View style={styles.iconBox}>
+          <Ionicons 
+            name={mode === "add" ? "cube" : "build"} 
+            size={28} 
+            color="#2563EB" 
+          />
+        </View>
+      </View>
+
+      {/* FORM CARD */}
       <View style={styles.card}>
         {/* Part Name */}
         <View onLayout={(e) => recordLayout("name", e.nativeEvent.layout.y)}>
@@ -255,17 +283,54 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F3F4F6",
-    padding: 18,
+    padding: 20,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  backBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "bold",
     color: "#111827",
-    marginBottom: 20,
+  },
+  subtitle: {
+    marginTop: 2,
+    color: "#6B7280",
+    fontSize: 13,
+  },
+  iconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: "#DBEAFE",
+    alignItems: "center",
+    justifyContent: "center",
   },
   card: {
     backgroundColor: "white",
-    borderRadius: 20,
+    borderRadius: 22,
     padding: 18,
   },
   label: {
@@ -285,6 +350,7 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 6,
     fontSize: 15,
+    color: "#111827",
   },
   inputError: {
     borderColor: "#DC2626",
@@ -301,7 +367,7 @@ const styles = StyleSheet.create({
     padding: 18,
     borderRadius: 18,
     alignItems: "center",
-    marginTop: 22,
+    marginTop: 24,
   },
   saveText: {
     color: "white",

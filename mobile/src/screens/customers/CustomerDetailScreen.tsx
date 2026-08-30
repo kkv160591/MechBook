@@ -5,7 +5,7 @@ import {
   ScrollView,
   TouchableOpacity
 } from "react-native"
-import { RouteProp } from "@react-navigation/native"
+import { RouteProp, useNavigation } from "@react-navigation/native"
 import { Ionicons, MaterialIcons } from "@expo/vector-icons"
 import { RootStackParamList } from "../../types/navigation"
 import { useTranslation } from "../../context/LanguageContext"
@@ -30,12 +30,34 @@ const jobs = [
 ]
 
 export default function CustomerDetailScreen({ route }: Props) {
+  const navigation: any = useNavigation()
   const { customer } = route.params
   const { t } = useTranslation()
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* HEADER */}
+      {/* HEADER BAR */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity 
+            style={styles.backBtn} 
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={24} color="#111827" />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.title}>{t("customers.detailsTitle")}</Text>
+            <Text style={styles.subtitle}>{customer.name}</Text>
+          </View>
+        </View>
+
+        <View style={styles.iconBox}>
+          <Ionicons name="person" size={28} color="#2563EB" />
+        </View>
+      </View>
+
+      {/* CUSTOMER CARD */}
       <View style={styles.headerCard}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{customer.name?.charAt(0)}</Text>
@@ -120,6 +142,49 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F3F4F6",
     padding: 18
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1
+  },
+  backBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#111827"
+  },
+  subtitle: {
+    marginTop: 2,
+    color: "#6B7280",
+    fontSize: 13
+  },
+  iconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: "#DBEAFE",
+    alignItems: "center",
+    justifyContent: "center"
   },
   headerCard: {
     backgroundColor: "white",

@@ -13,7 +13,7 @@ import { getWorkers } from "../../services/workerService"
 import { useCallback, useState } from "react"
 import { useFocusEffect } from "@react-navigation/native"
 import { Picker } from "@react-native-picker/picker"
-import { Ionicons } from "@expo/vector-icons"
+import { Ionicons, Feather } from "@expo/vector-icons"
 import { useTranslation } from "../../context/LanguageContext"
 
 import {
@@ -169,7 +169,19 @@ export default function JobDetailScreen({ route, navigation }: any) {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* HEADER */}
+      {/* TOP HEADER WITH BACK BUTTON */}
+      <View style={styles.topHeaderBar}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+        >
+          <Feather name="arrow-left" size={24} color="#111827" />
+        </TouchableOpacity>
+        <Text style={styles.screenTitle}>{t("jobs.jobDetails") || "Job Details"}</Text>
+      </View>
+
+      {/* HEADER CARD */}
       <View style={styles.headerCard}>
         <View>
           <Text style={styles.vehicleNumber}>{job.vehicleNumber}</Text>
@@ -196,7 +208,7 @@ export default function JobDetailScreen({ route, navigation }: any) {
 
       {/* CUSTOMER */}
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>{t("jobs.customer")}</Text>
+        <Text style={styles.cardSectionTitle}>{t("jobs.customer")}</Text>
 
         <View style={styles.infoRow}>
           <Ionicons name="person-outline" size={18} color="#2563EB" />
@@ -216,7 +228,7 @@ export default function JobDetailScreen({ route, navigation }: any) {
 
       {/* VEHICLE */}
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>{t("jobs.vehicle")}</Text>
+        <Text style={styles.cardSectionTitle}>{t("jobs.vehicle")}</Text>
 
         <View style={styles.detailRow}>
           <Text style={styles.label}>{t("jobs.brand")}</Text>
@@ -243,7 +255,7 @@ export default function JobDetailScreen({ route, navigation }: any) {
 
       {/* JOB INFO */}
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>{t("jobs.jobInformation")}</Text>
+        <Text style={styles.cardSectionTitle}>{t("jobs.jobInformation")}</Text>
 
         <View style={styles.detailRow}>
           <Text style={styles.label}>{t("jobs.assignedWorker")}</Text>
@@ -277,7 +289,7 @@ export default function JobDetailScreen({ route, navigation }: any) {
 
       {/* SERVICES */}
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>{t("jobs.services")}</Text>
+        <Text style={styles.cardSectionTitle}>{t("jobs.services")}</Text>
 
         {(job.services || []).map((service: any, index: number) => {
           const quantity = Number(service.quantity || 0)
@@ -314,7 +326,7 @@ export default function JobDetailScreen({ route, navigation }: any) {
 
       {/* BILLING SUMMARY CARD */}
       <View style={styles.totalCard}>
-        <Text style={styles.sectionTitle}>{t("jobs.billingSummary")}</Text>
+        <Text style={styles.summarySectionTitle}>{t("jobs.billingSummary")}</Text>
 
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>{t("jobs.servicesSubtotal")}</Text>
@@ -395,6 +407,28 @@ const styles = StyleSheet.create({
     backgroundColor: "#F3F4F6",
     padding: 16
   },
+  topHeaderBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+    marginTop: 8
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB"
+  },
+  screenTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#111827"
+  },
   disabledButton: {
     backgroundColor: "#9CA3AF",
     opacity: 0.7
@@ -442,6 +476,12 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 18,
     marginBottom: 16
+  },
+  cardSectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 14
   },
   infoRow: {
     flexDirection: "row",
@@ -556,7 +596,7 @@ const styles = StyleSheet.create({
   },
 
   totalCard: {
-    backgroundColor: "#1E293B", // Deep slate background for strong contrast
+    backgroundColor: "#1E293B",
     borderRadius: 16,
     padding: 20,
     marginVertical: 12,
@@ -566,50 +606,50 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
-    elevation: 4,
+    elevation: 4
   },
-  sectionTitle: {
+  summarySectionTitle: {
     fontSize: 16,
     fontWeight: "700",
     color: "#F8FAFC",
     marginBottom: 16,
-    letterSpacing: 0.3,
+    letterSpacing: 0.3
   },
   summaryRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginVertical: 6,
+    marginVertical: 6
   },
   summaryLabel: {
     fontSize: 14,
-    color: "#94A3B8", // Readable muted light gray
-    fontWeight: "500",
+    color: "#94A3B8",
+    fontWeight: "500"
   },
   summaryValue: {
     fontSize: 15,
-    color: "#F1F5F9", // Crisp white text
-    fontWeight: "600",
+    color: "#F1F5F9",
+    fontWeight: "600"
   },
   discountLabel: {
     color: "#34D399",
-    fontWeight: "600",
+    fontWeight: "600"
   },
   discountValue: {
     fontSize: 15,
-    color: "#34D399", // Vivid mint green for discount
-    fontWeight: "700",
+    color: "#34D399",
+    fontWeight: "700"
   },
   actualTotalDivider: {
     height: 1,
     backgroundColor: "#334155",
-    marginVertical: 14,
+    marginVertical: 14
   },
   estimatedTotalAmount: {
     fontSize: 15,
     color: "#64748B",
     fontWeight: "500",
-    textDecorationLine: "line-through",
+    textDecorationLine: "line-through"
   },
   actualTotalRow: {
     flexDirection: "row",
@@ -617,19 +657,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 8,
     paddingTop: 12,
-    backgroundColor: "rgba(16, 185, 129, 0.08)", // Subtle green background highlight
+    backgroundColor: "rgba(16, 185, 129, 0.08)",
     borderRadius: 10,
     paddingHorizontal: 12,
-    paddingBottom: 12,
+    paddingBottom: 12
   },
   actualTotalLabel: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#F8FAFC",
+    color: "#F8FAFC"
   },
   actualTotalAmount: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#10B981", // Bright emerald green grand total
-  },
+    color: "#10B981"
+  }
 })

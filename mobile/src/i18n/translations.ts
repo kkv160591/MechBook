@@ -2,6 +2,7 @@ export const translations = {
   en: {
     // Shared Across Screens
     common: {
+      delete: "Delete",
       appName: "MechBook",
       loading: "Loading...",
       validationTitle: "Validation",
@@ -191,6 +192,8 @@ export const translations = {
 
     // Inventory
     inventory: {
+      addSubtitle: "Add new item to inventory",
+      editSubtitle: "Update inventory details",
       deleteConfirmTitle: "Delete Part",
       deleteConfirmMessage: "Are you sure you want to delete this part? This action cannot be undone.",
       title: "Inventory",
@@ -235,6 +238,7 @@ export const translations = {
 
     // GST Configuration
     gstConfig: {
+      subtitle: "Configure GST details and tax preferences",
       title: "GST Configuration",
       enableGst: "Enable GST",
       enableGstSub: "Apply GST on invoices",
@@ -257,6 +261,12 @@ export const translations = {
 
     // Service Type
     services: {
+      editServiceTitle: "Edit Service",
+      editServiceSubtitle: "Modify service details and pricing",
+      serviceTypesTitle: "Service Types",
+      serviceTypesSubtitle: "Manage service catalog",
+      addServiceTitle: "Add Service",
+      addServiceSubtitle: "Create a new service offering",
       title: "Service Types",
       loading: "Loading Services...",
       noServices: "No Services Added",
@@ -388,6 +398,10 @@ export const translations = {
 
     // Worker Management
     workers: {
+      workerDetailsTitle: "Worker Details",
+      workerDetailsSubtitle: "View and manage staff profile",
+      addWorkerTitle: "Add New Worker",
+      addWorkerSubtitle: "Enter staff credentials and details",
       title: "Worker Management",
       loading: "Loading workers...",
       noWorkers: "No workers found",
@@ -524,6 +538,8 @@ export const translations = {
 
     // Invoice Setting
     invoiceSettings: {
+      title: "Invoice Settings",
+      subtitle: "Customize your invoice billing defaults, PDF layout, and terms",
       pdfFields: "PDF Display Fields",
       showGarageLogo: "Garage Logo",
       showGSTNumber: "GST Number",
@@ -551,12 +567,51 @@ export const translations = {
         footerNoteTooLong: "Footer note exceeds maximum length",
         termsTooLong: "Terms & Conditions exceed maximum length"
       }
+    },
+
+    "invoice": {
+      "title": "Invoice Details",
+      "subtitle": "View complete job sheet & billing summary",
+      "loadingSubtitle": "Loading invoice breakdown...",
+      "owner": "Owner",
+      "number": "Invoice No",
+      "date": "Invoice Date",
+      "customerDetails": "Customer Details",
+      "vehicleDetails": "Vehicle Details",
+      "vehicleType": "Vehicle Type",
+      "odometer": "Odometer",
+      "assignedWorker": "Assigned Worker",
+      "priority": "Priority",
+      "jobInfo": "Job Information",
+      "complaint": "Complaint / Reported Issues",
+      "inspectionNotes": "Inspection Notes",
+      "estDelivery": "Estimated Delivery",
+      "servicesPerformed": "Services & Spare Parts",
+      "service": "Service / Item",
+      "qty": "Qty",
+      "rate": "Rate",
+      "amount": "Amount",
+      "billSummary": "Bill Summary",
+      "servicesSubtotal": "Services Subtotal",
+      "laborFee": "Labor Charge",
+      "subtotal": "Subtotal",
+      "discount": "Discount",
+      "roundOff": "Round Off",
+      "grandTotal": "Grand Total",
+      "warrantyTerms": "Warranty Terms",
+      "terms": "Terms & Conditions",
+      "customerSig": "Customer Signature",
+      "authSig": "Authorized Signatory",
+      "generatePDF": "Generate PDF Invoice",
+      "share": "Share Invoice",
+      "print": "Print Invoice"
     }
   },
 
   hi: {
     // Shared Across Screens (Hindi)
     common: {
+      delete: "हटाएं",
       appName: "मैकबुक (MechBook)",
       loading: "लोड हो रहा है...",
       validationTitle: "सत्यापन",
@@ -745,6 +800,8 @@ export const translations = {
 
     // Inventory
     inventory: {
+      addSubtitle: "इन्वेंटरी में नया सामान जोड़ें",
+      editSubtitle: "इन्वेंटरी विवरण अपडेट करें",
       deleteConfirmTitle: "पार्ट हटाएं",
       deleteConfirmMessage: "क्या आप निश्चित रूप से इस पार्ट को हटाना चाहते हैं? यह कार्रवाई वापस नहीं ली जा सकती।",
       title: "इन्वेंटरी",
@@ -789,6 +846,7 @@ export const translations = {
 
     // GST Configuration (Hindi)
     gstConfig: {
+      subtitle: "जीएसटी विवरण और कर प्राथमिकताओं को कॉन्फ़िगर करें",
       title: "जीएसटी कॉन्फ़िगरेशन",
       enableGst: "जीएसटी सक्षम करें",
       enableGstSub: "चालान पर जीएसटी लागू करें",
@@ -811,6 +869,12 @@ export const translations = {
 
     // Service Type
     services: {
+      editServiceTitle: "सर्विस एडिट करें",
+      editServiceSubtitle: "सर्विस विवरण और मूल्य अपडेट करें",
+      serviceTypesTitle: "सर्विस प्रकार",
+      serviceTypesSubtitle: "सर्विस कैटलॉग प्रबंधित करें",
+      addServiceTitle: "नई सेवा जोड़ें",
+      addServiceSubtitle: "एक नया सेवा विकल्प बनाएं",
       title: "सेवा के प्रकार",
       loading: "सेवाएं लोड हो रही हैं...",
       noServices: "कोई सेवा नहीं जोड़ी गई",
@@ -942,6 +1006,10 @@ export const translations = {
 
     // Worker Management (Hindi)
     workers: {
+      workerDetailsTitle: "कर्मचारी विवरण",
+      workerDetailsSubtitle: "कर्मचारी की प्रोफ़ाइल देखें और प्रबंधित करें",
+      addWorkerTitle: "नया कर्मचारी जोड़ें",
+      addWorkerSubtitle: "कर्मचारी की जानकारी और क्रेडेंशियल दर्ज करें",
       title: "कर्मचारी प्रबंधन",
       loading: "कर्मचारियों की जानकारी लोड हो रही है...",
       noWorkers: "कोई कर्मचारी नहीं मिला",
@@ -1077,6 +1145,8 @@ export const translations = {
     },
 
     invoiceSettings: {
+      title: "इनवॉइस सेटिंग्स",
+      subtitle: "अपने इनवॉइस बिलिंग डिफ़ॉल्ट, पीडीएफ लेआउट और शर्तें कस्टमाइज़ करें",
       pdfFields: "पीडीएफ में दिखने वाले फ़ील्ड्स",
       showGarageLogo: "गैराज लोगो",
       showGSTNumber: "जीएसटी नंबर",
@@ -1104,6 +1174,44 @@ export const translations = {
         footerNoteTooLong: "फुटर नोट अधिकतम लंबाई से अधिक है",
         termsTooLong: "नियम और शर्तें अधिकतम लंबाई से अधिक हैं"
       }
+    },
+
+    "invoice": {
+      "title": "इनवॉइस विवरण",
+      "subtitle": "पूरा जॉब शीट और बिल विवरण देखें",
+      "loadingSubtitle": "इनवॉइस विवरण लोड हो रहा है...",
+      "owner": "मालिक",
+      "number": "इनवॉइस संख्या",
+      "date": "इनवॉइस दिनांक",
+      "customerDetails": "ग्राहक का विवरण",
+      "vehicleDetails": "वाहन का विवरण",
+      "vehicleType": "वाहन का प्रकार",
+      "odometer": "ओडोमीटर (KM)",
+      "assignedWorker": "आवंटित तकनीशियन",
+      "priority": "प्राथमिकता",
+      "jobInfo": "काम की जानकारी",
+      "complaint": "शिकायत / बताई गई समस्या",
+      "inspectionNotes": "निरीक्षण टिप्पणी",
+      "estDelivery": "अनुमानित डिलीवरी",
+      "servicesPerformed": "की गई सेवाएं और पार्ट्स",
+      "service": "सेवा / आइटम",
+      "qty": "मात्रा",
+      "rate": "दर",
+      "amount": "कुल मूल्य",
+      "billSummary": "बिल का विवरण",
+      "servicesSubtotal": "सेवाओं का उप-योग",
+      "laborFee": "लेबर चार्ज",
+      "subtotal": "सबटोटल",
+      "discount": "छूट (Discount)",
+      "roundOff": "राउंड ऑफ",
+      "grandTotal": "कुल राशि (Grand Total)",
+      "warrantyTerms": "वारंटी की शर्तें",
+      "terms": "नियम और शर्तें",
+      "customerSig": "ग्राहक के हस्ताक्षर",
+      "authSig": "अधिकृत हस्ताक्षर",
+      "generatePDF": "PDF इनवॉइस बनाएं",
+      "share": "इनवॉइस शेयर करें",
+      "print": "इनवॉइस प्रिंट करें"
     }
   },
 };

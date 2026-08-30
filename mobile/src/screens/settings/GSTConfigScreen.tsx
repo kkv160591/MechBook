@@ -12,6 +12,7 @@ import {
 } from "react-native"
 
 import { useState, useEffect, useRef } from "react"
+import { Feather } from "@expo/vector-icons"
 import { getGSTSettings, updateGSTSettings } from "../../services/settingsService"
 import { useTranslation } from "../../context/LanguageContext"
 
@@ -25,7 +26,7 @@ interface FormErrors {
   applyMode?: string
 }
 
-export default function GSTConfigScreen() {
+export default function GSTConfigScreen({ navigation }: any) {
   const { t } = useTranslation()
 
   // ScrollView Reference & Section Y-Offsets
@@ -158,6 +159,25 @@ export default function GSTConfigScreen() {
       style={styles.container}
       showsVerticalScrollIndicator={false}
     >
+      {/* Header Bar with Back Button */}
+      <View style={styles.headerBar}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+        >
+          <Feather name="arrow-left" size={24} color="#111827" />
+        </TouchableOpacity>
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.heading}>
+            {t('gstConfig.title') || "GST Settings"}
+          </Text>
+          <Text style={styles.subHeading}>
+            {t('gstConfig.subtitle') || "Configure GST details and tax preferences"}
+          </Text>
+        </View>
+      </View>
+
       {/* Enable GST Section */}
       <View style={styles.card}>
         <View style={styles.row}>
@@ -317,6 +337,41 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F3F4F6",
     padding: 16
+  },
+
+  headerBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 20,
+    marginTop: 10
+  },
+
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB"
+  },
+
+  headerTextContainer: {
+    flex: 1
+  },
+
+  heading: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#111827"
+  },
+
+  subHeading: {
+    color: "#6B7280",
+    fontSize: 13,
+    marginTop: 2
   },
 
   centerContainer: {

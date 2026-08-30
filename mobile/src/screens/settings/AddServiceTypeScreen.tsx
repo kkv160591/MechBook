@@ -8,6 +8,7 @@ import {
   ScrollView
 } from "react-native"
 import { useState } from "react"
+import { Feather } from "@expo/vector-icons"
 import { createServiceType } from "../../services/serviceTypesService"
 import { useTranslation } from "../../context/LanguageContext"
 
@@ -90,6 +91,25 @@ export default function AddServiceTypeScreen({ navigation }: any) {
 
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+      {/* Header Bar with Back Button */}
+      <View style={styles.headerBar}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+        >
+          <Feather name="arrow-left" size={24} color="#111827" />
+        </TouchableOpacity>
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.heading}>
+            {t("services.addServiceTitle") || "Add Service"}
+          </Text>
+          <Text style={styles.subHeading}>
+            {t("services.addServiceSubtitle") || "Create a new service offerings"}
+          </Text>
+        </View>
+      </View>
+
       {/* Name Field */}
       <FieldLabel label={t("services.labels.name") || "Service Name"} required />
       <TextInput
@@ -154,6 +174,36 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F3F4F6",
     padding: 18
+  },
+  headerBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 20,
+    marginTop: 10
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB"
+  },
+  headerTextContainer: {
+    flex: 1
+  },
+  heading: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#111827"
+  },
+  subHeading: {
+    color: "#6B7280",
+    fontSize: 13,
+    marginTop: 2
   },
   labelContainer: {
     flexDirection: "row",

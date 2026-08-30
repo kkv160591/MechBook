@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
   Alert
 } from "react-native"
-import { MaterialIcons, Ionicons } from "@expo/vector-icons"
+import { MaterialIcons, Ionicons, Feather } from "@expo/vector-icons"
 import { useEffect, useState, useCallback } from "react"
 import { useFocusEffect } from "@react-navigation/native"
 import { getWorkers } from "../../services/workerService"
@@ -116,15 +116,24 @@ export default function WorkersScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      {/* Top Header / Add Button */}
+      {/* Top Header Bar / Back Button & Add Button */}
       <View style={styles.headerContainer}>
-        <View>
-          <Text style={styles.headerTitle}>
-            {t("workers.title") || "Worker Management"}
-          </Text>
-          <Text style={styles.headerSubtitle}>
-            {workers.length} {workers.length === 1 ? "Worker" : "Workers"}
-          </Text>
+        <View style={styles.headerLeftGroup}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
+          >
+            <Feather name="arrow-left" size={24} color="#111827" />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.headerTitle}>
+              {t("workers.title") || "Worker Management"}
+            </Text>
+            <Text style={styles.headerSubtitle}>
+              {workers.length} {workers.length === 1 ? "Worker" : "Workers"}
+            </Text>
+          </View>
         </View>
 
         <TouchableOpacity
@@ -185,6 +194,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16
   },
+  headerLeftGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    marginRight: 8
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB"
+  },
   headerTitle: {
     fontSize: 20,
     fontWeight: "700",
@@ -199,7 +225,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#2563EB",
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 12
   },
@@ -207,7 +233,7 @@ const styles = StyleSheet.create({
     color: "white",
     fontWeight: "600",
     marginLeft: 4,
-    fontSize: 14
+    fontSize: 13
   },
   listContent: {
     paddingBottom: 24

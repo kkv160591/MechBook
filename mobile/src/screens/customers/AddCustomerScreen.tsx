@@ -100,9 +100,18 @@ export default function AddCustomerScreen() {
     >
       {/* HEADER */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>{t("customers.addTitle")}</Text>
-          <Text style={styles.subtitle}>{t("customers.addSubtitle")}</Text>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity 
+            style={styles.backBtn} 
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={24} color="#111827" />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.title}>{t("customers.addTitle")}</Text>
+            <Text style={styles.subtitle}>{t("customers.addSubtitle")}</Text>
+          </View>
         </View>
 
         <View style={styles.iconBox}>
@@ -215,19 +224,39 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 24
   },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1
+  },
+  backBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2
+  },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "bold",
     color: "#111827"
   },
   subtitle: {
-    marginTop: 5,
-    color: "#6B7280"
+    marginTop: 2,
+    color: "#6B7280",
+    fontSize: 13
   },
   iconBox: {
-    width: 60,
-    height: 60,
-    borderRadius: 18,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     backgroundColor: "#DBEAFE",
     alignItems: "center",
     justifyContent: "center"

@@ -1,7 +1,7 @@
 import axios from "axios"
 
 const API_BASE_URL =
-  "http://localhost:3001/auth"
+  `${process.env.EXPO_PUBLIC_API_URL}/auth`
 
 export const loginUser =
   async (

@@ -6,9 +6,10 @@ import {
   ScrollView,
   Alert,
   Modal,
-  TextInput
+  TextInput,
+  ActivityIndicator
 } from "react-native"
-import { MaterialIcons, Ionicons } from "@expo/vector-icons"
+import { MaterialIcons, Ionicons, Feather } from "@expo/vector-icons"
 import { useEffect, useState } from "react"
 import {
   getWorkerById,
@@ -68,14 +69,36 @@ export default function WorkerDetailsScreen({ route, navigation }: any) {
   if (!worker) {
     return (
       <View style={styles.centerContainer}>
-        <Text>{t("common.loading") || "Loading..."}</Text>
+        <ActivityIndicator size="large" color="#2563EB" />
+        <Text style={{ marginTop: 10, color: "#6B7280" }}>
+          {t("common.loading") || "Loading..."}
+        </Text>
       </View>
     )
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: "#F3F4F6" }}>
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        {/* Header Bar with Back Button */}
+        <View style={styles.headerBar}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
+          >
+            <Feather name="arrow-left" size={24} color="#111827" />
+          </TouchableOpacity>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.heading}>
+              {t("workers.workerDetailsTitle") || "Worker Details"}
+            </Text>
+            <Text style={styles.subHeading}>
+              {t("workers.workerDetailsSubtitle") || "View and manage staff profile"}
+            </Text>
+          </View>
+        </View>
+
         {/* Profile Card */}
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
@@ -251,6 +274,36 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F3F4F6",
     padding: 16
+  },
+  headerBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 20,
+    marginTop: 10
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB"
+  },
+  headerTextContainer: {
+    flex: 1
+  },
+  heading: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#111827"
+  },
+  subHeading: {
+    color: "#6B7280",
+    fontSize: 13,
+    marginTop: 2
   },
   centerContainer: {
     flex: 1,

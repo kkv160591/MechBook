@@ -11,6 +11,8 @@ import {
 } from "react-native"
 
 import { useState, useEffect, useRef } from "react"
+import { useNavigation } from "@react-navigation/native"
+import { Feather } from "@expo/vector-icons"
 import { getInvoiceSettings, updateInvoiceSettings } from "../../services/settingsService"
 import { useTranslation } from "../../context/LanguageContext"
 
@@ -42,6 +44,7 @@ const MAX_TERMS_LENGTH = 1000
 const MAX_WARRANTY_LENGTH = 300
 
 export default function InvoiceSettingsScreen() {
+  const navigation = useNavigation()
   const { t } = useTranslation()
 
   const scrollViewRef = useRef<ScrollView>(null)
@@ -122,7 +125,6 @@ export default function InvoiceSettingsScreen() {
     }
   }
 
-  // Helper to sanitize numeric inputs on keystroke
   const sanitizeNumericInput = (text: string) => {
     let cleaned = text.replace(/[^0-9.]/g, "")
     const parts = cleaned.split(".")
@@ -165,7 +167,6 @@ export default function InvoiceSettingsScreen() {
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {}
 
-    // 1. Labor Cost Validation (Optional - only validate format if provided)
     if (settings.defaultLaborCost && settings.defaultLaborCost.trim() !== "") {
       const laborVal = Number(settings.defaultLaborCost)
       if (isNaN(laborVal)) {
@@ -175,7 +176,6 @@ export default function InvoiceSettingsScreen() {
       }
     }
 
-    // 2. Discount Validation (Optional - only validate format if provided)
     if (settings.defaultDiscount && settings.defaultDiscount.trim() !== "") {
       const discountVal = Number(settings.defaultDiscount)
       if (isNaN(discountVal)) {
@@ -190,7 +190,6 @@ export default function InvoiceSettingsScreen() {
       }
     }
 
-    // 3. Warranty Notes Validation
     if (
       settings.defaultWarranty &&
       settings.defaultWarranty.trim().length > MAX_WARRANTY_LENGTH
@@ -198,7 +197,6 @@ export default function InvoiceSettingsScreen() {
       newErrors.defaultWarranty = t("invoiceSettings.validation.warrantyTooLong")
     }
 
-    // 4. Footer Note Validation
     if (
       settings.footerNote &&
       settings.footerNote.trim().length > MAX_FOOTER_LENGTH
@@ -206,7 +204,6 @@ export default function InvoiceSettingsScreen() {
       newErrors.footerNote = t("invoiceSettings.validation.footerNoteTooLong")
     }
 
-    // 5. Terms Validation
     if (settings.terms && settings.terms.trim().length > MAX_TERMS_LENGTH) {
       newErrors.terms = t("invoiceSettings.validation.termsTooLong")
     }
@@ -256,6 +253,25 @@ export default function InvoiceSettingsScreen() {
       style={styles.container}
       showsVerticalScrollIndicator={false}
     >
+      {/* Header Bar with Back Button */}
+      <View style={styles.headerBar}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+        >
+          <Feather name="arrow-left" size={24} color="#111827" />
+        </TouchableOpacity>
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.heading}>
+            {t("invoiceSettings.title") || "Invoice Settings"}
+          </Text>
+          <Text style={styles.subHeading}>
+            {t("invoiceSettings.subtitle") || "Configure billing defaults and PDF details"}
+          </Text>
+        </View>
+      </View>
+
       {/* BILLING DEFAULTS */}
       <Text style={styles.sectionTitle}>{t("invoiceSettings.billingDefaults")}</Text>
 
@@ -505,6 +521,36 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F3F4F6",
     padding: 16
+  },
+  headerBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 20,
+    marginTop: 10
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB"
+  },
+  headerTextContainer: {
+    flex: 1
+  },
+  heading: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#111827"
+  },
+  subHeading: {
+    color: "#6B7280",
+    fontSize: 13,
+    marginTop: 2
   },
   centerContainer: {
     flex: 1,

@@ -68,7 +68,7 @@ export default function LoginScreen() {
     try {
       setLoading(true)
 
-      const response = await axios.post("http://localhost:3001/auth/login", {
+      const response = await axios.post(`${process.env.EXPO_PUBLIC_API_URL}/auth/login`, {
         phone: trimmedPhone,
         pin: trimmedPin,
       })

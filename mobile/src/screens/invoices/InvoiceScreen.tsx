@@ -5,30 +5,24 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Image
+  Image,
+  SafeAreaView
 } from "react-native"
-
-import {
-  Ionicons,
-  MaterialCommunityIcons
-} from "@expo/vector-icons"
-
+import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons"
 import { useEffect, useMemo, useState } from "react"
-
 import { useRoute } from "@react-navigation/native"
 
 import { getJobById } from "../../services/jobService"
-
 import { getGarageProfile } from "../../services/garageService"
-
 import { getWorkers } from "../../services/workerService"
-
 import {
   getGSTSettings,
   getInvoiceSettings
 } from "../../services/settingsService"
+import { useTranslation } from "../../context/LanguageContext"
 
-export default function InvoiceScreen() {
+export default function InvoiceScreen({ navigation }: any) {
+  const { t } = useTranslation()
   const route = useRoute<any>()
   const { jobId } = route.params
 
@@ -73,7 +67,7 @@ export default function InvoiceScreen() {
     )
   }, [job, workers])
 
-  // 1. Calculate Services/Parts Subtotal (Matching JobDetailScreen logic)
+  // 1. Calculate Services/Parts Subtotal
   const partsTotal = useMemo(() => {
     if (!job?.services) return 0
     return job.services.reduce((sum: number, item: any) => {
@@ -90,7 +84,7 @@ export default function InvoiceScreen() {
     }, 0)
   }, [job])
 
-  // 2. Labor Cost (Property: laborCost)
+  // 2. Labor Cost
   const laborFee = Number(job?.laborCost ?? invoiceSettings?.defaultLaborCost ?? 0)
 
   // 3. Raw Subtotal before Discount & GST
@@ -119,14 +113,54 @@ export default function InvoiceScreen() {
 
   if (loading || !garage || !gstSettings || !invoiceSettings || !job) {
     return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#2563EB" />
+      <View style={styles.container}>
+        <SafeAreaView />
+        <View style={styles.headerBar}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
+          >
+            <Feather name="arrow-left" size={24} color="#111827" />
+          </TouchableOpacity>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.heading}>
+              {t("invoice.title") || "Invoice Details"}
+            </Text>
+            <Text style={styles.subHeading}>
+              {t("invoice.loadingSubtitle") || "Loading invoice breakdown..."}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.loader}>
+          <ActivityIndicator size="large" color="#2563EB" />
+        </View>
       </View>
     )
   }
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <SafeAreaView />
+      {/* Header Bar with Back Button */}
+      <View style={styles.headerBar}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+        >
+          <Feather name="arrow-left" size={24} color="#111827" />
+        </TouchableOpacity>
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.heading}>
+            {t("invoice.title") || "Invoice Details"}
+          </Text>
+          <Text style={styles.subHeading}>
+            {t("invoice.subtitle") || "View complete job sheet & billing summary"}
+          </Text>
+        </View>
+      </View>
+
       {/* GARAGE HEADER */}
       <View style={styles.header}>
         {invoiceSettings.showGarageLogo && (
@@ -140,7 +174,9 @@ export default function InvoiceScreen() {
         )}
 
         <Text style={styles.garageName}>{garage.garageName}</Text>
-        <Text style={styles.garageSubtitle}>Owner : {garage.ownerName}</Text>
+        <Text style={styles.garageSubtitle}>
+          {t("invoice.owner") || "Owner"} : {garage.ownerName}
+        </Text>
 
         {invoiceSettings.showGarageAddress && (
           <>
@@ -157,13 +193,13 @@ export default function InvoiceScreen() {
 
         <View style={styles.invoiceStrip}>
           <View>
-            <Text style={styles.invoiceLabel}>Invoice No</Text>
+            <Text style={styles.invoiceLabel}>{t("invoice.number") || "Invoice No"}</Text>
             <Text style={styles.invoiceValue}>
               INV-{(job._id || job.jobId || "").slice(0, 8).toUpperCase()}
             </Text>
           </View>
           <View>
-            <Text style={styles.invoiceLabel}>Invoice Date</Text>
+            <Text style={styles.invoiceLabel}>{t("invoice.date") || "Invoice Date"}</Text>
             <Text style={styles.invoiceValue}>
               {new Date(job.createdAt || Date.now()).toLocaleDateString()}
             </Text>
@@ -173,7 +209,7 @@ export default function InvoiceScreen() {
 
       {/* CUSTOMER */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Customer Details</Text>
+        <Text style={styles.cardTitle}>{t("invoice.customerDetails") || "Customer Details"}</Text>
         <View style={styles.infoRow}>
           <Ionicons name="person-outline" size={18} color="#2563EB" />
           <Text style={styles.infoText}>{job.customerName}</Text>
@@ -193,7 +229,7 @@ export default function InvoiceScreen() {
       {/* VEHICLE DETAILS */}
       {invoiceSettings.showVehicleDetails && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Vehicle Details</Text>
+          <Text style={styles.cardTitle}>{t("invoice.vehicleDetails") || "Vehicle Details"}</Text>
           <View style={styles.vehicleHeader}>
             <MaterialCommunityIcons
               name={job.vehicleType === "2 Wheeler" ? "motorbike" : "car"}
@@ -212,23 +248,23 @@ export default function InvoiceScreen() {
 
           <View style={styles.grid}>
             <View style={styles.gridItem}>
-              <Text style={styles.label}>Vehicle Type</Text>
+              <Text style={styles.label}>{t("invoice.vehicleType") || "Vehicle Type"}</Text>
               <Text style={styles.value}>{job.vehicleType || "-"}</Text>
             </View>
             <View style={styles.gridItem}>
-              <Text style={styles.label}>Odometer</Text>
+              <Text style={styles.label}>{t("invoice.odometer") || "Odometer"}</Text>
               <Text style={styles.value}>
                 {job.odometer ? `${job.odometer} KM` : "-"}
               </Text>
             </View>
             <View style={styles.gridItem}>
-              <Text style={styles.label}>Assigned Worker</Text>
+              <Text style={styles.label}>{t("invoice.assignedWorker") || "Assigned Worker"}</Text>
               <Text style={styles.value}>
                 {job.workerName || assignedWorker?.name || "-"}
               </Text>
             </View>
             <View style={styles.gridItem}>
-              <Text style={styles.label}>Priority</Text>
+              <Text style={styles.label}>{t("invoice.priority") || "Priority"}</Text>
               <Text style={styles.value}>{job.priority || "Normal"}</Text>
             </View>
           </View>
@@ -237,19 +273,19 @@ export default function InvoiceScreen() {
 
       {/* JOB INFORMATION */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Job Information</Text>
-        <Text style={styles.sectionLabel}>Complaint</Text>
+        <Text style={styles.cardTitle}>{t("invoice.jobInfo") || "Job Information"}</Text>
+        <Text style={styles.sectionLabel}>{t("invoice.complaint") || "Complaint"}</Text>
         <Text style={styles.description}>{job.complaint || "-"}</Text>
 
         <View style={{ height: 12 }} />
 
-        <Text style={styles.sectionLabel}>Inspection Notes</Text>
+        <Text style={styles.sectionLabel}>{t("invoice.inspectionNotes") || "Inspection Notes"}</Text>
         <Text style={styles.description}>{job.inspectionNotes || "-"}</Text>
 
         {job.deliveryDate && (
           <>
             <View style={{ height: 12 }} />
-            <Text style={styles.sectionLabel}>Estimated Delivery</Text>
+            <Text style={styles.sectionLabel}>{t("invoice.estDelivery") || "Estimated Delivery"}</Text>
             <Text style={styles.description}>
               {new Date(job.deliveryDate).toLocaleString()}
             </Text>
@@ -259,12 +295,14 @@ export default function InvoiceScreen() {
 
       {/* SERVICES PERFORMED */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Services Performed</Text>
+        <Text style={styles.cardTitle}>{t("invoice.servicesPerformed") || "Services Performed"}</Text>
         <View style={styles.tableHeader}>
-          <Text style={[styles.tableCell, { flex: 3, fontWeight: "700" }]}>Service</Text>
-          <Text style={styles.tableCell}>Qty</Text>
-          <Text style={styles.tableCell}>Rate</Text>
-          <Text style={styles.tableCell}>Amount</Text>
+          <Text style={[styles.tableCell, { flex: 3, fontWeight: "700" }]}>
+            {t("invoice.service") || "Service"}
+          </Text>
+          <Text style={styles.tableCell}>{t("invoice.qty") || "Qty"}</Text>
+          <Text style={styles.tableCell}>{t("invoice.rate") || "Rate"}</Text>
+          <Text style={styles.tableCell}>{t("invoice.amount") || "Amount"}</Text>
         </View>
 
         {(job.services || []).map((service: any, index: number) => {
@@ -291,27 +329,28 @@ export default function InvoiceScreen() {
 
       {/* BILL SUMMARY */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Bill Summary</Text>
+        <Text style={styles.cardTitle}>{t("invoice.billSummary") || "Bill Summary"}</Text>
 
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Services Subtotal</Text>
+          <Text style={styles.summaryLabel}>{t("invoice.servicesSubtotal") || "Services Subtotal"}</Text>
           <Text style={styles.summaryValue}>₹{partsTotal.toFixed(2)}</Text>
         </View>
 
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Labor Fee</Text>
+          <Text style={styles.summaryLabel}>{t("invoice.laborFee") || "Labor Fee"}</Text>
           <Text style={styles.summaryValue}>+ ₹{laborFee.toFixed(2)}</Text>
         </View>
 
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Subtotal</Text>
+          <Text style={styles.summaryLabel}>{t("invoice.subtotal") || "Subtotal"}</Text>
           <Text style={styles.summaryValue}>₹{subTotal.toFixed(2)}</Text>
         </View>
 
         {discountAmount > 0 && (
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>
-              Discount {discountType === "percentage" ? `(${rawDiscountValue}%)` : "(Fixed)"}
+              {t("invoice.discount") || "Discount"}{" "}
+              {discountType === "percentage" ? `(${rawDiscountValue}%)` : "(Fixed)"}
             </Text>
             <Text style={[styles.summaryValue, { color: "#059669" }]}>
               - ₹{discountAmount.toFixed(2)}
@@ -327,21 +366,21 @@ export default function InvoiceScreen() {
         )}
 
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Round Off</Text>
+          <Text style={styles.summaryLabel}>{t("invoice.roundOff") || "Round Off"}</Text>
           <Text style={styles.summaryValue}>₹{roundOff.toFixed(2)}</Text>
         </View>
 
         <View style={styles.divider} />
 
         <View style={styles.summaryRow}>
-          <Text style={styles.grandLabel}>Grand Total</Text>
+          <Text style={styles.grandLabel}>{t("invoice.grandTotal") || "Grand Total"}</Text>
           <Text style={styles.grandValue}>₹{grandTotal}</Text>
         </View>
       </View>
 
       {/* WARRANTY */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Warranty Terms</Text>
+        <Text style={styles.cardTitle}>{t("invoice.warrantyTerms") || "Warranty Terms"}</Text>
         <Text style={styles.description}>
           {invoiceSettings.defaultWarranty || "• Genuine spare warranty depends on manufacturer terms."}
         </Text>
@@ -349,7 +388,7 @@ export default function InvoiceScreen() {
 
       {/* TERMS & CONDITIONS */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Terms & Conditions</Text>
+        <Text style={styles.cardTitle}>{t("invoice.terms") || "Terms & Conditions"}</Text>
         <Text style={styles.description}>
           {invoiceSettings.terms || "• Please inspect your vehicle before taking delivery."}
         </Text>
@@ -369,11 +408,11 @@ export default function InvoiceScreen() {
         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
           <View style={{ alignItems: "center" }}>
             <View style={styles.signatureLine} />
-            <Text style={styles.signatureText}>Customer Signature</Text>
+            <Text style={styles.signatureText}>{t("invoice.customerSig") || "Customer Signature"}</Text>
           </View>
           <View style={{ alignItems: "center" }}>
             <View style={styles.signatureLine} />
-            <Text style={styles.signatureText}>Authorized Signatory</Text>
+            <Text style={styles.signatureText}>{t("invoice.authSig") || "Authorized Signatory"}</Text>
           </View>
         </View>
       </View>
@@ -387,17 +426,23 @@ export default function InvoiceScreen() {
         ]}
       >
         <Ionicons name="document-text-outline" size={22} color="white" />
-        <Text style={styles.primaryButtonText}>Generate PDF Invoice</Text>
+        <Text style={styles.primaryButtonText}>
+          {t("invoice.generatePDF") || "Generate PDF Invoice"}
+        </Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.secondaryButton}>
         <Ionicons name="share-social-outline" size={22} color="#2563EB" />
-        <Text style={styles.secondaryButtonText}>Share Invoice</Text>
+        <Text style={styles.secondaryButtonText}>
+          {t("invoice.share") || "Share Invoice"}
+        </Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.secondaryButton}>
         <Ionicons name="print-outline" size={22} color="#2563EB" />
-        <Text style={styles.secondaryButtonText}>Print Invoice</Text>
+        <Text style={styles.secondaryButtonText}>
+          {t("invoice.print") || "Print Invoice"}
+        </Text>
       </TouchableOpacity>
 
       <View style={{ height: 40 }} />
@@ -406,303 +451,282 @@ export default function InvoiceScreen() {
 }
 
 const styles = StyleSheet.create({
-
-container:{
-flex:1,
-backgroundColor:"#F3F4F6"
-},
-
-loader:{
-flex:1,
-justifyContent:"center",
-alignItems:"center"
-},
-
-/* HEADER */
-
-header:{
-backgroundColor:"white",
-paddingVertical:28,
-paddingHorizontal:20,
-alignItems:"center",
-marginBottom:16,
-borderBottomLeftRadius:22,
-borderBottomRightRadius:22,
-elevation:2
-},
-
-logoContainer:{
-width:90,
-height:90,
-borderRadius:45,
-backgroundColor:"#EFF6FF",
-justifyContent:"center",
-alignItems:"center",
-marginBottom:15
-},
-
-logo:{
-width:65,
-height:65
-},
-
-garageName:{
-fontSize:24,
-fontWeight:"700",
-color:"#111827"
-},
-
-garageSubtitle:{
-marginTop:4,
-fontSize:15,
-color:"#374151"
-},
-
-garageAddress:{
-marginTop:10,
-color:"#6B7280",
-textAlign:"center"
-},
-
-garagePhone:{
-marginTop:4,
-color:"#6B7280"
-},
-
-gst:{
-marginTop:6,
-fontWeight:"600",
-color:"#111827"
-},
-
-invoiceStrip:{
-marginTop:22,
-paddingTop:18,
-borderTopWidth:1,
-borderColor:"#E5E7EB",
-width:"100%",
-flexDirection:"row",
-justifyContent:"space-between"
-},
-
-invoiceLabel:{
-fontSize:12,
-color:"#6B7280"
-},
-
-invoiceValue:{
-marginTop:4,
-fontWeight:"700",
-fontSize:15,
-color:"#111827"
-},
-
-/* CARD */
-
-card:{
-backgroundColor:"white",
-marginHorizontal:16,
-marginBottom:16,
-borderRadius:20,
-padding:18,
-elevation:2
-},
-
-cardTitle:{
-fontSize:18,
-fontWeight:"700",
-marginBottom:16,
-color:"#111827"
-},
-
-/* COMMON */
-
-infoRow:{
-flexDirection:"row",
-alignItems:"center",
-marginBottom:12
-},
-
-infoText:{
-marginLeft:10,
-flex:1,
-fontSize:15,
-color:"#374151"
-},
-
-divider:{
-height:1,
-backgroundColor:"#E5E7EB",
-marginVertical:18
-},
-
-/* VEHICLE */
-
-vehicleHeader:{
-flexDirection:"row",
-alignItems:"center"
-},
-
-vehicleNumber:{
-fontSize:20,
-fontWeight:"700",
-color:"#111827"
-},
-
-vehicleModel:{
-marginTop:4,
-color:"#6B7280"
-},
-
-grid:{
-flexDirection:"row",
-flexWrap:"wrap",
-justifyContent:"space-between"
-},
-
-gridItem:{
-width:"48%",
-marginBottom:16
-},
-
-label:{
-fontSize:12,
-color:"#6B7280",
-marginBottom:6
-},
-
-value:{
-fontWeight:"600",
-fontSize:15,
-color:"#111827"
-},
-
-sectionLabel:{
-fontWeight:"700",
-fontSize:15,
-marginBottom:8,
-color:"#111827"
-},
-
-description:{
-fontSize:14,
-lineHeight:24,
-color:"#4B5563"
-},
-
-/* TABLE */
-
-tableHeader:{
-flexDirection:"row",
-paddingBottom:12,
-borderBottomWidth:1,
-borderBottomColor:"#E5E7EB"
-},
-
-tableRow:{
-flexDirection:"row",
-paddingVertical:14,
-borderBottomWidth:1,
-borderBottomColor:"#F3F4F6"
-},
-
-tableCell:{
-flex:1,
-fontSize:13,
-color:"#374151",
-textAlign:"center"
-},
-
-/* SUMMARY */
-
-summaryRow:{
-flexDirection:"row",
-justifyContent:"space-between",
-alignItems:"center",
-marginBottom:14
-},
-
-summaryLabel:{
-fontSize:15,
-color:"#374151"
-},
-
-summaryValue:{
-fontSize:15,
-fontWeight:"600",
-color:"#111827"
-},
-
-grandLabel:{
-fontSize:21,
-fontWeight:"700",
-color:"#111827"
-},
-
-grandValue:{
-fontSize:28,
-fontWeight:"700",
-color:"#16A34A"
-},
-
-/* SIGNATURE */
-
-signatureLine:{
-width:120,
-borderBottomWidth:1.5,
-borderBottomColor:"#9CA3AF",
-marginBottom:8,
-marginTop:40
-},
-
-signatureText:{
-fontSize:13,
-color:"#6B7280"
-},
-
-/* BUTTONS */
-
-primaryButton:{
-backgroundColor:"#2563EB",
-marginHorizontal:16,
-marginBottom:12,
-paddingVertical:18,
-borderRadius:18,
-alignItems:"center",
-justifyContent:"center",
-flexDirection:"row",
-elevation:2
-},
-
-primaryButtonText:{
-marginLeft:10,
-color:"white",
-fontWeight:"700",
-fontSize:16
-},
-
-secondaryButton:{
-backgroundColor:"white",
-marginHorizontal:16,
-marginBottom:12,
-paddingVertical:18,
-borderRadius:18,
-alignItems:"center",
-justifyContent:"center",
-flexDirection:"row",
-borderWidth:1,
-borderColor:"#E5E7EB"
-},
-
-secondaryButtonText:{
-marginLeft:10,
-fontSize:16,
-fontWeight:"700",
-color:"#2563EB"
-},
-
-disabledButton:{
-backgroundColor:"#9CA3AF"
-}
-
+  container: {
+    flex: 1,
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 18,
+    paddingTop: 10,
+  },
+  loader: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 100,
+  },
+  /* HEADER BAR */
+  headerBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 20,
+    marginTop: 10,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  headerTextContainer: {
+    flex: 1,
+  },
+  heading: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#111827",
+  },
+  subHeading: {
+    color: "#6B7280",
+    fontSize: 13,
+    marginTop: 2,
+  },
+  /* GARAGE HEADER */
+  header: {
+    backgroundColor: "white",
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    alignItems: "center",
+    marginBottom: 16,
+    borderRadius: 20,
+    elevation: 2,
+  },
+  logoContainer: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  logo: {
+    width: 65,
+    height: 65,
+  },
+  garageName: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  garageSubtitle: {
+    marginTop: 4,
+    fontSize: 15,
+    color: "#374151",
+  },
+  garageAddress: {
+    marginTop: 10,
+    color: "#6B7280",
+    textAlign: "center",
+  },
+  garagePhone: {
+    marginTop: 4,
+    color: "#6B7280",
+  },
+  gst: {
+    marginTop: 6,
+    fontWeight: "600",
+    color: "#111827",
+  },
+  invoiceStrip: {
+    marginTop: 22,
+    paddingTop: 18,
+    borderTopWidth: 1,
+    borderColor: "#E5E7EB",
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  invoiceLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  invoiceValue: {
+    marginTop: 4,
+    fontWeight: "700",
+    fontSize: 15,
+    color: "#111827",
+  },
+  /* CARD */
+  card: {
+    backgroundColor: "white",
+    marginBottom: 16,
+    borderRadius: 20,
+    padding: 18,
+    elevation: 2,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 16,
+    color: "#111827",
+  },
+  /* COMMON */
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  infoText: {
+    marginLeft: 10,
+    flex: 1,
+    fontSize: 15,
+    color: "#374151",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#E5E7EB",
+    marginVertical: 18,
+  },
+  /* VEHICLE */
+  vehicleHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  vehicleNumber: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  vehicleModel: {
+    marginTop: 4,
+    color: "#6B7280",
+  },
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+  gridItem: {
+    width: "48%",
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginBottom: 6,
+  },
+  value: {
+    fontWeight: "600",
+    fontSize: 15,
+    color: "#111827",
+  },
+  sectionLabel: {
+    fontWeight: "700",
+    fontSize: 15,
+    marginBottom: 8,
+    color: "#111827",
+  },
+  description: {
+    fontSize: 14,
+    lineHeight: 24,
+    color: "#4B5563",
+  },
+  /* TABLE */
+  tableHeader: {
+    flexDirection: "row",
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  tableRow: {
+    flexDirection: "row",
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  tableCell: {
+    flex: 1,
+    fontSize: 13,
+    color: "#374151",
+    textAlign: "center",
+  },
+  /* SUMMARY */
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  summaryLabel: {
+    fontSize: 15,
+    color: "#374151",
+  },
+  summaryValue: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#111827",
+  },
+  grandLabel: {
+    fontSize: 21,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  grandValue: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#16A34A",
+  },
+  /* SIGNATURE */
+  signatureLine: {
+    width: 120,
+    borderBottomWidth: 1.5,
+    borderBottomColor: "#9CA3AF",
+    marginBottom: 8,
+    marginTop: 40,
+  },
+  signatureText: {
+    fontSize: 13,
+    color: "#6B7280",
+  },
+  /* BUTTONS */
+  primaryButton: {
+    backgroundColor: "#2563EB",
+    marginBottom: 12,
+    paddingVertical: 18,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    elevation: 2,
+  },
+  primaryButtonText: {
+    marginLeft: 10,
+    color: "white",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  secondaryButton: {
+    backgroundColor: "white",
+    marginBottom: 12,
+    paddingVertical: 18,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  secondaryButtonText: {
+    marginLeft: 10,
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#2563EB",
+  },
+  disabledButton: {
+    backgroundColor: "#9CA3AF",
+  },
 })
