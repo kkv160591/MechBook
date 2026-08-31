@@ -605,6 +605,60 @@ export const translations = {
       "generatePDF": "Generate PDF Invoice",
       "share": "Share Invoice",
       "print": "Print Invoice"
+    },
+
+    dashboard: {
+      welcome: "Welcome Back 👋",
+      loading: "Loading...",
+      defaultGarage: "Garage",
+      defaultSubtitle: "Garage Dashboard",
+      plan: {
+        free: "Free"
+      },
+      roles: {
+        user: "USER"
+      },
+      stats: {
+        totalJobs: "Total Jobs",
+        pendingJobs: "Pending Jobs",
+        completed: "Completed",
+        revenue: "Revenue"
+      },
+      sections: {
+        quickActions: "Quick Actions",
+        businessOverview: "Business Overview",
+        recentJobs: "Recent Jobs"
+      },
+      actions: {
+        createJob: "Create Job",
+        invoices: "Invoices",
+        viewAll: "View All"
+      },
+      overview: {
+        workers: "Workers",
+        workersSubtitle: "Active staff available",
+        inProgress: "In Progress",
+        inProgressSubtitle: "Jobs currently being serviced",
+        lowStock: "Low Stock",
+        lowStockSubtitle: "Spare parts need attention"
+      },
+      empty: {
+        noJobsTitle: "No jobs yet",
+        noJobsSubtitle: "Create your first job to see it here."
+      },
+      status: {
+        completed: "COMPLETED",
+        pending: "PENDING",
+        inProgress: "IN PROGRESS",
+        unknown: "UNKNOWN"
+      },
+      jobCard: {
+        defaultVehicle: "Vehicle",
+        defaultDetails: "Vehicle details",
+        defaultCustomer: "Customer",
+        servicesCount: "services",
+        singleService: "Service"
+      }
     }
   },
 
@@ -1212,6 +1266,60 @@ export const translations = {
       "generatePDF": "PDF इनवॉइस बनाएं",
       "share": "इनवॉइस शेयर करें",
       "print": "इनवॉइस प्रिंट करें"
+    },
+
+    dashboard: {
+      welcome: "वापसी पर स्वागत है 👋",
+      loading: "लोड हो रहा है...",
+      defaultGarage: "गैराज",
+      defaultSubtitle: "गैराज डैशबोर्ड",
+      plan: {
+        free: "मुफ़्त"
+      },
+      roles: {
+        user: "उपयोगकर्ता"
+      },
+      stats: {
+        totalJobs: "कुल काम",
+        pendingJobs: "लंबित काम",
+        completed: "पूरा हुआ",
+        revenue: "कुल कमाई"
+      },
+      sections: {
+        quickActions: "त्वरित कार्य",
+        businessOverview: "व्यवसाय अवलोकन",
+        recentJobs: "हाल के काम"
+      },
+      actions: {
+        createJob: "नया काम जोड़ें",
+        invoices: "इनवॉइस",
+        viewAll: "सभी देखें"
+      },
+      overview: {
+        workers: "कर्मचारी",
+        workersSubtitle: "उपलब्ध सक्रिय कर्मचारी",
+        inProgress: "प्रगति पर है",
+        inProgressSubtitle: "काम अभी जारी है",
+        lowStock: "कम स्टॉक",
+        lowStockSubtitle: "स्पेयर पार्ट्स पर ध्यान दें"
+      },
+      empty: {
+        noJobsTitle: "अभी कोई काम नहीं है",
+        noJobsSubtitle: "यहाँ देखने के लिए अपना पहला काम जोड़ें।"
+      },
+      status: {
+        completed: "पूरा हुआ",
+        pending: "लंबित",
+        inProgress: "प्रगति में",
+        unknown: "अज्ञात"
+      },
+      jobCard: {
+        defaultVehicle: "वाहन",
+        defaultDetails: "वाहन विवरण",
+        defaultCustomer: "ग्राहक",
+        servicesCount: "सेवाएं",
+        singleService: "सेवा"
+      }
     }
   },
 };

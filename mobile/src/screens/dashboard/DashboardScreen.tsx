@@ -1,5 +1,6 @@
 // DashboardScreen.tsx
 
+import React, { useState, useCallback } from "react"
 import {
   View,
   Text,
@@ -7,2261 +8,726 @@ import {
   TouchableOpacity,
   ScrollView,
   RefreshControl,
-  ActivityIndicator
+  ActivityIndicator,
 } from "react-native"
+import { MaterialIcons, Ionicons, FontAwesome5 } from "@expo/vector-icons"
+import { useNavigation, useFocusEffect } from "@react-navigation/native"
 
-import {
-  useState,
-  useCallback
-} from "react"
-
-import {
-  getGarageProfile
-} from "../../services/garageService"
-
-import {
-  getJobs
-} from "../../services/jobService"
-
-import {
-  getWorkers
-} from "../../services/workerService"
-
-import {
-  getLowStockItems
-} from "../../services/inventoryService"
-
-import {
-  MaterialIcons,
-  Ionicons,
-  FontAwesome5
-} from "@expo/vector-icons"
-
-import {
-  useNavigation,
-  useFocusEffect
-} from "@react-navigation/native"
-
-import {
-  useAuth
-} from "../../context/AuthContext"
-
+import { getGarageProfile } from "../../services/garageService"
+import { getJobs } from "../../services/jobService"
+import { getWorkers } from "../../services/workerService"
+import { getLowStockItems } from "../../services/inventoryService"
+import { useAuth } from "../../context/AuthContext"
 import {
   getPlanUsage,
-  PlanUsageResponse
+  PlanUsageResponse,
 } from "../../services/subscriptionService"
+import { useTranslation } from "../../context/LanguageContext"
 
+interface GarageProfile {
+  garageName?: string
+  city?: string
+  state?: string
+  address?: string
+}
+
+interface ServiceItem {
+  actualPrice?: number
+  estimatedPrice?: number
+}
+
+interface Job {
+  id: string | number
+  status: "completed" | "pending" | "progress" | "in-progress" | "inProgress" | string
+  totalAmount?: number
+  total?: number
+  services?: ServiceItem[]
+  vehicleType?: string
+  vehicleNumber?: string
+  vehicleModel?: string
+  vehicle?: {
+    number?: string
+    model?: string
+  }
+  customerName?: string
+  customer?: string | { name?: string }
+}
+
+interface Worker {
+  id: string | number
+  name?: string
+}
+
+interface LowStockItem {
+  id: string | number
+  name?: string
+}
 
 export default function DashboardScreen() {
-
-  const navigation: any =
-    useNavigation()
-
-  const {
-    user
-  } = useAuth()
-
+  const navigation = useNavigation<any>()
+  const { user } = useAuth()
+  const { t } = useTranslation()
 
   // ==================================
   // STATE
   // ==================================
-
-  const [garage, setGarage] =
-    useState<any>(null)
-
-  const [jobs, setJobs] =
-    useState<any[]>([])
-
-  const [workers, setWorkers] =
-    useState<any[]>([])
-
-  const [lowStockItems, setLowStockItems] =
-    useState<any[]>([])
-
-  const [loading, setLoading] =
-    useState(true)
-
-  const [refreshing, setRefreshing] =
-    useState(false)
-
-  const [planUsage, setPlanUsage] =
-    useState<PlanUsageResponse | null>(null)
-
-  const [planUsageLoading, setPlanUsageLoading] =
-    useState(true)
-
+  const [garage, setGarage] = useState<GarageProfile | null>(null)
+  const [jobs, setJobs] = useState<Job[]>([])
+  const [workers, setWorkers] = useState<Worker[]>([])
+  const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [planUsage, setPlanUsage] = useState<PlanUsageResponse | null>(null)
+  const [planUsageLoading, setPlanUsageLoading] = useState(true)
 
   // ==================================
-  // LOAD SUBSCRIPTION
+  // HELPER: JOB TOTAL CALCULATOR
   // ==================================
-
-  const loadSubscription =
-    useCallback(
-      async () => {
-
-        try {
-
-          setPlanUsageLoading(true)
-
-          const data =
-            await getPlanUsage()
-
-          console.log(
-            "========== DASHBOARD SUBSCRIPTION =========="
-          )
-
-          console.log(
-            "garageId:",
-            data?.garageId
-          )
-
-          console.log(
-            "planCode:",
-            data?.planCode
-          )
-
-          console.log(
-            "planName:",
-            data?.planName
-          )
-
-          console.log(
-            "billingCycle:",
-            data?.billingCycle
-          )
-
-          console.log(
-            "jobsUsed:",
-            data?.jobsUsed
-          )
-
-          console.log(
-            "jobsLimit:",
-            data?.jobsLimit
-          )
-
-          console.log(
-            "boosterJobs:",
-            data?.boosterJobs
-          )
-
-          console.log(
-            "usagePercentage:",
-            data?.usagePercentage
-          )
-
-          console.log(
-            "jobsRemaining:",
-            data?.jobsRemaining
-          )
-
-          console.log(
-            "============================================"
-          )
-
-
-          setPlanUsage(data)
-
-        }
-
-        catch (error) {
-
-          console.log(
-            "Failed to load dashboard subscription:",
-            error
-          )
-
-          /*
-           * Do not destroy existing subscription
-           * information if a refresh fails.
-           */
-
-        }
-
-        finally {
-
-          setPlanUsageLoading(false)
-
-        }
-
-      },
-      []
-    )
-
+  const getJobTotal = (job: Job): number => {
+    if (typeof job.totalAmount === "number") return job.totalAmount
+    if (typeof job.total === "number") return job.total
+    if (Array.isArray(job.services)) {
+      return job.services.reduce(
+        (sum, service) =>
+          sum + Number(service.actualPrice ?? service.estimatedPrice ?? 0),
+        0
+      )
+    }
+    return 0
+  }
 
   // ==================================
-  // LOAD DASHBOARD DATA
+  // LOAD ALL DATA (UNIFIED FETCHING)
   // ==================================
+  const loadAllData = useCallback(async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true)
+    setPlanUsageLoading(true)
 
-  const loadDashboardData =
-    useCallback(
-      async () => {
+    try {
+      const [garageRes, jobsRes, workersRes, lowStockRes, planRes] =
+        await Promise.allSettled([
+          getGarageProfile(),
+          getJobs(),
+          getWorkers(),
+          getLowStockItems(),
+          getPlanUsage(),
+        ])
 
-        try {
+      // 1. Garage
+      if (garageRes.status === "fulfilled") {
+        setGarage(garageRes.value?.garage || null)
+      }
 
-          setLoading(true)
+      // 2. Jobs
+      if (jobsRes.status === "fulfilled") {
+        const res = jobsRes.value
+        const jobList = Array.isArray(res)
+          ? res
+          : Array.isArray(res?.jobs)
+          ? res.jobs
+          : []
+        setJobs(jobList)
+      }
 
-          const [
-            garageResponse,
-            jobsResponse,
-            workersResponse,
-            lowStockResponse
-          ] =
-            await Promise.all([
+      // 3. Workers
+      if (workersRes.status === "fulfilled") {
+        const res = workersRes.value
+        const workerList = Array.isArray(res)
+          ? res
+          : Array.isArray(res?.workers)
+          ? res.workers
+          : []
+        setWorkers(workerList)
+      }
 
-              getGarageProfile(),
+      // 4. Low Stock
+      if (lowStockRes.status === "fulfilled") {
+        const res = lowStockRes.value
+        const inventoryList = Array.isArray(res)
+          ? res
+          : Array.isArray(res?.items)
+          ? res.items
+          : []
+        setLowStockItems(inventoryList)
+      }
 
-              getJobs(),
-
-              getWorkers(),
-
-              getLowStockItems()
-
-            ])
-
-
-          console.log(
-            "Dashboard Garage:",
-            garageResponse?.garage
-          )
-
-          console.log(
-            "Dashboard Jobs:",
-            jobsResponse
-          )
-
-          console.log(
-            "Dashboard Workers:",
-            workersResponse
-          )
-
-          console.log(
-            "Dashboard Low Stock:",
-            lowStockResponse
-          )
-
-
-          // ----------------------------
-          // GARAGE
-          // ----------------------------
-
-          setGarage(
-            garageResponse?.garage ||
-            null
-          )
-
-
-          // ----------------------------
-          // JOBS
-          // ----------------------------
-
-          const jobList =
-            Array.isArray(jobsResponse)
-
-              ? jobsResponse
-
-              : Array.isArray(
-                  jobsResponse?.jobs
-                )
-
-                ? jobsResponse.jobs
-
-                : []
-
-          setJobs(jobList)
-
-
-          // ----------------------------
-          // WORKERS
-          // ----------------------------
-
-          const workerList =
-            Array.isArray(workersResponse)
-
-              ? workersResponse
-
-              : Array.isArray(
-                  workersResponse?.workers
-                )
-
-                ? workersResponse.workers
-
-                : []
-
-          setWorkers(workerList)
-
-
-          // ----------------------------
-          // LOW STOCK
-          // ----------------------------
-
-          const inventoryList =
-            Array.isArray(lowStockResponse)
-
-              ? lowStockResponse
-
-              : Array.isArray(
-                  lowStockResponse?.items
-                )
-
-                ? lowStockResponse.items
-
-                : []
-
-          setLowStockItems(
-            inventoryList
-          )
-
-        }
-
-        catch (error) {
-
-          console.log(
-            "Failed to load dashboard:",
-            error
-          )
-
-        }
-
-        finally {
-
-          setLoading(false)
-
-        }
-
-      },
-      []
-    )
-
-
-  // ==================================
-  // LOAD EVERYTHING WHEN SCREEN
-  // GETS FOCUS
-  // ==================================
+      // 5. Subscription
+      if (planRes.status === "fulfilled") {
+        setPlanUsage(planRes.value)
+      }
+    } catch (error) {
+      console.log("Error loading dashboard data:", error)
+    } finally {
+      setLoading(false)
+      setPlanUsageLoading(false)
+    }
+  }, [])
 
   useFocusEffect(
-    useCallback(
-      () => {
-
-        /*
-         * Refresh both dashboard data AND
-         * subscription data whenever the
-         * dashboard becomes active.
-         */
-
-        void loadDashboardData()
-
-        void loadSubscription()
-
-      },
-      [
-        loadDashboardData,
-        loadSubscription
-      ]
-    )
+    useCallback(() => {
+      void loadAllData()
+    }, [loadAllData])
   )
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    await loadAllData(true)
+    setRefreshing(false)
+  }, [loadAllData])
 
   // ==================================
-  // PULL TO REFRESH
+  // STATISTICS & METRICS
   // ==================================
+  const totalJobs = jobs.length
+  const completedJobs = jobs.filter((job) => job.status === "completed").length
+  const pendingJobs = jobs.filter((job) => job.status === "pending").length
+  const inProgressJobs = jobs.filter((job) =>
+    ["progress", "in-progress", "inProgress"].includes(job.status)
+  ).length
 
-  const onRefresh =
-    useCallback(
-      async () => {
-
-        try {
-
-          setRefreshing(true)
-
-          await Promise.all([
-
-            loadDashboardData(),
-
-            loadSubscription()
-
-          ])
-
-        }
-
-        catch (error) {
-
-          console.log(
-            "Dashboard refresh failed:",
-            error
-          )
-
-        }
-
-        finally {
-
-          setRefreshing(false)
-
-        }
-
-      },
-      [
-        loadDashboardData,
-        loadSubscription
-      ]
-    )
-
+  // Calculate total revenue dynamically from completed jobs
+  const totalRevenue = jobs
+    .filter((job) => job.status === "completed")
+    .reduce((sum, job) => sum + getJobTotal(job), 0)
 
   // ==================================
-  // JOB STATISTICS
+  // PLAN USAGE CALCULATIONS
   // ==================================
+  const actualPlanName = planUsage?.planName || planUsage?.planCode || t("dashboard.plan.free") || "Free"
+  const rawJobsUsed = Number(planUsage?.jobsUsed ?? 0)
+  const jobsUsed = Number.isFinite(rawJobsUsed) ? Math.max(rawJobsUsed, 0) : 0
 
-  const totalJobs =
-    jobs.length
-
-
-  const completedJobs =
-    jobs.filter(
-      job =>
-        job.status ===
-        "completed"
-    ).length
-
-
-  const pendingJobs =
-    jobs.filter(
-      job =>
-        job.status ===
-        "pending"
-    ).length
-
-
-  const inProgressJobs =
-    jobs.filter(
-      job =>
-        job.status === "progress" ||
-        job.status === "in-progress" ||
-        job.status === "inProgress"
-    ).length
-
-
-  // ==================================
-  // DEMO REVENUE
-  // ==================================
-
-  /*
-   * Keep this temporary until
-   * invoice/revenue API is available.
-   */
-
-  const demoRevenue =
-    48500
-
-
-  // ==================================
-  // ACTUAL PLAN INFORMATION
-  // ==================================
-
-  const actualPlanName =
-    planUsage?.planName ||
-    planUsage?.planCode ||
-    "Free"
-
-
-  // ==================================
-  // ACTUAL USAGE
-  // ==================================
-
-  const rawJobsUsed =
-    Number(
-      planUsage?.jobsUsed ?? 0
-    )
-
-
-  const jobsUsed =
-    Number.isFinite(rawJobsUsed)
-      ? Math.max(
-          rawJobsUsed,
-          0
-        )
-      : 0
-
-
-  /*
-   * Determine whether the plan is
-   * unlimited.
-   */
-
-  const jobsLimitValue =
-    planUsage?.jobsLimit
-
-
+  const jobsLimitValue = planUsage?.jobsLimit
   const isUnlimited =
-    String(
-      jobsLimitValue ?? ""
-    )
-      .trim()
-      .toLowerCase() ===
-      "unlimited"
+    String(jobsLimitValue ?? "").trim().toLowerCase() === "unlimited"
+  const numericJobLimit = Number(jobsLimitValue ?? 0)
 
-
-  /*
-   * Numeric limit for normal plans.
-   */
-
-  const numericJobLimit =
-    Number(
-      jobsLimitValue ?? 0
-    )
-
-
-  /*
-   * Prefer the backend's usagePercentage.
-   *
-   * PlanUsageScreen also receives this
-   * value from getPlanUsage().
-   *
-   * If the backend doesn't provide it,
-   * calculate it locally as a fallback.
-   */
-
-  const backendUsagePercentage =
-    Number(
-      planUsage?.usagePercentage
-    )
-
-
+  const backendUsagePercentage = Number(planUsage?.usagePercentage)
   const calculatedUsagePercentage =
-    numericJobLimit > 0
-
-      ? Math.round(
-          (
-            jobsUsed /
-            numericJobLimit
-          ) * 100
-        )
-
-      : 0
-
-
-  const usagePercentage =
-    isUnlimited
-
-      ? 0
-
-      : Number.isFinite(
-          backendUsagePercentage
-        )
-
-        ? Math.min(
-            Math.max(
-              Math.round(
-                backendUsagePercentage
-              ),
-              0
-            ),
-            100
-          )
-
-        : Math.min(
-            Math.max(
-              calculatedUsagePercentage,
-              0
-            ),
-            100
-          )
-
-
-  /*
-   * Remaining jobs.
-   */
-
-  const jobsRemaining =
-    isUnlimited
-
-      ? "Unlimited"
-
-      : Math.max(
-          numericJobLimit -
-          jobsUsed,
-          0
-        )
-
-
-  /*
-   * Color the ring based on usage.
-   */
-
-  const planRingColor =
-    isUnlimited
-
-      ? "#16A34A"
-
-      : usagePercentage >= 100
-
-        ? "#DC2626"
-
-        : usagePercentage >= 80
-
-          ? "#EA580C"
-
-          : "#2563EB"
-
-
-  const planRingBackground =
-    isUnlimited
-
-      ? "#ECFDF5"
-
-      : usagePercentage >= 100
-
-        ? "#FEF2F2"
-
-        : usagePercentage >= 80
-
-          ? "#FFF7ED"
-
-          : "#EFF6FF"
-
-
-  // ==================================
-  // DEMO PAYMENT DATA
-  // ==================================
-
-  /*
-   * Temporary until invoice/payment
-   * API is implemented.
-   */
-
-  const pendingPayments =
-    2
-
-
-  // ==================================
-  // RECENT JOBS
-  // ==================================
-
-  const recentJobs =
-    jobs.slice(0, 4)
-
-
-  // ==================================
-  // STATUS HELPERS
-  // ==================================
-
-  const getStatusColor =
-    (
-      status: string
-    ) => {
-
-      if (
-        status ===
-        "completed"
-      ) {
-
-        return "#16A34A"
-
-      }
-
-
-      if (
-        status ===
-        "pending"
-      ) {
-
-        return "#DC2626"
-
-      }
-
-
-      if (
-        status === "progress" ||
-        status === "in-progress" ||
-        status === "inProgress"
-      ) {
-
-        return "#EA580C"
-
-      }
-
-
-      return "#2563EB"
-
-    }
-
-
-  const getStatusText =
-    (
-      status: string
-    ) => {
-
-      if (
-        status ===
-        "completed"
-      ) {
-
-        return "COMPLETED"
-
-      }
-
-
-      if (
-        status ===
-        "pending"
-      ) {
-
-        return "PENDING"
-
-      }
-
-
-      if (
-        status === "progress" ||
-        status === "in-progress" ||
-        status === "inProgress"
-      ) {
-
-        return "IN PROGRESS"
-
-      }
-
-
-      return (
-        status?.toUpperCase() ||
-        "UNKNOWN"
-      )
-
-    }
-
-
-  // ==================================
-  // JOB TOTAL
-  // ==================================
-
-  const getJobTotal =
-    (
-      job: any
-    ) => {
-
-      if (
-        typeof job.totalAmount ===
-        "number"
-      ) {
-
-        return job.totalAmount
-
-      }
-
-
-      if (
-        typeof job.total ===
-        "number"
-      ) {
-
-        return job.total
-
-      }
-
-
-      if (
-        Array.isArray(
-          job.services
-        )
-      ) {
-
-        return job.services.reduce(
-          (
-            sum: number,
-            service: any
-          ) => {
-
-            return (
-              sum +
-              Number(
-                service.actualPrice ??
-                service.estimatedPrice ??
-                0
-              )
-            )
-
-          },
-          0
-        )
-
-      }
-
-
-      return 0
-
-    }
-
-
-  // ==================================
-  // RENDER
-  // ==================================
+    numericJobLimit > 0 ? Math.round((jobsUsed / numericJobLimit) * 100) : 0
+
+  const usagePercentage = isUnlimited
+    ? 0
+    : Number.isFinite(backendUsagePercentage)
+    ? Math.min(Math.max(Math.round(backendUsagePercentage), 0), 100)
+    : Math.min(Math.max(calculatedUsagePercentage, 0), 100)
+
+  const planRingColor = isUnlimited
+    ? "#16A34A"
+    : usagePercentage >= 100
+    ? "#DC2626"
+    : usagePercentage >= 80
+    ? "#EA580C"
+    : "#2563EB"
+
+  const planRingBackground = isUnlimited
+    ? "#ECFDF5"
+    : usagePercentage >= 100
+    ? "#FEF2F2"
+    : usagePercentage >= 80
+    ? "#FFF7ED"
+    : "#EFF6FF"
+
+  const recentJobs = jobs.slice(0, 4)
+
+  const getStatusColor = (status: string) => {
+    if (status === "completed") return "#16A34A"
+    if (status === "pending") return "#DC2626"
+    if (["progress", "in-progress", "inProgress"].includes(status))
+      return "#EA580C"
+    return "#2563EB"
+  }
+
+  const getStatusText = (status: string) => {
+    if (status === "completed") return t("dashboard.status.completed") || "COMPLETED"
+    if (status === "pending") return t("dashboard.status.pending") || "PENDING"
+    if (["progress", "in-progress", "inProgress"].includes(status))
+      return t("dashboard.status.inProgress") || "IN PROGRESS"
+    return status?.toUpperCase() || t("dashboard.status.unknown") || "UNKNOWN"
+  }
 
   return (
-
-    <View
-      style={styles.screen}
-    >
-
+    <View style={styles.screen}>
       <ScrollView
-
-        style={
-          styles.container
-        }
-
-        showsVerticalScrollIndicator={
-          false
-        }
-
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
         refreshControl={
-
-          <RefreshControl
-            refreshing={
-              refreshing
-            }
-            onRefresh={
-              onRefresh
-            }
-          />
-
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
-
       >
-
-        {/* ==========================
-            HEADER
-        ========================== */}
-
-        <View style={styles.headerRow}>
-
-          <View
-            style={
-              styles.headerInfo
-            }
-          >
-
-            <Text
-              style={
-                styles.greeting
-              }
-            >
-              Welcome Back 👋
+        {/* HIGHLIGHTED HEADER CONTAINER */}
+        <View style={styles.headerCard}>
+          <View style={styles.headerInfo}>
+            <Text style={styles.greeting}>{t("dashboard.welcome") || "Welcome Back 👋"}</Text>
+            <Text style={styles.header} numberOfLines={1}>
+              {loading ? t("dashboard.loading") || "Loading..." : garage?.garageName || t("dashboard.defaultGarage") || "Garage"}
             </Text>
-
-
-            <Text
-              style={
-                styles.header
-              }
-              numberOfLines={1}
-            >
-
-              {loading
-                ? "Loading..."
-                : garage?.garageName ||
-                  "Garage"}
-
-            </Text>
-
-
-            <Text
-              style={
-                styles.subHeader
-              }
-              numberOfLines={1}
-            >
-
+            <Text style={styles.subHeader} numberOfLines={1}>
               {garage?.city
-
-                ? `${garage.city}${
-                    garage.state
-                      ? `, ${garage.state}`
-                      : ""
-                  }`
-
-                : garage?.address ||
-                  "Garage Dashboard"}
-
+                ? `${garage.city}${garage.state ? `, ${garage.state}` : ""}`
+                : garage?.address || t("dashboard.defaultSubtitle") || "Garage Dashboard"}
             </Text>
-
-
-            <Text
-              style={
-                styles.roleText
-              }
-            >
-
-              {user?.role
-                ?.toUpperCase() ||
-                "USER"}
-
-            </Text>
-
+            <View style={styles.roleBadge}>
+              <Text style={styles.roleText}>
+                {user?.role?.toUpperCase() || t("dashboard.roles.user") || "USER"}
+              </Text>
+            </View>
           </View>
 
-
-          {/* ========================
-    ACTUAL PLAN + USAGE
-======================== */}
-
-<TouchableOpacity
-  style={styles.planHeaderContainer}
-  onPress={() =>
-    navigation.navigate(
-      "PlanUsage"
-    )
-  }
-  activeOpacity={0.7}
->
-
-  <View
-  style={[
-    styles.planRing,
-    {
-      borderColor: planRingColor,
-      backgroundColor: planRingBackground,
-    }
-  ]}
->
-  {planUsageLoading ? (
-    <ActivityIndicator
-      size="small"
-      color={planRingColor}
-    />
-  ) : isUnlimited ? (
-    <Text
-      style={[
-        styles.planRingNumber,
-        {
-          color: planRingColor
-        }
-      ]}
-    >
-      ∞
-    </Text>
-  ) : (
-    <Text
-      style={[
-        styles.planRingNumber,
-        {
-          color: planRingColor
-        }
-      ]}
-    >
-      {usagePercentage}%
-    </Text>
-  )}
-</View>
-
-  {/* PLAN NAME */}
-
-  <Text
-    style={[
-      styles.planNameHeader,
-      {
-        color:
-          planRingColor
-      }
-    ]}
-    numberOfLines={1}
-  >
-    {actualPlanName}
-  </Text>
-
-</TouchableOpacity>
-
+          {/* PLAN HEADER */}
+          <TouchableOpacity
+            style={styles.planHeaderContainer}
+            onPress={() => navigation.navigate("PlanUsage")}
+            activeOpacity={0.7}
+          >
+            <View
+              style={[
+                styles.planRing,
+                {
+                  borderColor: planRingColor,
+                  backgroundColor: planRingBackground,
+                },
+              ]}
+            >
+              {planUsageLoading ? (
+                <ActivityIndicator size="small" color={planRingColor} />
+              ) : isUnlimited ? (
+                <Text
+                  style={[styles.planRingNumber, { color: planRingColor }]}
+                >
+                  ∞
+                </Text>
+              ) : (
+                <Text
+                  style={[styles.planRingNumber, { color: planRingColor }]}
+                >
+                  {usagePercentage}%
+                </Text>
+              )}
+            </View>
+            <Text
+              style={[styles.planNameHeader, { color: planRingColor }]}
+              numberOfLines={1}
+            >
+              {actualPlanName}
+            </Text>
+          </TouchableOpacity>
         </View>
 
-
-        {/* ==========================
-            STATS
-        ========================== */}
-
-        <View
-          style={
-            styles.statsContainer
-          }
-        >
-
-          {/* TOTAL JOBS */}
-
-          <View
-            style={
-              styles.card
-            }
-          >
-
-            <View
-              style={
-                styles.iconBox
-              }
-            >
-
-              <MaterialIcons
-                name="build"
-                size={22}
-                color="#2563EB"
-              />
-
+        {/* STATS */}
+        <View style={styles.statsContainer}>
+          <View style={styles.card}>
+            <View style={styles.iconBox}>
+              <MaterialIcons name="build" size={22} color="#2563EB" />
             </View>
-
-
-            <Text
-              style={
-                styles.cardValue
-              }
-            >
-              {totalJobs}
-            </Text>
-
-
-            <Text
-              style={
-                styles.cardTitle
-              }
-            >
-              Total Jobs
-            </Text>
-
+            <Text style={styles.cardValue}>{totalJobs}</Text>
+            <Text style={styles.cardTitle}>{t("dashboard.stats.totalJobs") || "Total Jobs"}</Text>
           </View>
 
-
-          {/* PENDING */}
-
-          <View
-            style={
-              styles.card
-            }
-          >
-
-            <View
-              style={[
-                styles.iconBox,
-                {
-                  backgroundColor:
-                    "#FEF2F2"
-                }
-              ]}
-            >
-
-              <MaterialIcons
-                name="pending-actions"
-                size={22}
-                color="#DC2626"
-              />
-
+          <View style={styles.card}>
+            <View style={[styles.iconBox, styles.bgRed]}>
+              <MaterialIcons name="pending-actions" size={22} color="#DC2626" />
             </View>
-
-
-            <Text
-              style={
-                styles.cardValue
-              }
-            >
-              {pendingJobs}
-            </Text>
-
-
-            <Text
-              style={
-                styles.cardTitle
-              }
-            >
-              Pending Jobs
-            </Text>
-
+            <Text style={styles.cardValue}>{pendingJobs}</Text>
+            <Text style={styles.cardTitle}>{t("dashboard.stats.pendingJobs") || "Pending Jobs"}</Text>
           </View>
 
-
-          {/* COMPLETED */}
-
-          <View
-            style={
-              styles.card
-            }
-          >
-
-            <View
-              style={[
-                styles.iconBox,
-                {
-                  backgroundColor:
-                    "#ECFDF5"
-                }
-              ]}
-            >
-
-              <MaterialIcons
-                name="check-circle"
-                size={22}
-                color="#16A34A"
-              />
-
+          <View style={styles.card}>
+            <View style={[styles.iconBox, styles.bgGreen]}>
+              <MaterialIcons name="check-circle" size={22} color="#16A34A" />
             </View>
-
-
-            <Text
-              style={
-                styles.cardValue
-              }
-            >
-              {completedJobs}
-            </Text>
-
-
-            <Text
-              style={
-                styles.cardTitle
-              }
-            >
-              Completed
-            </Text>
-
+            <Text style={styles.cardValue}>{completedJobs}</Text>
+            <Text style={styles.cardTitle}>{t("dashboard.stats.completed") || "Completed"}</Text>
           </View>
 
-
-          {/* REVENUE */}
-
-          <View
-            style={
-              styles.card
-            }
-          >
-
-            <View
-              style={[
-                styles.iconBox,
-                {
-                  backgroundColor:
-                    "#EFF6FF"
-                }
-              ]}
-            >
-
-              <MaterialIcons
-                name="payments"
-                size={22}
-                color="#2563EB"
-              />
-
+          <View style={styles.card}>
+            <View style={[styles.iconBox, styles.bgBlue]}>
+              <MaterialIcons name="payments" size={22} color="#2563EB" />
             </View>
-
-
             <Text
-              style={
-                styles.cardValue
-              }
+              style={styles.cardValue}
               numberOfLines={1}
               adjustsFontSizeToFit
             >
-              ₹
-              {demoRevenue.toLocaleString(
-                "en-IN"
-              )}
+              ₹{totalRevenue.toLocaleString("en-IN")}
             </Text>
-
-
-            <Text
-              style={
-                styles.cardTitle
-              }
-            >
-              Revenue
-            </Text>
-
+            <Text style={styles.cardTitle}>{t("dashboard.stats.revenue") || "Revenue"}</Text>
           </View>
-
         </View>
 
-
-        {/* ==========================
-            QUICK ACTIONS
-        ========================== */}
-
-        <Text
-          style={
-            styles.sectionTitle
-          }
-        >
-          Quick Actions
-        </Text>
-
-
-        <View
-          style={
-            styles.quickActions
-          }
-        >
-
-          {/* CREATE JOB */}
-
+        {/* QUICK ACTIONS */}
+        <Text style={styles.sectionTitle}>{t("dashboard.sections.quickActions") || "Quick Actions"}</Text>
+        <View style={styles.quickActions}>
           <TouchableOpacity
-            style={
-              styles.actionBtn
-            }
-            onPress={() =>
-              navigation.navigate(
-                "CreateJob"
-              )
-            }
+            style={styles.actionBtn}
+            onPress={() => navigation.navigate("CreateJob")}
             activeOpacity={0.7}
           >
-
-            <MaterialIcons
-              name="add-circle"
-              size={30}
-              color="#2563EB"
-            />
-
-
-            <Text
-              style={
-                styles.actionText
-              }
-            >
-              Create Job
-            </Text>
-
+            <MaterialIcons name="add-circle" size={30} color="#2563EB" />
+            <Text style={styles.actionText}>{t("dashboard.actions.createJob") || "Create Job"}</Text>
           </TouchableOpacity>
-
-
-          {/* INVOICE */}
 
           <TouchableOpacity
-            style={
-              styles.actionBtn
-            }
-            onPress={() =>
-              navigation.navigate(
-                "Invoice"
-              )
-            }
+            style={styles.actionBtn}
+            onPress={() => navigation.navigate("Invoice")}
             activeOpacity={0.7}
           >
-
-            <FontAwesome5
-              name="file-invoice"
-              size={24}
-              color="#2563EB"
-            />
-
-
-            <Text
-              style={
-                styles.actionText
-              }
-            >
-              Invoices
-            </Text>
-
+            <FontAwesome5 name="file-invoice" size={24} color="#2563EB" />
+            <Text style={styles.actionText}>{t("dashboard.actions.invoices") || "Invoices"}</Text>
           </TouchableOpacity>
-
         </View>
 
-
-        {/* ==========================
-            BUSINESS OVERVIEW
-        ========================== */}
-
-        <Text
-          style={
-            styles.sectionTitle
-          }
-        >
-          Business Overview
-        </Text>
-
-
-        <View
-          style={
-            styles.overviewCard
-          }
-        >
-
-          {/* WORKERS */}
-
-          <View
-            style={
-              styles.overviewRow
-            }
-          >
-
-            <View
-              style={
-                styles.overviewIcon
-              }
-            >
-
-              <Ionicons
-                name="people-outline"
-                size={20}
-                color="#2563EB"
-              />
-
+        {/* BUSINESS OVERVIEW */}
+        <Text style={styles.sectionTitle}>{t("dashboard.sections.businessOverview") || "Business Overview"}</Text>
+        <View style={styles.overviewCard}>
+          <View style={styles.overviewRow}>
+            <View style={styles.overviewIcon}>
+              <Ionicons name="people-outline" size={20} color="#2563EB" />
             </View>
-
-
-            <View
-              style={
-                styles.overviewText
-              }
-            >
-
-              <Text
-                style={
-                  styles.overviewTitle
-                }
-              >
-                Workers
+            <View style={styles.overviewText}>
+              <Text style={styles.overviewTitle}>{t("dashboard.overview.workers") || "Workers"}</Text>
+              <Text style={styles.overviewSubtitle}>
+                {t("dashboard.overview.workersSubtitle") || "Active staff available"}
               </Text>
-
-
-              <Text
-                style={
-                  styles.overviewSubtitle
-                }
-              >
-                Active staff available
-              </Text>
-
             </View>
-
-
-            <Text
-              style={
-                styles.overviewValue
-              }
-            >
-              {workers.length}
-            </Text>
-
+            <Text style={styles.overviewValue}>{workers.length}</Text>
           </View>
 
+          <View style={styles.divider} />
 
-          <View
-            style={
-              styles.divider
-            }
-          />
-
-
-          {/* IN PROGRESS */}
-
-          <View
-            style={
-              styles.overviewRow
-            }
-          >
-
-            <View
-              style={
-                styles.overviewIcon
-              }
-            >
-
-              <MaterialIcons
-                name="build-circle"
-                size={20}
-                color="#EA580C"
-              />
-
+          <View style={styles.overviewRow}>
+            <View style={styles.overviewIcon}>
+              <MaterialIcons name="build-circle" size={20} color="#EA580C" />
             </View>
-
-
-            <View
-              style={
-                styles.overviewText
-              }
-            >
-
-              <Text
-                style={
-                  styles.overviewTitle
-                }
-              >
-                In Progress
+            <View style={styles.overviewText}>
+              <Text style={styles.overviewTitle}>{t("dashboard.overview.inProgress") || "In Progress"}</Text>
+              <Text style={styles.overviewSubtitle}>
+                {t("dashboard.overview.inProgressSubtitle") || "Jobs currently being serviced"}
               </Text>
-
-
-              <Text
-                style={
-                  styles.overviewSubtitle
-                }
-              >
-                Jobs currently being serviced
-              </Text>
-
             </View>
-
-
-            <Text
-              style={
-                styles.overviewValue
-              }
-            >
-              {inProgressJobs}
-            </Text>
-
+            <Text style={styles.overviewValue}>{inProgressJobs}</Text>
           </View>
 
+          <View style={styles.divider} />
 
-          <View
-            style={
-              styles.divider
-            }
-          />
-
-
-          {/* LOW STOCK */}
-
-          <View
-            style={
-              styles.overviewRow
-            }
-          >
-
-            <View
-              style={[
-                styles.overviewIcon,
-                {
-                  backgroundColor:
-                    "#FEF2F2"
-                }
-              ]}
-            >
-
-              <Ionicons
-                name="warning-outline"
-                size={20}
-                color="#DC2626"
-              />
-
+          <View style={styles.overviewRow}>
+            <View style={[styles.overviewIcon, styles.bgRed]}>
+              <Ionicons name="warning-outline" size={20} color="#DC2626" />
             </View>
-
-
-            <View
-              style={
-                styles.overviewText
-              }
-            >
-
-              <Text
-                style={
-                  styles.overviewTitle
-                }
-              >
-                Low Stock
+            <View style={styles.overviewText}>
+              <Text style={styles.overviewTitle}>{t("dashboard.overview.lowStock") || "Low Stock"}</Text>
+              <Text style={styles.overviewSubtitle}>
+                {t("dashboard.overview.lowStockSubtitle") || "Spare parts need attention"}
               </Text>
-
-
-              <Text
-                style={
-                  styles.overviewSubtitle
-                }
-              >
-                Spare parts need attention
-              </Text>
-
             </View>
-
-
             <Text
               style={[
                 styles.overviewValue,
-                {
-                  color:
-                    lowStockItems.length > 0
-                      ? "#DC2626"
-                      : "#16A34A"
-                }
+                { color: lowStockItems.length > 0 ? "#DC2626" : "#16A34A" },
               ]}
             >
               {lowStockItems.length}
             </Text>
-
           </View>
-
-
-          <View
-            style={
-              styles.divider
-            }
-          />
-
-
-          {/* PAYMENTS */}
-
-          <View
-            style={
-              styles.overviewRow
-            }
-          >
-
-            <View
-              style={[
-                styles.overviewIcon,
-                {
-                  backgroundColor:
-                    "#FFF7ED"
-                }
-              ]}
-            >
-
-              <MaterialIcons
-                name="payments"
-                size={20}
-                color="#EA580C"
-              />
-
-            </View>
-
-
-            <View
-              style={
-                styles.overviewText
-              }
-            >
-
-              <Text
-                style={
-                  styles.overviewTitle
-                }
-              >
-                Pending Payments
-              </Text>
-
-
-              <Text
-                style={
-                  styles.overviewSubtitle
-                }
-              >
-                Demo data for now
-              </Text>
-
-            </View>
-
-
-            <Text
-              style={[
-                styles.overviewValue,
-                {
-                  color:
-                    "#EA580C"
-                }
-              ]}
-            >
-              {pendingPayments}
-            </Text>
-
-          </View>
-
         </View>
 
-
-        {/* ==========================
-            RECENT JOBS
-        ========================== */}
-
-        <View
-          style={
-            styles.sectionRow
-          }
-        >
-
-          <Text
-            style={
-              styles.sectionTitle
-            }
-          >
-            Recent Jobs
-          </Text>
-
-
-          <TouchableOpacity
-            onPress={() =>
-              navigation.navigate(
-                "Jobs"
-              )
-            }
-          >
-
-            <Text
-              style={
-                styles.viewAll
-              }
-            >
-              View All
-            </Text>
-
+        {/* RECENT JOBS */}
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionTitle}>{t("dashboard.sections.recentJobs") || "Recent Jobs"}</Text>
+          <TouchableOpacity onPress={() => navigation.navigate("Jobs")}>
+            <Text style={styles.viewAll}>{t("dashboard.actions.viewAll") || "View All"}</Text>
           </TouchableOpacity>
-
         </View>
-
 
         {recentJobs.length === 0 ? (
-
-          <View
-            style={
-              styles.emptyCard
-            }
-          >
-
-            <MaterialIcons
-              name="assignment"
-              size={36}
-              color="#9CA3AF"
-            />
-
-
-            <Text
-              style={
-                styles.emptyTitle
-              }
-            >
-              No jobs yet
+          <View style={styles.emptyCard}>
+            <MaterialIcons name="assignment" size={36} color="#9CA3AF" />
+            <Text style={styles.emptyTitle}>{t("dashboard.empty.noJobsTitle") || "No jobs yet"}</Text>
+            <Text style={styles.emptyText}>
+              {t("dashboard.empty.noJobsSubtitle") || "Create your first job to see it here."}
             </Text>
-
-
-            <Text
-              style={
-                styles.emptyText
-              }
-            >
-              Create your first job to see
-              it here.
-            </Text>
-
-
             <TouchableOpacity
-              style={
-                styles.emptyButton
-              }
-              onPress={() =>
-                navigation.navigate(
-                  "CreateJob"
-                )
-              }
+              style={styles.emptyButton}
+              onPress={() => navigation.navigate("CreateJob")}
             >
-
-              <Text
-                style={
-                  styles.emptyButtonText
-                }
-              >
-                Create Job
-              </Text>
-
+              <Text style={styles.emptyButtonText}>{t("dashboard.actions.createJob") || "Create Job"}</Text>
             </TouchableOpacity>
-
           </View>
-
         ) : (
-
-          recentJobs.map(
-            (
-              item: any
-            ) => {
-
-              const total =
-                getJobTotal(
-                  item
-                )
-
-
-              return (
-
-                <TouchableOpacity
-                  key={item.id}
-                  style={
-                    styles.jobCard
-                  }
-                  onPress={() =>
-                    navigation.navigate(
-                      "JobDetail",
-                      {
-                        job: item
-                      }
-                    )
-                  }
-                  activeOpacity={0.7}
-                >
-
-                  <View
-                    style={
-                      styles.jobTop
-                    }
-                  >
-
-                    <View
-                      style={{
-                        flex: 1
-                      }}
-                    >
-
-                      <View
-                        style={
-                          styles.vehicleRow
-                        }
-                      >
-
-                        <View
-                          style={
-                            styles.vehicleIcon
+          recentJobs.map((item) => {
+            const total = getJobTotal(item)
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.jobCard}
+                onPress={() =>
+                  navigation.navigate("JobDetail", { job: item })
+                }
+                activeOpacity={0.7}
+              >
+                <View style={styles.jobTop}>
+                  <View style={styles.flex1}>
+                    <View style={styles.vehicleRow}>
+                      <View style={styles.vehicleIcon}>
+                        <Ionicons
+                          name={
+                            item.vehicleType === "2 Wheeler"
+                              ? "bicycle"
+                              : "car-sport"
                           }
-                        >
-
-                          <Ionicons
-                            name={
-                              item.vehicleType ===
-                              "2 Wheeler"
-                                ? "bicycle"
-                                : "car-sport"
-                            }
-                            size={16}
-                            color="#2563EB"
-                          />
-
-                        </View>
-
-
-                        <View
-                          style={{
-                            flex: 1
-                          }}
-                        >
-
-                          <Text
-                            style={
-                              styles.vehicle
-                            }
-                            numberOfLines={1}
-                          >
-                            {
-                              item.vehicleNumber ||
-                              item.vehicle?.number ||
-                              "Vehicle"
-                            }
-                          </Text>
-
-
-                          <Text
-                            style={
-                              styles.vehicleModel
-                            }
-                            numberOfLines={1}
-                          >
-                            {
-                              item.vehicleModel ||
-                              item.vehicle?.model ||
-                              "Vehicle details"
-                            }
-                          </Text>
-
-                        </View>
-
+                          size={16}
+                          color="#2563EB"
+                        />
                       </View>
-
-
-                      <Text
-                        style={
-                          styles.customer
-                        }
-                        numberOfLines={1}
-                      >
-                        {
-                          item.customerName ||
+                      <View style={styles.flex1}>
+                        <Text style={styles.vehicle} numberOfLines={1}>
+                          {item.vehicleNumber ||
+                            item.vehicle?.number ||
+                            t("dashboard.jobCard.defaultVehicle") ||
+                            "Vehicle"}
+                        </Text>
+                        <Text style={styles.vehicleModel} numberOfLines={1}>
+                          {item.vehicleModel ||
+                            item.vehicle?.model ||
+                            t("dashboard.jobCard.defaultDetails") ||
+                            "Vehicle details"}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.customer} numberOfLines={1}>
+                      {typeof item.customer === "string"
+                        ? item.customer
+                        : item.customerName ||
                           item.customer?.name ||
-                          item.customer ||
-                          "Customer"
-                        }
-                      </Text>
-
-                    </View>
-
-
-                    <Text
-                      style={
-                        styles.amount
-                      }
-                    >
-                      ₹
-                      {Number(total)
-                        .toLocaleString(
-                          "en-IN"
-                        )}
+                          t("dashboard.jobCard.defaultCustomer") ||
+                          "Customer"}
                     </Text>
-
                   </View>
+                  <Text style={styles.amount}>
+                    ₹{Number(total).toLocaleString("en-IN")}
+                  </Text>
+                </View>
 
-
+                <View style={styles.jobBottom}>
                   <View
-                    style={
-                      styles.jobBottom
-                    }
+                    style={[
+                      styles.statusBadge,
+                      { backgroundColor: getStatusColor(item.status) },
+                    ]}
                   >
-
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        {
-                          backgroundColor:
-                            getStatusColor(
-                              item.status
-                            )
-                        }
-                      ]}
-                    >
-
-                      <Text
-                        style={
-                          styles.statusText
-                        }
-                      >
-                        {
-                          getStatusText(
-                            item.status
-                          )
-                        }
-                      </Text>
-
-                    </View>
-
-
-                    <Text
-                      style={
-                        styles.servicesText
-                      }
-                    >
-                      {
-                        Array.isArray(
-                          item.services
-                        )
-
-                          ? `${item.services.length} services`
-
-                          : "Service"
-                      }
+                    <Text style={styles.statusText}>
+                      {getStatusText(item.status)}
                     </Text>
-
                   </View>
-
-                </TouchableOpacity>
-
-              )
-
-            }
-          )
-
+                  <Text style={styles.servicesText}>
+                    {Array.isArray(item.services)
+                      ? `${item.services.length} ${t("dashboard.jobCard.servicesCount") || "services"}`
+                      : t("dashboard.jobCard.singleService") || "Service"}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )
+          })
         )}
 
-
-        <View
-          style={{
-            height: 100
-          }}
-        />
-
+        <View style={styles.bottomSpacer} />
       </ScrollView>
-
     </View>
-
   )
-
 }
 
-
-// ==================================
-// STYLES
-// ==================================
-
-const styles =
-  StyleSheet.create({
-
-    screen: {
-      flex: 1,
-      backgroundColor:
-        "#F3F4F6"
-    },
-
-    container: {
-      flex: 1,
-      backgroundColor:
-        "#F3F4F6",
-      paddingHorizontal: 18,
-      paddingTop: 18
-    },
-
-    headerRow: {
-      backgroundColor: "#FFFFFF",
-      borderRadius: 20,
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 18,
-
-      borderWidth: 1,
-      borderColor: "#E5E7EB",
-
-      shadowColor: "#000",
-      shadowOffset: {
-        width: 0,
-        height: 2
-      },
-      shadowOpacity: 0.04,
-      shadowRadius: 6,
-      elevation: 2
-    },
-
-    headerInfo: {
-      flex: 1,
-      paddingRight: 10
-    },
-
-    greeting: {
-      color: "#6B7280",
-      fontSize: 12,
-      fontWeight: "500"
-    },
-
-    header: {
-      fontSize: 24,
-      fontWeight: "800",
-      color: "#111827",
-      marginTop: 2
-    },
-
-    subHeader: {
-      color: "#6B7280",
-      fontSize: 12,
-      marginTop: 2
-    },
-
-    roleText: {
-      marginTop: 4,
-      color: "#2563EB",
-      fontWeight: "700",
-      fontSize: 11
-    },
-
-
-    // ==================================
-    // PLAN HEADER
-    // ==================================
-
-    planHeaderContainer: {
-      alignItems: "center",
-      justifyContent: "center",
-      width: 54,
-      marginLeft: 6
-    },
-
-    planRing: {
-      width: 50,
-      height: 50,
-      borderRadius: 25,
-      borderWidth: 3,
-      justifyContent: "center",
-      alignItems: "center"
-    },
-
-    planRingNumber: {
-      fontSize: 12,
-      fontWeight: "800"
-    },
-
-    planRingLabel: {
-      display: "none"
-    },
-
-    planNameHeader: {
-      marginTop: 2,
-      fontSize: 9,
-      fontWeight: "800",
-      maxWidth: 60,
-      textAlign: "center"
-    },
-
-    planUsageHeader: {
-      marginTop: 1,
-      fontSize: 9,
-      color: "#6B7280",
-      fontWeight: "600",
-      textAlign: "center"
-    },
-
-
-    // ==================================
-    // STATS
-    // ==================================
-
-    statsContainer: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      justifyContent:
-        "space-between"
-    },
-
-    card: {
-      width: "48%",
-      backgroundColor: "white",
-      borderRadius: 20,
-      padding: 18,
-      marginBottom: 15
-    },
-
-    iconBox: {
-      width: 42,
-      height: 42,
-      borderRadius: 14,
-      backgroundColor:
-        "#EFF6FF",
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: 12
-    },
-
-    cardValue: {
-      fontSize: 24,
-      fontWeight: "bold",
-      color: "#111827"
-    },
-
-    cardTitle: {
-      color: "#6B7280",
-      marginTop: 5,
-      fontSize: 13
-    },
-
-
-    // ==================================
-    // SECTIONS
-    // ==================================
-
-    sectionTitle: {
-      fontSize: 19,
-      fontWeight: "bold",
-      color: "#111827",
-      marginBottom: 14,
-      marginTop: 8
-    },
-
-
-    // ==================================
-    // QUICK ACTIONS
-    // ==================================
-
-    quickActions: {
-      flexDirection: "row",
-      justifyContent:
-        "space-between",
-      marginBottom: 12
-    },
-
-    actionBtn: {
-      width: "48%",
-      backgroundColor: "white",
-      borderRadius: 18,
-      paddingVertical: 22,
-      alignItems: "center"
-    },
-
-    actionText: {
-      marginTop: 10,
-      fontWeight: "600",
-      color: "#374151"
-    },
-
-
-    // ==================================
-    // BUSINESS OVERVIEW
-    // ==================================
-
-    overviewCard: {
-      backgroundColor: "white",
-      borderRadius: 18,
-      paddingHorizontal: 16,
-      marginBottom: 18
-    },
-
-    overviewRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingVertical: 14
-    },
-
-    overviewIcon: {
-      width: 40,
-      height: 40,
-      borderRadius: 12,
-      backgroundColor:
-        "#EFF6FF",
-      alignItems: "center",
-      justifyContent: "center",
-      marginRight: 12
-    },
-
-    overviewText: {
-      flex: 1
-    },
-
-    overviewTitle: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: "#111827"
-    },
-
-    overviewSubtitle: {
-      fontSize: 12,
-      color: "#6B7280",
-      marginTop: 3
-    },
-
-    overviewValue: {
-      fontSize: 18,
-      fontWeight: "bold",
-      color: "#111827"
-    },
-
-    divider: {
-      height: 1,
-      backgroundColor:
-        "#E5E7EB"
-    },
-
-
-    // ==================================
-    // RECENT JOBS
-    // ==================================
-
-    sectionRow: {
-      flexDirection: "row",
-      justifyContent:
-        "space-between",
-      alignItems: "center"
-    },
-
-    viewAll: {
-      color: "#2563EB",
-      fontWeight: "600"
-    },
-
-    jobCard: {
-      backgroundColor: "white",
-      borderRadius: 20,
-      padding: 18,
-      marginBottom: 14
-    },
-
-    jobTop: {
-      flexDirection: "row",
-      justifyContent:
-        "space-between"
-    },
-
-    vehicleRow: {
-      flexDirection: "row",
-      alignItems: "center"
-    },
-
-    vehicleIcon: {
-      width: 42,
-      height: 42,
-      borderRadius: 14,
-      backgroundColor:
-        "#EFF6FF",
-      alignItems: "center",
-      justifyContent: "center",
-      marginRight: 12
-    },
-
-    vehicle: {
-      fontSize: 17,
-      fontWeight: "bold",
-      color: "#111827"
-    },
-
-    vehicleModel: {
-      color: "#6B7280",
-      marginTop: 2
-    },
-
-    customer: {
-      marginTop: 14,
-      color: "#374151",
-      fontWeight: "500"
-    },
-
-    amount: {
-      fontWeight: "bold",
-      color: "#16A34A",
-      fontSize: 17,
-      marginLeft: 8
-    },
-
-    jobBottom: {
-      flexDirection: "row",
-      justifyContent:
-        "space-between",
-      alignItems: "center",
-      marginTop: 18
-    },
-
-    statusBadge: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 30
-    },
-
-    statusText: {
-      color: "white",
-      fontWeight: "bold",
-      fontSize: 11
-    },
-
-    servicesText: {
-      color: "#6B7280",
-      fontWeight: "500"
-    },
-
-
-    // ==================================
-    // EMPTY STATE
-    // ==================================
-
-    emptyCard: {
-      backgroundColor: "white",
-      borderRadius: 20,
-      padding: 28,
-      alignItems: "center",
-      marginBottom: 20
-    },
-
-    emptyTitle: {
-      fontSize: 17,
-      fontWeight: "700",
-      color: "#111827",
-      marginTop: 10
-    },
-
-    emptyText: {
-      fontSize: 13,
-      color: "#6B7280",
-      textAlign: "center",
-      marginTop: 5,
-      marginBottom: 16
-    },
-
-    emptyButton: {
-      backgroundColor: "#2563EB",
-      paddingHorizontal: 20,
-      paddingVertical: 11,
-      borderRadius: 12
-    },
-
-    emptyButtonText: {
-      color: "white",
-      fontWeight: "700"
-    }
-
-  })
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: "#F9FAFB" },
+  container: { flex: 1, paddingHorizontal: 16, paddingTop: 16 },
+
+  headerCard: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#EFF6FF",
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+  },
+  headerInfo: { flex: 1, marginRight: 12 },
+  greeting: { fontSize: 13, color: "#3B82F6", fontWeight: "600" },
+  header: { fontSize: 20, fontWeight: "700", color: "#1E3A8A", marginTop: 2 },
+  subHeader: { fontSize: 13, color: "#4B5563", marginTop: 2 },
+  roleBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#DBEAFE",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginTop: 6,
+  },
+  roleText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#1D4ED8",
+  },
+  planHeaderContainer: { alignItems: "center" },
+  planRing: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 3,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  planRingNumber: { fontSize: 12, fontWeight: "700" },
+  planNameHeader: { fontSize: 11, fontWeight: "600", marginTop: 4 },
+
+  statsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  card: {
+    width: "48%",
+    backgroundColor: "#FFFFFF",
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  iconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  bgRed: { backgroundColor: "#FEF2F2" },
+  bgGreen: { backgroundColor: "#ECFDF5" },
+  bgBlue: { backgroundColor: "#EFF6FF" },
+  cardValue: { fontSize: 18, fontWeight: "700", color: "#111827" },
+  cardTitle: { fontSize: 12, color: "#6B7280", marginTop: 2 },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 12,
+  },
+  quickActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    marginHorizontal: 4,
+  },
+  actionText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginLeft: 8,
+  },
+  overviewCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    marginBottom: 20,
+  },
+  overviewRow: { flexDirection: "row", alignItems: "center" },
+  overviewIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  overviewText: { flex: 1 },
+  overviewTitle: { fontSize: 14, fontWeight: "600", color: "#111827" },
+  overviewSubtitle: { fontSize: 12, color: "#6B7280", marginTop: 2 },
+  overviewValue: { fontSize: 16, fontWeight: "700", color: "#111827" },
+  divider: { height: 1, backgroundColor: "#F3F4F6", marginVertical: 12 },
+  sectionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  viewAll: { fontSize: 13, fontWeight: "600", color: "#2563EB" },
+  emptyCard: {
+    backgroundColor: "#FFFFFF",
+    padding: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#374151",
+    marginTop: 8,
+  },
+  emptyText: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 4,
+    textAlign: "center",
+  },
+  emptyButton: {
+    marginTop: 14,
+    backgroundColor: "#2563EB",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  emptyButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "600" },
+  jobCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  jobTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  flex1: { flex: 1 },
+  vehicleRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
+  vehicleIcon: { marginRight: 8 },
+  vehicle: { fontSize: 14, fontWeight: "700", color: "#111827" },
+  vehicleModel: { fontSize: 12, color: "#6B7280" },
+  customer: { fontSize: 12, color: "#4B5563", marginTop: 2 },
+  amount: { fontSize: 15, fontWeight: "700", color: "#111827", marginLeft: 8 },
+  jobBottom: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  statusBadge: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 },
+  statusText: { fontSize: 10, fontWeight: "700", color: "#FFFFFF" },
+  servicesText: { fontSize: 12, color: "#6B7280" },
+  bottomSpacer: { height: 100 },
+})
