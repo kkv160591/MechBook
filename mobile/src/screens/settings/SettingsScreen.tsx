@@ -19,7 +19,11 @@ export default function SettingsScreen() {
 
   const [logoutVisible, setLogoutVisible] = useState(false)
 
-  const sections = [
+  // Role check
+  const isWorker = user?.role?.toLowerCase() === "worker"
+
+  // Raw full settings list (for Owners)
+  const allSections = [
     {
       title: t("settings.sections.garage") || "Garage",
       items: [
@@ -78,13 +82,6 @@ export default function SettingsScreen() {
     {
       title: t("settings.sections.dataAccount") || "Data & Account",
       items: [
-        // {
-        //   title: t("settings.items.backup.title") || "Data Backup",
-        //   subtitle:
-        //     t("settings.items.backup.subtitle") || "Cloud backup management",
-        //   icon: "cloud-upload",
-        //   screen: "Backup"
-        // },
         {
           title: t("settings.items.plan.title") || "Plan & Usage",
           subtitle:
@@ -104,6 +101,25 @@ export default function SettingsScreen() {
       ]
     }
   ]
+
+  // Filter sections if user is a Worker
+  const sections = isWorker
+    ? [
+        {
+          title: t("settings.sections.preferences") || "Preferences",
+          items: [
+            {
+              title: t("settings.items.language.title") || "Language",
+              subtitle:
+                t("settings.items.language.subtitle") ||
+                "Hindi, Tamil, Telugu etc.",
+              icon: "language",
+              screen: "Language"
+            }
+          ]
+        }
+      ]
+    : allSections
 
   const handleLogout = () => {
     setLogoutVisible(true)
@@ -128,8 +144,10 @@ export default function SettingsScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>{t("settings.title") || "Settings"}</Text>
         <Text style={styles.subtitle}>
-          {t("settings.subtitle") ||
-            "Manage your garage configuration and account"}
+          {isWorker
+            ? t("settings.workerSubtitle") || "Manage app language and account"
+            : t("settings.subtitle") ||
+              "Manage your garage configuration and account"}
         </Text>
       </View>
 
@@ -274,43 +292,6 @@ const styles = StyleSheet.create({
     marginTop: 5,
     fontSize: 14,
     lineHeight: 20
-  },
-  profileBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 14,
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: "#E5E7EB"
-  },
-  avatarCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#2563EB",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12
-  },
-  avatarText: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "700"
-  },
-  profileTextContainer: {
-    justifyContent: "center"
-  },
-  ownerName: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#111827"
-  },
-  phoneText: {
-    fontSize: 13,
-    color: "#6B7280",
-    marginTop: 2
   },
   section: {
     marginBottom: 22

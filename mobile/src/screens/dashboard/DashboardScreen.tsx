@@ -1,5 +1,3 @@
-// DashboardScreen.tsx
-
 import React, { useState, useCallback } from "react"
 import {
   View,
@@ -10,7 +8,7 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from "react-native"
-import { MaterialIcons, Ionicons, FontAwesome5 } from "@expo/vector-icons"
+import { MaterialIcons, Ionicons } from "@expo/vector-icons"
 import { useNavigation, useFocusEffect } from "@react-navigation/native"
 
 import { getGarageProfile } from "../../services/garageService"
@@ -32,30 +30,43 @@ interface GarageProfile {
 }
 
 interface ServiceItem {
+  name?: string
+  quantity?: number
   actualPrice?: number
   estimatedPrice?: number
 }
 
 interface Job {
-  id: string | number
+  jobId: string
+  garageId?: string
+  workerId?: string
   status: "completed" | "pending" | "progress" | "in-progress" | "inProgress" | string
-  totalAmount?: number
-  total?: number
-  services?: ServiceItem[]
-  vehicleType?: string
+  customerName?: string
+  customerAddress?: string
+  phone?: string
   vehicleNumber?: string
   vehicleModel?: string
-  vehicle?: {
-    number?: string
-    model?: string
-  }
-  customerName?: string
+  vehicleBrand?: string
+  vehicleType?: string
+  laborCost?: number
+  discount?: number
+  services?: ServiceItem[]
+  id?: string | number
+  totalAmount?: number
+  total?: number
+  assignedWorkerId?: string | number
+  assignedWorker?: { id?: string | number }
+  vehicle?: { number?: string; model?: string }
   customer?: string | { name?: string }
 }
 
 interface Worker {
-  id: string | number
+  workerId: string
   name?: string
+  role?: string
+  active?: boolean
+  phone?: string
+  id?: string | number
 }
 
 interface LowStockItem {
@@ -67,6 +78,11 @@ export default function DashboardScreen() {
   const navigation = useNavigation<any>()
   const { user } = useAuth()
   const { t } = useTranslation()
+
+  // Dynamic Role Verification
+  const userRole = user?.role?.toLowerCase() || "worker"
+  const isOwner = userRole === "owner"
+  const isWorker = userRole === "worker"
 
   // ==================================
   // STATE
@@ -86,42 +102,48 @@ export default function DashboardScreen() {
   const getJobTotal = (job: Job): number => {
     if (typeof job.totalAmount === "number") return job.totalAmount
     if (typeof job.total === "number") return job.total
+
+    let servicesTotal = 0
     if (Array.isArray(job.services)) {
-      return job.services.reduce(
+      servicesTotal = job.services.reduce(
         (sum, service) =>
           sum + Number(service.actualPrice ?? service.estimatedPrice ?? 0),
         0
       )
     }
-    return 0
+
+    const labor = Number(job.laborCost ?? 0)
+    const discount = Number(job.discount ?? 0)
+
+    const calculatedTotal = servicesTotal + labor - discount
+    return calculatedTotal > 0 ? calculatedTotal : 0
   }
 
   // ==================================
-  // LOAD ALL DATA (UNIFIED FETCHING)
+  // LOAD ALL DATA
   // ==================================
   const loadAllData = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true)
-    setPlanUsageLoading(true)
+    if (isOwner) setPlanUsageLoading(true)
 
     try {
-      const [garageRes, jobsRes, workersRes, lowStockRes, planRes] =
-        await Promise.allSettled([
-          getGarageProfile(),
-          getJobs(),
-          getWorkers(),
-          getLowStockItems(),
-          getPlanUsage(),
-        ])
+      const calls: Promise<any>[] = [getGarageProfile(), getJobs()]
+      if (isOwner) {
+        calls.push(getWorkers(), getLowStockItems(), getPlanUsage())
+      }
 
-      // 1. Garage
-      if (garageRes.status === "fulfilled") {
-        setGarage(garageRes.value?.garage || null)
+      const results = await Promise.allSettled(calls)
+
+      // 1. Garage Profile
+      if (results[0]?.status === "fulfilled") {
+        const res = results[0].value
+        setGarage(res?.garage || res || null)
       }
 
       // 2. Jobs
-      if (jobsRes.status === "fulfilled") {
-        const res = jobsRes.value
-        const jobList = Array.isArray(res)
+      if (results[1]?.status === "fulfilled") {
+        const res = results[1].value
+        const jobList: Job[] = Array.isArray(res)
           ? res
           : Array.isArray(res?.jobs)
           ? res.jobs
@@ -129,31 +151,19 @@ export default function DashboardScreen() {
         setJobs(jobList)
       }
 
-      // 3. Workers
-      if (workersRes.status === "fulfilled") {
-        const res = workersRes.value
-        const workerList = Array.isArray(res)
-          ? res
-          : Array.isArray(res?.workers)
-          ? res.workers
-          : []
-        setWorkers(workerList)
-      }
-
-      // 4. Low Stock
-      if (lowStockRes.status === "fulfilled") {
-        const res = lowStockRes.value
-        const inventoryList = Array.isArray(res)
-          ? res
-          : Array.isArray(res?.items)
-          ? res.items
-          : []
-        setLowStockItems(inventoryList)
-      }
-
-      // 5. Subscription
-      if (planRes.status === "fulfilled") {
-        setPlanUsage(planRes.value)
+      // Owner-only admin calls
+      if (isOwner) {
+        if (results[2]?.status === "fulfilled") {
+          const res = results[2].value
+          setWorkers(Array.isArray(res) ? res : res?.workers || [])
+        }
+        if (results[3]?.status === "fulfilled") {
+          const res = results[3].value
+          setLowStockItems(Array.isArray(res) ? res : res?.items || [])
+        }
+        if (results[4]?.status === "fulfilled") {
+          setPlanUsage(results[4].value)
+        }
       }
     } catch (error) {
       console.log("Error loading dashboard data:", error)
@@ -161,7 +171,7 @@ export default function DashboardScreen() {
       setLoading(false)
       setPlanUsageLoading(false)
     }
-  }, [])
+  }, [isOwner])
 
   useFocusEffect(
     useCallback(() => {
@@ -176,30 +186,39 @@ export default function DashboardScreen() {
   }, [loadAllData])
 
   // ==================================
+  // ROLE-BASED JOB FILTERING
+  // ==================================
+  const displayedJobs = isOwner
+    ? jobs // Owners see all jobs (workers' + own)
+    : jobs.filter((job) => {
+        const assignedWorkerId =
+          job.workerId ?? job.assignedWorkerId ?? job.assignedWorker?.id
+        const currentUserId = user?.workerId ?? user?.id
+        return String(assignedWorkerId) === String(currentUserId)
+      })
+
+  // ==================================
   // STATISTICS & METRICS
   // ==================================
-  const totalJobs = jobs.length
-  const completedJobs = jobs.filter((job) => job.status === "completed").length
-  const pendingJobs = jobs.filter((job) => job.status === "pending").length
-  const inProgressJobs = jobs.filter((job) =>
+  const totalJobsCount = displayedJobs.length
+  const completedJobs = displayedJobs.filter((job) => job.status === "completed").length
+  const pendingJobs = displayedJobs.filter((job) => job.status === "pending").length
+  const inProgressJobs = displayedJobs.filter((job) =>
     ["progress", "in-progress", "inProgress"].includes(job.status)
   ).length
 
-  // Calculate total revenue dynamically from completed jobs
   const totalRevenue = jobs
     .filter((job) => job.status === "completed")
     .reduce((sum, job) => sum + getJobTotal(job), 0)
 
   // ==================================
-  // PLAN USAGE CALCULATIONS
+  // PLAN USAGE CALCULATIONS (OWNER ONLY)
   // ==================================
   const actualPlanName = planUsage?.planName || planUsage?.planCode || t("dashboard.plan.free") || "Free"
   const rawJobsUsed = Number(planUsage?.jobsUsed ?? 0)
   const jobsUsed = Number.isFinite(rawJobsUsed) ? Math.max(rawJobsUsed, 0) : 0
-
   const jobsLimitValue = planUsage?.jobsLimit
-  const isUnlimited =
-    String(jobsLimitValue ?? "").trim().toLowerCase() === "unlimited"
+  const isUnlimited = String(jobsLimitValue ?? "").trim().toLowerCase() === "unlimited"
   const numericJobLimit = Number(jobsLimitValue ?? 0)
 
   const backendUsagePercentage = Number(planUsage?.usagePercentage)
@@ -228,13 +247,12 @@ export default function DashboardScreen() {
     ? "#FFF7ED"
     : "#EFF6FF"
 
-  const recentJobs = jobs.slice(0, 4)
+  const recentJobs = displayedJobs.slice(0, 5)
 
   const getStatusColor = (status: string) => {
     if (status === "completed") return "#16A34A"
     if (status === "pending") return "#DC2626"
-    if (["progress", "in-progress", "inProgress"].includes(status))
-      return "#EA580C"
+    if (["progress", "in-progress", "inProgress"].includes(status)) return "#EA580C"
     return "#2563EB"
   }
 
@@ -255,12 +273,16 @@ export default function DashboardScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* HIGHLIGHTED HEADER CONTAINER */}
+        {/* HEADER CONTAINER */}
         <View style={styles.headerCard}>
           <View style={styles.headerInfo}>
-            <Text style={styles.greeting}>{t("dashboard.welcome") || "Welcome Back 👋"}</Text>
+            <Text style={styles.greeting}>
+              {t("dashboard.welcome") || "Welcome Back 👋"}
+            </Text>
             <Text style={styles.header} numberOfLines={1}>
-              {loading ? t("dashboard.loading") || "Loading..." : garage?.garageName || t("dashboard.defaultGarage") || "Garage"}
+              {loading
+                ? t("dashboard.loading") || "Loading..."
+                : garage?.garageName || t("dashboard.defaultGarage") || "Garage"}
             </Text>
             <Text style={styles.subHeader} numberOfLines={1}>
               {garage?.city
@@ -269,199 +291,269 @@ export default function DashboardScreen() {
             </Text>
             <View style={styles.roleBadge}>
               <Text style={styles.roleText}>
-                {user?.role?.toUpperCase() || t("dashboard.roles.user") || "USER"}
+                {user?.role?.toUpperCase() || "WORKER"}
               </Text>
             </View>
           </View>
 
-          {/* PLAN HEADER */}
-          <TouchableOpacity
-            style={styles.planHeaderContainer}
-            onPress={() => navigation.navigate("PlanUsage")}
-            activeOpacity={0.7}
-          >
-            <View
-              style={[
-                styles.planRing,
-                {
-                  borderColor: planRingColor,
-                  backgroundColor: planRingBackground,
-                },
-              ]}
+          {isOwner && (
+            <TouchableOpacity
+              style={styles.planHeaderContainer}
+              onPress={() => navigation.navigate("PlanUsage")}
+              activeOpacity={0.7}
             >
-              {planUsageLoading ? (
-                <ActivityIndicator size="small" color={planRingColor} />
-              ) : isUnlimited ? (
-                <Text
-                  style={[styles.planRingNumber, { color: planRingColor }]}
-                >
-                  ∞
-                </Text>
-              ) : (
-                <Text
-                  style={[styles.planRingNumber, { color: planRingColor }]}
-                >
-                  {usagePercentage}%
-                </Text>
-              )}
-            </View>
-            <Text
-              style={[styles.planNameHeader, { color: planRingColor }]}
-              numberOfLines={1}
-            >
-              {actualPlanName}
-            </Text>
-          </TouchableOpacity>
+              <View
+                style={[
+                  styles.planRing,
+                  {
+                    borderColor: planRingColor,
+                    backgroundColor: planRingBackground,
+                  },
+                ]}
+              >
+                {planUsageLoading ? (
+                  <ActivityIndicator size="small" color={planRingColor} />
+                ) : isUnlimited ? (
+                  <Text style={[styles.planRingNumber, { color: planRingColor }]}>
+                    ∞
+                  </Text>
+                ) : (
+                  <Text style={[styles.planRingNumber, { color: planRingColor }]}>
+                    {usagePercentage}%
+                  </Text>
+                )}
+              </View>
+              <Text
+                style={[styles.planNameHeader, { color: planRingColor }]}
+                numberOfLines={1}
+              >
+                {actualPlanName}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* STATS */}
-        <View style={styles.statsContainer}>
-          <View style={styles.card}>
-            <View style={styles.iconBox}>
-              <MaterialIcons name="build" size={22} color="#2563EB" />
+        {/* WORKER DASHBOARD METRICS */}
+        {isWorker ? (
+          <View style={styles.statsContainer}>
+            <View style={styles.card}>
+              <View style={styles.iconBox}>
+                <MaterialIcons name="assignment-ind" size={22} color="#2563EB" />
+              </View>
+              <Text style={styles.cardValue}>{totalJobsCount}</Text>
+              <Text style={styles.cardTitle}>{t("dashboard.stats.myJobs") || "My Jobs"}</Text>
             </View>
-            <Text style={styles.cardValue}>{totalJobs}</Text>
-            <Text style={styles.cardTitle}>{t("dashboard.stats.totalJobs") || "Total Jobs"}</Text>
-          </View>
 
-          <View style={styles.card}>
-            <View style={[styles.iconBox, styles.bgRed]}>
-              <MaterialIcons name="pending-actions" size={22} color="#DC2626" />
+            <View style={styles.card}>
+              <View style={[styles.iconBox, styles.bgOrange]}>
+                <MaterialIcons name="build-circle" size={22} color="#EA580C" />
+              </View>
+              <Text style={styles.cardValue}>{inProgressJobs}</Text>
+              <Text style={styles.cardTitle}>{t("dashboard.stats.inProgress") || "In Progress"}</Text>
             </View>
-            <Text style={styles.cardValue}>{pendingJobs}</Text>
-            <Text style={styles.cardTitle}>{t("dashboard.stats.pendingJobs") || "Pending Jobs"}</Text>
-          </View>
 
-          <View style={styles.card}>
-            <View style={[styles.iconBox, styles.bgGreen]}>
-              <MaterialIcons name="check-circle" size={22} color="#16A34A" />
+            <View style={styles.card}>
+              <View style={[styles.iconBox, styles.bgGreen]}>
+                <MaterialIcons name="check-circle" size={22} color="#16A34A" />
+              </View>
+              <Text style={styles.cardValue}>{completedJobs}</Text>
+              <Text style={styles.cardTitle}>{t("dashboard.stats.completed") || "Completed"}</Text>
             </View>
-            <Text style={styles.cardValue}>{completedJobs}</Text>
-            <Text style={styles.cardTitle}>{t("dashboard.stats.completed") || "Completed"}</Text>
-          </View>
 
-          <View style={styles.card}>
-            <View style={[styles.iconBox, styles.bgBlue]}>
-              <MaterialIcons name="payments" size={22} color="#2563EB" />
+            <View style={styles.card}>
+              <View style={[styles.iconBox, styles.bgRed]}>
+                <MaterialIcons name="pending-actions" size={22} color="#DC2626" />
+              </View>
+              <Text style={styles.cardValue}>{pendingJobs}</Text>
+              <Text style={styles.cardTitle}>{t("dashboard.stats.pending") || "Pending"}</Text>
             </View>
-            <Text
-              style={styles.cardValue}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-            >
-              ₹{totalRevenue.toLocaleString("en-IN")}
-            </Text>
-            <Text style={styles.cardTitle}>{t("dashboard.stats.revenue") || "Revenue"}</Text>
           </View>
-        </View>
+        ) : (
+          /* OWNER DASHBOARD METRICS */
+          <View style={styles.statsContainer}>
+            <View style={styles.card}>
+              <View style={styles.iconBox}>
+                <MaterialIcons name="build" size={22} color="#2563EB" />
+              </View>
+              <Text style={styles.cardValue}>{totalJobsCount}</Text>
+              <Text style={styles.cardTitle}>
+                {t("dashboard.stats.totalJobs") || "Total Jobs"}
+              </Text>
+            </View>
+
+            <View style={styles.card}>
+              <View style={[styles.iconBox, styles.bgRed]}>
+                <MaterialIcons name="pending-actions" size={22} color="#DC2626" />
+              </View>
+              <Text style={styles.cardValue}>{pendingJobs}</Text>
+              <Text style={styles.cardTitle}>
+                {t("dashboard.stats.pendingJobs") || "Pending Jobs"}
+              </Text>
+            </View>
+
+            <View style={styles.card}>
+              <View style={[styles.iconBox, styles.bgGreen]}>
+                <MaterialIcons name="check-circle" size={22} color="#16A34A" />
+              </View>
+              <Text style={styles.cardValue}>{completedJobs}</Text>
+              <Text style={styles.cardTitle}>
+                {t("dashboard.stats.completed") || "Completed"}
+              </Text>
+            </View>
+
+            <View style={styles.card}>
+              <View style={[styles.iconBox, styles.bgBlue]}>
+                <MaterialIcons name="payments" size={22} color="#2563EB" />
+              </View>
+              <Text style={styles.cardValue} numberOfLines={1} adjustsFontSizeToFit>
+                ₹{totalRevenue.toLocaleString("en-IN")}
+              </Text>
+              <Text style={styles.cardTitle}>
+                {t("dashboard.stats.revenue") || "Revenue"}
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* QUICK ACTIONS */}
-        <Text style={styles.sectionTitle}>{t("dashboard.sections.quickActions") || "Quick Actions"}</Text>
+        <Text style={styles.sectionTitle}>
+          {t("dashboard.sections.quickActions") || "Quick Actions"}
+        </Text>
         <View style={styles.quickActions}>
           <TouchableOpacity
-            style={styles.actionBtn}
+            style={[styles.actionBtn, !isOwner && styles.actionBtnFull]}
             onPress={() => navigation.navigate("CreateJob")}
             activeOpacity={0.7}
           >
             <MaterialIcons name="add-circle" size={30} color="#2563EB" />
-            <Text style={styles.actionText}>{t("dashboard.actions.createJob") || "Create Job"}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => navigation.navigate("Invoice")}
-            activeOpacity={0.7}
-          >
-            <FontAwesome5 name="file-invoice" size={24} color="#2563EB" />
-            <Text style={styles.actionText}>{t("dashboard.actions.invoices") || "Invoices"}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* BUSINESS OVERVIEW */}
-        <Text style={styles.sectionTitle}>{t("dashboard.sections.businessOverview") || "Business Overview"}</Text>
-        <View style={styles.overviewCard}>
-          <View style={styles.overviewRow}>
-            <View style={styles.overviewIcon}>
-              <Ionicons name="people-outline" size={20} color="#2563EB" />
-            </View>
-            <View style={styles.overviewText}>
-              <Text style={styles.overviewTitle}>{t("dashboard.overview.workers") || "Workers"}</Text>
-              <Text style={styles.overviewSubtitle}>
-                {t("dashboard.overview.workersSubtitle") || "Active staff available"}
-              </Text>
-            </View>
-            <Text style={styles.overviewValue}>{workers.length}</Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.overviewRow}>
-            <View style={styles.overviewIcon}>
-              <MaterialIcons name="build-circle" size={20} color="#EA580C" />
-            </View>
-            <View style={styles.overviewText}>
-              <Text style={styles.overviewTitle}>{t("dashboard.overview.inProgress") || "In Progress"}</Text>
-              <Text style={styles.overviewSubtitle}>
-                {t("dashboard.overview.inProgressSubtitle") || "Jobs currently being serviced"}
-              </Text>
-            </View>
-            <Text style={styles.overviewValue}>{inProgressJobs}</Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.overviewRow}>
-            <View style={[styles.overviewIcon, styles.bgRed]}>
-              <Ionicons name="warning-outline" size={20} color="#DC2626" />
-            </View>
-            <View style={styles.overviewText}>
-              <Text style={styles.overviewTitle}>{t("dashboard.overview.lowStock") || "Low Stock"}</Text>
-              <Text style={styles.overviewSubtitle}>
-                {t("dashboard.overview.lowStockSubtitle") || "Spare parts need attention"}
-              </Text>
-            </View>
-            <Text
-              style={[
-                styles.overviewValue,
-                { color: lowStockItems.length > 0 ? "#DC2626" : "#16A34A" },
-              ]}
-            >
-              {lowStockItems.length}
+            <Text style={styles.actionText}>
+              {t("dashboard.actions.createJob") || "Create Job"}
             </Text>
-          </View>
+          </TouchableOpacity>
+
+          {isOwner && (
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => navigation.navigate("Invoice")}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="receipt" size={26} color="#2563EB" />
+              <Text style={styles.actionText}>
+                {t("dashboard.actions.invoices") || "Invoices"}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* RECENT JOBS */}
+        {/* BUSINESS OVERVIEW (OWNER ONLY) */}
+        {isOwner && (
+          <>
+            <Text style={styles.sectionTitle}>
+              {t("dashboard.sections.businessOverview") || "Business Overview"}
+            </Text>
+            <View style={styles.overviewCard}>
+              <View style={styles.overviewRow}>
+                <View style={styles.overviewIcon}>
+                  <Ionicons name="people-outline" size={20} color="#2563EB" />
+                </View>
+                <View style={styles.overviewText}>
+                  <Text style={styles.overviewTitle}>
+                    {t("dashboard.overview.workers") || "Workers"}
+                  </Text>
+                  <Text style={styles.overviewSubtitle}>
+                    {t("dashboard.overview.workersSubtitle") || "Active staff available"}
+                  </Text>
+                </View>
+                <Text style={styles.overviewValue}>{workers.length}</Text>
+              </View>
+
+              <View style={styles.divider} />
+
+              <View style={styles.overviewRow}>
+                <View style={styles.overviewIcon}>
+                  <MaterialIcons name="build-circle" size={20} color="#EA580C" />
+                </View>
+                <View style={styles.overviewText}>
+                  <Text style={styles.overviewTitle}>
+                    {t("dashboard.overview.inProgress") || "In Progress"}
+                  </Text>
+                  <Text style={styles.overviewSubtitle}>
+                    {t("dashboard.overview.inProgressSubtitle") || "Jobs currently being serviced"}
+                  </Text>
+                </View>
+                <Text style={styles.overviewValue}>{inProgressJobs}</Text>
+              </View>
+
+              <View style={styles.divider} />
+
+              <View style={styles.overviewRow}>
+                <View style={[styles.overviewIcon, styles.bgRed]}>
+                  <Ionicons name="warning-outline" size={20} color="#DC2626" />
+                </View>
+                <View style={styles.overviewText}>
+                  <Text style={styles.overviewTitle}>
+                    {t("dashboard.overview.lowStock") || "Low Stock"}
+                  </Text>
+                  <Text style={styles.overviewSubtitle}>
+                    {t("dashboard.overview.lowStockSubtitle") || "Spare parts need attention"}
+                  </Text>
+                </View>
+                <Text
+                  style={[
+                    styles.overviewValue,
+                    { color: lowStockItems.length > 0 ? "#DC2626" : "#16A34A" },
+                  ]}
+                >
+                  {lowStockItems.length}
+                </Text>
+              </View>
+            </View>
+          </>
+        )}
+
+        {/* RECENT / ASSIGNED JOBS LIST */}
         <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>{t("dashboard.sections.recentJobs") || "Recent Jobs"}</Text>
+          <Text style={styles.sectionTitle}>
+            {isWorker ? t("dashboard.sections.myAssignedJobs") || "My Assigned Jobs" : t("dashboard.sections.recentJobs") || "Recent Jobs"}
+          </Text>
           <TouchableOpacity onPress={() => navigation.navigate("Jobs")}>
-            <Text style={styles.viewAll}>{t("dashboard.actions.viewAll") || "View All"}</Text>
+            <Text style={styles.viewAll}>
+              {t("dashboard.actions.viewAll") || "View All"}
+            </Text>
           </TouchableOpacity>
         </View>
 
         {recentJobs.length === 0 ? (
           <View style={styles.emptyCard}>
             <MaterialIcons name="assignment" size={36} color="#9CA3AF" />
-            <Text style={styles.emptyTitle}>{t("dashboard.empty.noJobsTitle") || "No jobs yet"}</Text>
+            <Text style={styles.emptyTitle}>
+              {isWorker ? t("dashboard.empty.noAssignedJobsTitle") || "No assigned jobs yet" : t("dashboard.empty.noJobsTitle") || "No jobs yet"}
+            </Text>
             <Text style={styles.emptyText}>
-              {t("dashboard.empty.noJobsSubtitle") || "Create your first job to see it here."}
+              {isWorker
+                ? t("dashboard.empty.noAssignedJobsSubtitle") || "Jobs assigned to you will appear here."
+                : t("dashboard.empty.noJobsSubtitle") || "Create your first job to see it here."}
             </Text>
             <TouchableOpacity
               style={styles.emptyButton}
               onPress={() => navigation.navigate("CreateJob")}
             >
-              <Text style={styles.emptyButtonText}>{t("dashboard.actions.createJob") || "Create Job"}</Text>
+              <Text style={styles.emptyButtonText}>
+                {t("dashboard.actions.createJob") || "Create Job"}
+              </Text>
             </TouchableOpacity>
           </View>
         ) : (
           recentJobs.map((item) => {
             const total = getJobTotal(item)
+            const keyId = item.jobId || item.id
+
             return (
               <TouchableOpacity
-                key={item.id}
+                key={keyId}
                 style={styles.jobCard}
                 onPress={() =>
-                  navigation.navigate("JobDetail", { job: item })
+                  navigation.navigate("JobDetail", { jobId: keyId, job: item, editAllowed: true })
                 }
                 activeOpacity={0.7}
               >
@@ -471,7 +563,7 @@ export default function DashboardScreen() {
                       <View style={styles.vehicleIcon}>
                         <Ionicons
                           name={
-                            item.vehicleType === "2 Wheeler"
+                            item.vehicleType?.includes("2")
                               ? "bicycle"
                               : "car-sport"
                           }
@@ -487,10 +579,11 @@ export default function DashboardScreen() {
                             "Vehicle"}
                         </Text>
                         <Text style={styles.vehicleModel} numberOfLines={1}>
-                          {item.vehicleModel ||
-                            item.vehicle?.model ||
-                            t("dashboard.jobCard.defaultDetails") ||
-                            "Vehicle details"}
+                          {item.vehicleModel || item.vehicleBrand
+                            ? `${item.vehicleBrand ?? ""} ${item.vehicleModel ?? ""}`.trim()
+                            : item.vehicle?.model ||
+                              t("dashboard.jobCard.defaultDetails") ||
+                              "Vehicle details"}
                         </Text>
                       </View>
                     </View>
@@ -503,9 +596,11 @@ export default function DashboardScreen() {
                           "Customer"}
                     </Text>
                   </View>
-                  <Text style={styles.amount}>
-                    ₹{Number(total).toLocaleString("en-IN")}
-                  </Text>
+                  {isOwner && (
+                    <Text style={styles.amount}>
+                      ₹{Number(total).toLocaleString("en-IN")}
+                    </Text>
+                  )}
                 </View>
 
                 <View style={styles.jobBottom}>
@@ -607,6 +702,7 @@ const styles = StyleSheet.create({
   bgRed: { backgroundColor: "#FEF2F2" },
   bgGreen: { backgroundColor: "#ECFDF5" },
   bgBlue: { backgroundColor: "#EFF6FF" },
+  bgOrange: { backgroundColor: "#FFF7ED" },
   cardValue: { fontSize: 18, fontWeight: "700", color: "#111827" },
   cardTitle: { fontSize: 12, color: "#6B7280", marginTop: 2 },
   sectionTitle: {
@@ -632,6 +728,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
     marginHorizontal: 4,
+  },
+  actionBtnFull: {
+    marginHorizontal: 0,
   },
   actionText: {
     fontSize: 14,

@@ -18,6 +18,15 @@ export const translations = {
       processing: "Processing...",
     },
 
+    // bottom tab navigation
+    navigation: {
+      dashboard: "Dashboard",
+      jobs: "Jobs",
+      customers: "Customers",
+      inventory: "Inventory",
+      settings: "Settings"
+    },
+
     // jobs
     jobs: {
       alertSuccessMsg: "Job created successfully!",
@@ -441,7 +450,9 @@ export const translations = {
     settings: {
       title: "Settings",
       subtitle: "Manage your garage configuration and account",
+      workerSubtitle: "Manage app language and account",
       sections: {
+        preferences: "Preferences",
         garage: "Garage",
         operations: "Operations",
         billing: "Billing & Invoices",
@@ -622,9 +633,13 @@ export const translations = {
         totalJobs: "Total Jobs",
         pendingJobs: "Pending Jobs",
         completed: "Completed",
-        revenue: "Revenue"
+        revenue: "Revenue",
+        myJobs: "My Jobs",
+        inProgress: "In Progress",
+        pending: "Pending"
       },
       sections: {
+        myAssignedJobs: "My Assigned Jobs",
         quickActions: "Quick Actions",
         businessOverview: "Business Overview",
         recentJobs: "Recent Jobs"
@@ -644,7 +659,9 @@ export const translations = {
       },
       empty: {
         noJobsTitle: "No jobs yet",
-        noJobsSubtitle: "Create your first job to see it here."
+        noJobsSubtitle: "Create your first job to see it here.",
+        noAssignedJobsTitle: "No assigned jobs yet",
+        noAssignedJobsSubtitle: "Jobs assigned to you will appear here."
       },
       status: {
         completed: "COMPLETED",
@@ -679,6 +696,15 @@ export const translations = {
       refreshing: "रिफ्रेश हो रहा है...",
       continue: "जारी रखें",
       processing: "प्रक्रिया जारी है...",
+    },
+
+    // bottom tab navigation
+    navigation: {
+      dashboard: "डैशबोर्ड",
+      jobs: "काम",
+      customers: "ग्राहक",
+      inventory: "सामग्री",
+      settings: "सेटिंग्स"
     },
 
     // jobs
@@ -1102,8 +1128,10 @@ export const translations = {
     // Settings Screen (Hindi)
     settings: {
       title: "सेटिंग्स",
+      workerSubtitle: "ऐप की भाषा और अपना अकाउंट प्रबंधित करें",
       subtitle: "अपने गैराज कॉन्फ़िगरेशन और खाते को प्रबंधित करें",
       sections: {
+        preferences: "प्राथमिकताएं",
         garage: "गैराज",
         operations: "संचालन",
         billing: "बिलिंग और चालान",
@@ -1283,9 +1311,13 @@ export const translations = {
         totalJobs: "कुल काम",
         pendingJobs: "लंबित काम",
         completed: "पूरा हुआ",
-        revenue: "कुल कमाई"
+        revenue: "कुल कमाई",
+        myJobs: "मेरे काम",
+        inProgress: "प्रगति पर",
+        pending: "लंबित"
       },
       sections: {
+        myAssignedJobs: "मेरे असाइन किए गए काम",
         quickActions: "त्वरित कार्य",
         businessOverview: "व्यवसाय अवलोकन",
         recentJobs: "हाल के काम"
@@ -1305,7 +1337,9 @@ export const translations = {
       },
       empty: {
         noJobsTitle: "अभी कोई काम नहीं है",
-        noJobsSubtitle: "यहाँ देखने के लिए अपना पहला काम जोड़ें।"
+        noJobsSubtitle: "यहाँ देखने के लिए अपना पहला काम जोड़ें।",
+        noAssignedJobsTitle: "अभी कोई असाइन किया गया काम नहीं है",
+        noAssignedJobsSubtitle: "आपको सौंपे गए काम यहां दिखाई देंगे।"
       },
       status: {
         completed: "पूरा हुआ",
