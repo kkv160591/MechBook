@@ -8,44 +8,28 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  FlatList
 } from "react-native"
 
-import {
-  useEffect,
-  useMemo,
-  useState,
-  useRef
-} from "react"
+import { useEffect, useMemo, useState, useRef } from "react"
+import { Ionicons } from "@expo/vector-icons"
+import { createJob } from "../../services/jobService"
+import { getWorkers } from "../../services/workerService"
+import { getServiceTypes } from "../../services/serviceTypesService"
+import { getInventory } from "../../services/inventoryService"
+import { getPlanUsage, PlanUsageResponse } from "../../services/subscriptionService"
 
-import {
-  Ionicons
-} from "@expo/vector-icons"
-
-import {
-  createJob
-} from "../../services/jobService"
-
-import {
-  getWorkers
-} from "../../services/workerService"
-
-import {
-  getServiceTypes
-} from "../../services/serviceTypesService"
-
-import {
-  getPlanUsage,
-  PlanUsageResponse
-} from "../../services/subscriptionService"
-
+import { useAuth } from "../../context/AuthContext"
 import { useSettings } from "../../context/SettingsContext"
 import { useTranslation } from "../../context/LanguageContext"
 import DateTimePicker from "@react-native-community/datetimepicker"
 
 export default function AddJobScreen({ navigation }: any) {
+  const [currentStep, setCurrentStep] = useState<number>(1)
   const [submitted, setSubmitted] = useState(false)
+  const { user } = useAuth()
   const { settings } = useSettings()
-  const { t } = useTranslation();
+  const { t } = useTranslation()
 
   const scrollRef = useRef<ScrollView>(null)
   const customerNameRef = useRef<TextInput>(null)
@@ -53,20 +37,16 @@ export default function AddJobScreen({ navigation }: any) {
   const vehicleNumberRef = useRef<TextInput>(null)
   const vehicleModelRef = useRef<TextInput>(null)
 
-  const customerNameY = useRef(0)
-  const phoneY = useRef(0)
-  const vehicleNumberY = useRef(0)
-  const vehicleModelY = useRef(0)
-
-  // LOADING
+  // LOADING STATES
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [planUsageLoading, setPlanUsageLoading] = useState(true)
   const [planUsageError, setPlanUsageError] = useState(false)
 
-  // DATA
+  // DATA LISTS
   const [workers, setWorkers] = useState<any[]>([])
   const [serviceTypes, setServiceTypes] = useState<any[]>([])
+  const [inventoryList, setInventoryList] = useState<any[]>([])
   const [planUsage, setPlanUsage] = useState<PlanUsageResponse | null>(null)
 
   // CUSTOMER
@@ -87,29 +67,37 @@ export default function AddJobScreen({ navigation }: any) {
   const [workerName, setWorkerName] = useState("")
   const [showWorkerSuggestions, setShowWorkerSuggestions] = useState(false)
 
-  // PAYMENT & BILLING
-  const [showPaymentSuggestions, setShowPaymentSuggestions] = useState(false)
-  
-  // LABOR & DISCOUNT (State initialized from Invoice Settings Context)
+  // LABOR & DISCOUNT
   const [laborCost, setLaborCost] = useState<string>("")
   const [discount, setDiscount] = useState<string>("")
 
-  // JOB
+  // JOB METADATA
   const [priority, setPriority] = useState(t("jobs.priorityNormal"))
   const [deliveryDate, setDeliveryDate] = useState<Date | null>(null)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [showTimePicker, setShowTimePicker] = useState(false)
-  const [notes, setNotes] = useState("")
   const [inspectionNotes, setInspectionNotes] = useState("")
 
   // SERVICES
   const [selectedServices, setSelectedServices] = useState<any[]>([])
   const [serviceName, setServiceName] = useState("")
   const [servicePrice, setServicePrice] = useState("")
-  const [serviceQty, setServiceQty] = useState("1")
   const [showSuggestions, setShowSuggestions] = useState(false)
 
-  // Set default labor cost and discount when settings context loads
+  // INVENTORY / PARTS SELECTION
+  const [selectedParts, setSelectedParts] = useState<any[]>([])
+  const [selectedPartItem, setSelectedPartItem] = useState<any | null>(null)
+  const [partName, setPartName] = useState("")
+  const [partPrice, setPartPrice] = useState("")
+  const [partQty, setPartQty] = useState("1")
+
+  useEffect(() => {
+    if (user && (user.userType === "worker" || user.role === "worker")) {
+      setWorkerId(user.workerId || user._id || user.id || "")
+      setWorkerName(user.name || user.workerName || user.ownerName || "")
+    }
+  }, [user])
+
   useEffect(() => {
     if (settings?.invoice) {
       if (settings.invoice.defaultLaborCost !== undefined) {
@@ -125,21 +113,16 @@ export default function AddJobScreen({ navigation }: any) {
     Keyboard.dismiss()
     setShowSuggestions(false)
     setShowWorkerSuggestions(false)
-    setShowPaymentSuggestions(false)
   }
 
   const searchedWorkers = useMemo(() => {
     if (!workerName.trim()) return workers
-    return workers.filter(worker =>
-      (worker.name || "").toLowerCase().includes(workerName.toLowerCase())
-    )
+    return workers.filter(w => (w.name || "").toLowerCase().includes(workerName.toLowerCase()))
   }, [workerName, workers])
 
   const searchedServices = useMemo(() => {
     if (!serviceName.trim()) return []
-    return serviceTypes.filter(service =>
-      (service.name || "").toLowerCase().includes(serviceName.toLowerCase())
-    )
+    return serviceTypes.filter(s => (s.name || "").toLowerCase().includes(serviceName.toLowerCase()))
   }, [serviceName, serviceTypes])
 
   useEffect(() => {
@@ -152,21 +135,20 @@ export default function AddJobScreen({ navigation }: any) {
       setPlanUsageLoading(true)
       setPlanUsageError(false)
 
-      const [workersRes, servicesRes, planUsageRes] = await Promise.all([
+      const [workersRes, servicesRes, inventoryRes, planUsageRes] = await Promise.all([
         getWorkers(),
         getServiceTypes(),
+        getInventory ? getInventory() : Promise.resolve([]),
         getPlanUsage()
       ])
 
       setWorkers(workersRes?.workers || [])
       setServiceTypes(servicesRes?.services || [])
+      setInventoryList(inventoryRes?.inventory || inventoryRes || [])
       setPlanUsage(planUsageRes || null)
     } catch (err: any) {
       setPlanUsageError(true)
-      Alert.alert(
-        t("jobs.alertErrorTitle"),
-        err?.response?.data?.message || t("jobs.unableToLoadData")
-      )
+      Alert.alert(t("jobs.alertErrorTitle"), err?.response?.data?.message || t("jobs.unableToLoadData"))
     } finally {
       setLoading(false)
       setPlanUsageLoading(false)
@@ -175,703 +157,522 @@ export default function AddJobScreen({ navigation }: any) {
 
   const jobsUsed = Number(planUsage?.jobsUsed ?? 0)
   const jobsLimitRaw = planUsage?.jobsLimit
-
-  const isUnlimited =
-    Number(jobsLimitRaw) === -1 ||
-    String(jobsLimitRaw ?? "").toLowerCase() === "unlimited"
-
+  const isUnlimited = Number(jobsLimitRaw) === -1 || String(jobsLimitRaw ?? "").toLowerCase() === "unlimited"
   const jobsLimit = isUnlimited ? null : Number(jobsLimitRaw ?? 0)
+  const hasReachedJobLimit = !isUnlimited && jobsLimit !== null && jobsLimit > 0 && jobsUsed >= jobsLimit
 
-  const hasReachedJobLimit =
-    !isUnlimited &&
-    jobsLimit !== null &&
-    jobsLimit > 0 &&
-    jobsUsed >= jobsLimit
-
-  const removeService = (index: number) => {
-    setSelectedServices(prev => prev.filter((_, i) => i !== index))
-  }
-
-  const updateService = (index: number, field: string, value: any) => {
+  // SERVICES HANDLERS
+  const removeService = (index: number) => setSelectedServices(prev => prev.filter((_, i) => i !== index))
+  
+  const updateServicePrice = (index: number, value: string) => {
+    const numValue = Number(value) || 0
     setSelectedServices(prev => {
       const copy = [...prev]
-      copy[index] = { ...copy[index], [field]: value }
+      copy[index] = { ...copy[index], estimatedPrice: numValue, actualPrice: numValue }
       return copy
     })
   }
 
   const addCurrentService = () => {
     if (!serviceName.trim()) return
-
-    setSelectedServices(prev => [
-      ...prev,
-      {
-        serviceId: null,
-        name: serviceName,
-        quantity: Number(serviceQty) || 1,
-        estimatedPrice: Number(servicePrice) || 0,
-        actualPrice: Number(servicePrice) || 0,
-      }
-    ])
-
+    const price = Number(servicePrice) || 0
+    setSelectedServices(prev => [...prev, { serviceId: null, name: serviceName, quantity: 1, estimatedPrice: price, actualPrice: price }])
     setServiceName("")
     setServicePrice("")
-    setServiceQty("1")
     closeDropdowns()
   }
 
-  // BILLING CALCULATIONS
-  const servicesSubtotal = useMemo(() => {
-    return selectedServices.reduce((sum, item) => sum + (Number(item.estimatedPrice) * Number(item.quantity)), 0)
-  }, [selectedServices])
-
-  const parsedLabor = useMemo(() => {
-    const val = parseFloat(laborCost)
-    return isNaN(val) || val < 0 ? 0 : val
-  }, [laborCost])
-
-  const parsedDiscount = useMemo(() => {
-    const val = parseFloat(discount)
-    return isNaN(val) || val < 0 ? 0 : val
-  }, [discount])
-
-  const discountAmount = useMemo(() => {
-    const rawTotal = servicesSubtotal + parsedLabor
-    return (rawTotal * Math.min(parsedDiscount, 100)) / 100
-  }, [servicesSubtotal, parsedLabor, parsedDiscount])
-
-  const grandTotal = useMemo(() => {
-    const sub = servicesSubtotal + parsedLabor
-    return Math.max(0, sub - discountAmount)
-  }, [servicesSubtotal, parsedLabor, discountAmount])
-
-  const isLaborInvalid = useMemo(() => {
-    if (!laborCost.trim()) return false
-    const val = Number(laborCost)
-    return isNaN(val) || val < 0
-  }, [laborCost])
-
-  const isDiscountInvalid = useMemo(() => {
-    if (!discount.trim()) return false
-    const val = Number(discount)
-    return isNaN(val) || val < 0 || val > 100
-  }, [discount])
-
-  const onDateChange = (event: any, selectedDate?: Date) => {
-    setShowDatePicker(false)
-    if (!selectedDate) return
-
-    const current = deliveryDate || new Date()
-    current.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
-    setDeliveryDate(new Date(current))
-    setShowTimePicker(true)
+  // PARTS HANDLERS
+  const handleSelectInventoryItem = (item: any) => {
+    setSelectedPartItem(item)
+    setPartName(item.name || "")
+    setPartPrice(String(item.price || item.unitPrice || 0))
   }
 
-  const onTimeChange = (event: any, selectedTime?: Date) => {
-    setShowTimePicker(false)
-    if (!selectedTime) return
+  const addCurrentPart = () => {
+    if (!partName.trim()) {
+      Alert.alert(t("jobs.alertErrorTitle"), t("jobs.valErrPartName"))
+      return
+    }
+    const requestedQty = parseInt(partQty) || 1
+    const unitPrice = parseFloat(partPrice) || 0
 
-    const current = deliveryDate || new Date()
-    current.setHours(selectedTime.getHours(), selectedTime.getMinutes())
-    setDeliveryDate(new Date(current))
+    if (selectedPartItem) {
+      const availableStock = selectedPartItem.stock ?? selectedPartItem.quantity ?? 0
+      const partId = selectedPartItem.id || selectedPartItem._id
+      const alreadyAddedQty = selectedParts.filter(p => p.inventoryId === partId).reduce((sum, p) => sum + p.quantity, 0)
+
+      if (availableStock <= 0 || (alreadyAddedQty + requestedQty) > availableStock) {
+        Alert.alert(t("jobs.outOfStock"), t("jobs.insufficientStock"))
+        return
+      }
+    }
+
+    setSelectedParts(prev => [
+      ...prev,
+      {
+        inventoryId: selectedPartItem ? (selectedPartItem.id || selectedPartItem._id) : null,
+        name: partName,
+        quantity: requestedQty,
+        unitPrice,
+        totalPrice: requestedQty * unitPrice
+      }
+    ])
+    setSelectedPartItem(null)
+    setPartName("")
+    setPartPrice("")
+    setPartQty("1")
+    closeDropdowns()
+  }
+
+  const removePart = (index: number) => setSelectedParts(prev => prev.filter((_, i) => i !== index))
+
+  // Extract discount type from settings with fallback to 'percentage'
+  const discountType = settings?.invoice?.defaultDiscountType || "percentage"
+
+  // BILLING CALCULATIONS
+  const servicesSubtotal = useMemo(
+    () => selectedServices.reduce((sum, item) => sum + Number(item.estimatedPrice || 0), 0),
+    [selectedServices]
+  )
+
+  const partsSubtotal = useMemo(
+    () => selectedParts.reduce((sum, item) => sum + Number(item.totalPrice || 0), 0),
+    [selectedParts]
+  )
+
+  const parsedLabor = useMemo(() => {
+    const v = parseFloat(laborCost)
+    return isNaN(v) || v < 0 ? 0 : v
+  }, [laborCost])
+
+  // Raw total before discount
+  const rawSubtotal = useMemo(
+    () => servicesSubtotal + partsSubtotal + parsedLabor,
+    [servicesSubtotal, partsSubtotal, parsedLabor]
+  )
+
+  const parsedDiscount = useMemo(() => {
+    const v = parseFloat(discount)
+    if (isNaN(v) || v < 0) return 0
+    // Cap at 100 if it's percentage mode, otherwise return raw amount
+    return discountType === "percentage" ? Math.min(v, 100) : v
+  }, [discount, discountType])
+
+  // Calculate discount value based on configuration
+  const discountAmount = useMemo(() => {
+    if (discountType === "percentage") {
+      return (rawSubtotal * parsedDiscount) / 100
+    }
+    // Fixed / Amount type discount
+    return Math.min(parsedDiscount, rawSubtotal)
+  }, [rawSubtotal, parsedDiscount, discountType])
+
+  // Final Grand Total
+  const grandTotal = useMemo(
+    () => Math.max(0, rawSubtotal - discountAmount),
+    [rawSubtotal, discountAmount]
+  )
+
+  const handleNext = () => {
+    setSubmitted(true)
+    if (currentStep === 1) {
+      if (!customerName.trim() || phone.trim().length !== 10 || !vehicleNumber.trim() || !vehicleModel.trim()) {
+        Alert.alert(t("jobs.alertValidationTitle"), t("jobs.fillStep1Alert"))
+        return
+      }
+    } else if (currentStep === 2) {
+      if (selectedServices.length === 0 && selectedParts.length === 0) {
+        Alert.alert(t("jobs.alertValidationTitle"), t("jobs.atLeastOneServiceField"))
+        return
+      }
+    }
+    setSubmitted(false)
+    setCurrentStep(prev => Math.min(prev + 1, 3))
+    scrollRef.current?.scrollTo({ y: 0, animated: true })
+  }
+
+  const handleBack = () => {
+    setCurrentStep(prev => Math.max(prev - 1, 1))
+    scrollRef.current?.scrollTo({ y: 0, animated: true })
   }
 
   const saveJob = async () => {
-    if (planUsageLoading) {
-      Alert.alert(t("jobs.pleaseWait"), t("jobs.checkingPlanUsage"))
-      return
-    }
-
-    if (planUsageError || !planUsage) {
-      Alert.alert(t("jobs.unableToVerifyPlanTitle"), t("jobs.unableToVerifyPlanMsg"))
-      return
-    }
-
-    if (hasReachedJobLimit) {
-      const plan = planUsage?.planName || t("jobs.current")
-      
-      Alert.alert(
-        t("jobs.jobLimitReachedTitle"),
-        `${t("jobs.jobLimitReachedMsg")}\n(${plan}: ${jobsUsed}/${jobsLimit})`
-      )
-      return
-    }
-
-    setSubmitted(true)
-    const missingFields: string[] = []
-
-    const cleanName = customerName.trim()
-    const cleanPhone = phone.trim()
-    const cleanVehNum = vehicleNumber.trim()
-    const cleanVehModel = vehicleModel.trim()
-
-    if (!cleanName) missingFields.push(t("jobs.customerName"))
-    if (!cleanPhone || cleanPhone.length !== 10) missingFields.push(t("jobs.validPhone"))
-    if (!cleanVehNum) missingFields.push(t("jobs.vehicleNumber"))
-    if (!cleanVehModel) missingFields.push(t("jobs.vehicleModel"))
-    if (selectedServices.length === 0) missingFields.push(t("jobs.atLeastOneServiceField"))
-
-    // Billing Validation
-    if (isLaborInvalid) missingFields.push(t("jobs.errNonNegativeLabor"))
-    if (isDiscountInvalid) missingFields.push(t("jobs.errValidDiscount"))
-
-    if (missingFields.length > 0) {
-      if (!cleanName) {
-        scrollRef.current?.scrollTo({ y: Math.max(0, customerNameY.current - 20), animated: true })
-        setTimeout(() => customerNameRef.current?.focus(), 300)
-      } else if (!cleanPhone || cleanPhone.length !== 10) {
-        scrollRef.current?.scrollTo({ y: Math.max(0, phoneY.current - 20), animated: true })
-        setTimeout(() => phoneRef.current?.focus(), 300)
-      } else if (!cleanVehNum) {
-        scrollRef.current?.scrollTo({ y: Math.max(0, vehicleNumberY.current - 20), animated: true })
-        setTimeout(() => vehicleNumberRef.current?.focus(), 300)
-      } else if (!cleanVehModel) {
-        scrollRef.current?.scrollTo({ y: Math.max(0, vehicleModelY.current - 20), animated: true })
-        setTimeout(() => vehicleModelRef.current?.focus(), 300)
-      }
-
-      Alert.alert(t("jobs.alertValidationTitle"), t("jobs.validationErrorMsgList") + missingFields.join("\n• "))
-      return
-    }
-
+    if (hasReachedJobLimit) return
     try {
       setSaving(true)
       await createJob({
-        customerName: cleanName,
-        phone: cleanPhone,
+        customerName: customerName.trim(),
+        phone: phone.trim(),
         customerAddress,
-        vehicleNumber: cleanVehNum,
-        vehicleModel: cleanVehModel,
+        vehicleNumber: vehicleNumber.trim(),
+        vehicleModel: vehicleModel.trim(),
         vehicleBrand,
         vehicleType,
         odometer,
         complaint,
         inspectionNotes,
         workerId,
+        workerName,
         priority,
         deliveryDate: deliveryDate ? deliveryDate.toISOString() : "",
         laborCost: parsedLabor,
         discount: parsedDiscount,
         totalAmount: grandTotal,
-        notes,
-        services: selectedServices
+        services: selectedServices,
+        parts: selectedParts
       })
-
       Alert.alert(t("jobs.alertSuccessTitle"), t("jobs.alertSuccessMsg"))
       navigation.goBack()
     } catch (err: any) {
-      const status = err?.response?.status
-      if (status === 403) {
-        Alert.alert(
-          t("jobs.jobLimitReachedTitle"),
-          err?.response?.data?.message || t("jobs.jobLimitReachedGarageMsg")
-        )
-        return
-      }
-
       Alert.alert(t("jobs.alertErrorTitle"), err?.response?.data?.message || t("jobs.unableToCreateJob"))
     } finally {
       setSaving(false)
     }
   }
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit"
-    })
-  }
-
   const RequiredLabel = ({ text }: { text: string }) => (
-    <Text style={styles.label}>
-      {text}<Text style={{ color: "#DC2626" }}> *</Text>
-    </Text>
+    <Text style={styles.label}>{text}<Text style={{ color: "#DC2626" }}> *</Text></Text>
   )
 
-  if (loading) {
-    return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#2563EB" />
-      </View>
-    )
-  }
+  if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color="#2563EB" /></View>
 
   return (
-    <ScrollView
-      ref={scrollRef}
-      style={styles.container}
-      keyboardShouldPersistTaps="handled"
-      onScrollBeginDrag={closeDropdowns}
-    >
-
-      {/* CUSTOMER DETAILS */}
-      <Text style={styles.heading}>{t("jobs.customerDetails")}</Text>
-
-      <RequiredLabel text={t("jobs.customerName")} />
-      <View onLayout={e => (customerNameY.current = e.nativeEvent.layout.y)}>
-        <TextInput
-          ref={customerNameRef}
-          onFocus={closeDropdowns}
-          style={[styles.input, submitted && !customerName.trim() && styles.inputError]}
-          value={customerName}
-          onChangeText={setCustomerName}
-        />
-        {submitted && !customerName.trim() && (
-          <Text style={styles.errorText}>{t("jobs.valErrName")}</Text>
-        )}
-      </View>
-
-      <RequiredLabel text={t("jobs.phoneNumber")} />
-      <View onLayout={e => (phoneY.current = e.nativeEvent.layout.y)}>
-        <TextInput
-          ref={phoneRef}
-          onFocus={closeDropdowns}
-          keyboardType="phone-pad"
-          maxLength={10}
-          style={[
-            styles.input,
-            submitted && (!phone.trim() || phone.trim().length !== 10) && styles.inputError
-          ]}
-          value={phone}
-          onChangeText={setPhone}
-        />
-        {submitted && !phone.trim() && (
-          <Text style={styles.errorText}>{t("jobs.valErrPhoneReq")}</Text>
-        )}
-        {submitted && phone.trim().length > 0 && phone.trim().length !== 10 && (
-          <Text style={styles.errorText}>{t("jobs.valErrPhoneLen")}</Text>
-        )}
-      </View>
-
-      <Text style={styles.label}>{t("jobs.customerAddress")}</Text>
-      <TextInput
-        onFocus={closeDropdowns}
-        style={styles.input}
-        value={customerAddress}
-        onChangeText={setCustomerAddress}
-      />
-
-      {/* VEHICLE DETAILS */}
-      <Text style={styles.heading}>{t("jobs.vehicleDetails")}</Text>
-
-      <RequiredLabel text={t("jobs.vehicleNumber")} />
-      <View onLayout={e => (vehicleNumberY.current = e.nativeEvent.layout.y)}>
-        <TextInput
-          ref={vehicleNumberRef}
-          onFocus={closeDropdowns}
-          style={[styles.input, submitted && !vehicleNumber.trim() && styles.inputError]}
-          value={vehicleNumber}
-          onChangeText={text => setVehicleNumber(text.toUpperCase())}
-        />
-        {submitted && !vehicleNumber.trim() && (
-          <Text style={styles.errorText}>{t("jobs.valErrVehNum")}</Text>
-        )}
-      </View>
-
-      <Text style={styles.label}>{t("jobs.vehicleBrand")}</Text>
-      <TextInput
-        onFocus={closeDropdowns}
-        style={styles.input}
-        value={vehicleBrand}
-        onChangeText={setVehicleBrand}
-      />
-
-      <RequiredLabel text={t("jobs.vehicleModel")} />
-      <View onLayout={e => (vehicleModelY.current = e.nativeEvent.layout.y)}>
-        <TextInput
-          ref={vehicleModelRef}
-          onFocus={closeDropdowns}
-          style={[styles.input, submitted && !vehicleModel.trim() && styles.inputError]}
-          value={vehicleModel}
-          onChangeText={setVehicleModel}
-        />
-        {submitted && !vehicleModel.trim() && (
-          <Text style={styles.errorText}>{t("jobs.valErrVehModel")}</Text>
-        )}
-      </View>
-
-      <Text style={styles.label}>{t("jobs.odometer")}</Text>
-      <TextInput
-        onFocus={closeDropdowns}
-        keyboardType="numeric"
-        maxLength={7}
-        style={styles.input}
-        value={odometer}
-        onChangeText={setOdometer}
-      />
-
-      <RequiredLabel text={t("jobs.vehicleType")} />
-      <View style={styles.typeRow}>
-        <TouchableOpacity
-          style={[styles.typeButton, vehicleType === t("jobs.twoWheeler") && styles.selectedType]}
-          onPress={() => setVehicleType(t("jobs.twoWheeler"))}
-        >
-          <Text>🏍 {t("jobs.twoWheeler")}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.typeButton, vehicleType === t("jobs.fourWheeler") && styles.selectedType]}
-          onPress={() => setVehicleType(t("jobs.fourWheeler"))}
-        >
-          <Text>🚗 {t("jobs.fourWheeler")}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* WORKER */}
-      <Text style={styles.heading}>{t("jobs.worker")}</Text>
-      <Text style={styles.label}>{t("jobs.assignWorker")}</Text>
-      <View style={[styles.inputWrapper, { zIndex: 10 }]}>
-        <TextInput
-          placeholder={t("jobs.selectWorker")}
-          style={styles.input}
-          value={workerName}
-          onFocus={() => {
-            setShowWorkerSuggestions(true)
-            setShowSuggestions(false)
-            setShowPaymentSuggestions(false)
-          }}
-          onChangeText={text => {
-            setWorkerName(text)
-            setShowWorkerSuggestions(true)
-          }}
-        />
-
-        {showWorkerSuggestions && (
-          <View style={styles.suggestionContainer}>
-            {searchedWorkers.map(worker => (
-              <TouchableOpacity
-                key={worker.workerId}
-                style={styles.workerSuggestion}
-                onPress={() => {
-                  setWorkerId(worker.workerId)
-                  setWorkerName(worker.name)
-                  setShowWorkerSuggestions(false)
-                }}
-              >
-                <View>
-                  <Text style={styles.cardTitle}>{worker.name}</Text>
-                  <Text style={styles.cardSubtitle}>{worker.role}</Text>
-                </View>
-                <Ionicons name="person-circle" size={26} color="#2563EB" />
-              </TouchableOpacity>
-            ))}
+    <View style={{ flex: 1, backgroundColor: "#F3F4F6" }}>
+      {/* STEP INDICATOR */}
+      <View style={styles.stepContainer}>
+        {[
+          { step: 1, label: t("jobs.stepCustomer") },
+          { step: 2, label: t("jobs.stepServices") },
+          { step: 3, label: t("jobs.stepBilling") }
+        ].map((item) => (
+          <View key={item.step} style={styles.stepItem}>
+            <View style={[styles.stepBadge, currentStep === item.step && styles.activeBadge, currentStep > item.step && styles.completedBadge]}>
+              <Text style={[styles.stepBadgeText, (currentStep >= item.step) && styles.activeBadgeText]}>
+                {currentStep > item.step ? "✓" : item.step}
+              </Text>
+            </View>
+            <Text style={[styles.stepLabel, currentStep === item.step && styles.activeStepLabel]}>{item.label}</Text>
           </View>
-        )}
-      </View>
-
-      {/* JOB DETAILS */}
-      <Text style={styles.heading}>{t("jobs.jobDetails")}</Text>
-      <Text style={styles.label}>{t("jobs.priority")}</Text>
-      <View style={styles.priorityRow}>
-        {[t("jobs.priorityLow"), t("jobs.priorityNormal"), t("jobs.priorityHigh")].map(item => (
-          <TouchableOpacity
-            key={item}
-            style={[styles.priorityButton, priority === item && styles.selectedPriority]}
-            onPress={() => setPriority(item)}
-          >
-            <Text style={{ fontWeight: "600", color: priority === item ? "white" : "#111827" }}>
-              {item}
-            </Text>
-          </TouchableOpacity>
         ))}
       </View>
 
-      <Text style={styles.label}>{t("jobs.expectedDelivery")}</Text>
-      <TouchableOpacity style={styles.input} onPress={() => setShowDatePicker(true)}>
-        <Text style={{ color: deliveryDate ? "#111827" : "#9CA3AF" }}>
-          {deliveryDate ? formatDate(deliveryDate) : t("jobs.deliveryDate")}
-        </Text>
-      </TouchableOpacity>
+      <ScrollView ref={scrollRef} style={styles.container} keyboardShouldPersistTaps="handled" onScrollBeginDrag={closeDropdowns}>
+        {/* STEP 1: CUSTOMER & VEHICLE */}
+        {currentStep === 1 && (
+          <>
+            <View style={styles.sectionCard}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="person-outline" size={20} color="#2563EB" />
+                <Text style={styles.sectionHeading}>{t("jobs.customerDetails")}</Text>
+              </View>
 
-      {/* SERVICES */}
-      <Text style={styles.heading}>{t("jobs.services")}</Text>
-      <RequiredLabel text={t("jobs.service")} />
-      <View style={[styles.inputWrapper, { zIndex: 10 }]}>
-        <TextInput
-          style={styles.input}
-          value={serviceName}
-          onFocus={() => {
-            setShowSuggestions(true)
-            setShowWorkerSuggestions(false)
-            setShowPaymentSuggestions(false)
-          }}
-          onChangeText={text => {
-            setServiceName(text)
-            setShowSuggestions(true)
-          }}
-        />
+              <RequiredLabel text={t("jobs.customerName")} />
+              <TextInput ref={customerNameRef} onFocus={closeDropdowns} style={[styles.input, submitted && !customerName.trim() && styles.inputError]} value={customerName} onChangeText={setCustomerName} />
 
-        {showSuggestions && searchedServices.length > 0 && (
-          <View style={styles.suggestionContainer}>
-            {searchedServices.map(service => (
-              <TouchableOpacity
-                key={service.serviceTypeId}
-                style={styles.suggestionItem}
-                onPress={() => {
-                  setServiceName(service.name)
-                  setServicePrice(String(service.defaultPrice))
-                  closeDropdowns()
-                }}
-              >
+              <RequiredLabel text={t("jobs.phoneNumber")} />
+              <TextInput ref={phoneRef} onFocus={closeDropdowns} keyboardType="phone-pad" maxLength={10} style={[styles.input, submitted && (phone.trim().length !== 10) && styles.inputError]} value={phone} onChangeText={setPhone} />
+
+              <Text style={styles.label}>{t("jobs.customerAddress")}</Text>
+              <TextInput onFocus={closeDropdowns} style={styles.input} value={customerAddress} onChangeText={setCustomerAddress} />
+            </View>
+
+            <View style={styles.sectionCard}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="car-outline" size={20} color="#2563EB" />
+                <Text style={styles.sectionHeading}>{t("jobs.vehicleDetails")}</Text>
+              </View>
+
+              <RequiredLabel text={t("jobs.vehicleNumber")} />
+              <TextInput ref={vehicleNumberRef} onFocus={closeDropdowns} style={[styles.input, submitted && !vehicleNumber.trim() && styles.inputError]} value={vehicleNumber} onChangeText={text => setVehicleNumber(text.toUpperCase())} />
+
+              <View style={styles.row}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>{service.name}</Text>
-                  <Text style={styles.cardSubtitle}>{service.category}</Text>
+                  <Text style={styles.label}>{t("jobs.vehicleBrand")}</Text>
+                  <TextInput onFocus={closeDropdowns} style={styles.input} value={vehicleBrand} onChangeText={setVehicleBrand} />
                 </View>
-                <Text style={styles.suggestionPrice}>₹ {service.defaultPrice}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-      </View>
-
-      <View style={styles.row}>
-        <View style={{ flex: 2 }}>
-          <Text style={styles.label}>{t("jobs.estimatePrice")}</Text>
-          <TextInput
-            onFocus={closeDropdowns}
-            keyboardType="numeric"
-            style={styles.input}
-            value={servicePrice}
-            onChangeText={setServicePrice}
-            placeholder={t("jobs.enterEstimate")}
-          />
-        </View>
-
-        <View style={{ flex: 1 }}>
-          <Text style={styles.label}>{t("jobs.quantity")}</Text>
-          <TextInput
-            onFocus={closeDropdowns}
-            keyboardType="numeric"
-            style={styles.input}
-            value={serviceQty}
-            onChangeText={setServiceQty}
-          />
-        </View>
-      </View>
-
-      <TouchableOpacity style={styles.addServiceBtn} onPress={addCurrentService}>
-        <Text style={styles.addServiceText}>{t("jobs.addService")}</Text>
-      </TouchableOpacity>
-
-      {/* SELECTED SERVICES */}
-      <Text style={styles.heading}>{t("jobs.selectedServices")}</Text>
-
-      {selectedServices.length === 0 ? (
-        <View style={styles.emptyCard}>
-          <Text style={[styles.emptyText, submitted && { color: "#DC2626", fontWeight: "600" }]}>
-            {t("jobs.atLeastOneService")}
-          </Text>
-        </View>
-      ) : (
-        selectedServices.map((service, index) => (
-          <View key={index} style={styles.selectedServiceCard}>
-            <View style={styles.selectedHeader}>
-              <Text style={styles.cardTitle}>{service.name}</Text>
-              <TouchableOpacity onPress={() => removeService(index)}>
-                <Ionicons name="trash-outline" size={22} color="#DC2626" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.row}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.smallLabel}>{t("jobs.quantity")}</Text>
-                <TextInput
-                  onFocus={closeDropdowns}
-                  style={styles.smallInput}
-                  keyboardType="numeric"
-                  value={String(service.quantity)}
-                  onChangeText={text => updateService(index, "quantity", Number(text) || 1)}
-                />
+                <View style={{ flex: 1 }}>
+                  <RequiredLabel text={t("jobs.vehicleModel")} />
+                  <TextInput ref={vehicleModelRef} onFocus={closeDropdowns} style={[styles.input, submitted && !vehicleModel.trim() && styles.inputError]} value={vehicleModel} onChangeText={setVehicleModel} />
+                </View>
               </View>
 
-              <View style={{ flex: 1 }}>
-                <Text style={styles.smallLabel}>{t("jobs.estimatePrice")}</Text>
-                <TextInput
-                  onFocus={closeDropdowns}
-                  style={styles.smallInput}
-                  keyboardType="numeric"
-                  value={String(service.estimatedPrice)}
-                  onChangeText={text => updateService(index, "estimatedPrice", Number(text) || 0)}
-                />
+              <Text style={styles.label}>{t("jobs.odometer")}</Text>
+              <TextInput onFocus={closeDropdowns} keyboardType="numeric" maxLength={7} style={styles.input} value={odometer} onChangeText={setOdometer} />
+
+              <RequiredLabel text={t("jobs.vehicleType")} />
+              <View style={styles.typeRow}>
+                <TouchableOpacity style={[styles.typeButton, vehicleType === t("jobs.twoWheeler") && styles.selectedType]} onPress={() => setVehicleType(t("jobs.twoWheeler"))}>
+                  <Text style={[styles.typeButtonText, vehicleType === t("jobs.twoWheeler") && styles.selectedTypeButtonText]}>🏍 {t("jobs.twoWheeler")}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.typeButton, vehicleType === t("jobs.fourWheeler") && styles.selectedType]} onPress={() => setVehicleType(t("jobs.fourWheeler"))}>
+                  <Text style={[styles.typeButtonText, vehicleType === t("jobs.fourWheeler") && styles.selectedTypeButtonText]}>🚗 {t("jobs.fourWheeler")}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </>
+        )}
+
+        {/* STEP 2: WORKER, SERVICES & PARTS */}
+        {currentStep === 2 && (
+          <>
+            <View style={styles.sectionCard}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="people-outline" size={20} color="#2563EB" />
+                <Text style={styles.sectionHeading}>{t("jobs.workerAndAssignment")}</Text>
+              </View>
+
+              <Text style={styles.label}>{t("jobs.assignWorker")}</Text>
+              <View style={[styles.inputWrapper, { zIndex: 10 }]}>
+                <TextInput style={styles.input} value={workerName} onFocus={() => setShowWorkerSuggestions(true)} onChangeText={text => { setWorkerName(text); setShowWorkerSuggestions(true) }} />
+                {showWorkerSuggestions && (
+                  <View style={styles.suggestionContainer}>
+                    {searchedWorkers.map(w => (
+                      <TouchableOpacity key={w.workerId || w._id} style={styles.workerSuggestion} onPress={() => { setWorkerId(w.workerId || w._id); setWorkerName(w.name); setShowWorkerSuggestions(false) }}>
+                        <Text style={styles.cardTitle}>{w.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              <Text style={styles.label}>{t("jobs.priority")}</Text>
+              <View style={styles.priorityRow}>
+                {[t("jobs.priorityLow"), t("jobs.priorityNormal"), t("jobs.priorityHigh")].map(item => (
+                  <TouchableOpacity key={item} style={[styles.priorityButton, priority === item && styles.selectedPriority]} onPress={() => setPriority(item)}>
+                    <Text style={{ fontWeight: "600", color: priority === item ? "white" : "#374151" }}>{item}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             </View>
 
-            <View style={styles.totalRow}>
-              <Text style={styles.totalServiceText}>{t("jobs.subtotal")}</Text>
-              <Text style={styles.totalServicePrice}>
-                ₹ {Number(service.quantity) * Number(service.estimatedPrice)}
-              </Text>
+            {/* SERVICES */}
+            <View style={styles.sectionCard}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="construct-outline" size={20} color="#2563EB" />
+                <Text style={styles.sectionHeading}>{t("jobs.services")}</Text>
+              </View>
+
+              <View style={styles.row}>
+                <View style={{ flex: 2 }}>
+                  <Text style={styles.label}>{t("jobs.service")}</Text>
+                  <TextInput style={styles.input} value={serviceName} onFocus={() => setShowSuggestions(true)} onChangeText={text => { setServiceName(text); setShowSuggestions(true) }} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>{t("jobs.estimatePrice")}</Text>
+                  <TextInput keyboardType="numeric" style={styles.input} value={servicePrice} onChangeText={setServicePrice} />
+                </View>
+              </View>
+
+              <TouchableOpacity style={styles.addServiceBtn} onPress={addCurrentService}>
+                <Ionicons name="add-circle-outline" size={18} color="#FFF" style={{ marginRight: 6 }} />
+                <Text style={styles.addServiceText}>{t("jobs.addService")}</Text>
+              </TouchableOpacity>
+
+              {selectedServices.map((service, index) => (
+                <View key={index} style={styles.selectedServiceCard}>
+                  <View style={styles.selectedHeader}>
+                    <Text style={styles.cardTitle}>{service.name}</Text>
+                    <TouchableOpacity onPress={() => removeService(index)}><Ionicons name="trash-outline" size={20} color="#DC2626" /></TouchableOpacity>
+                  </View>
+                  <View style={styles.rowAlign}>
+                    <Text style={styles.smallLabel}>Cost (₹):</Text>
+                    <TextInput style={styles.inlinePriceInput} keyboardType="numeric" value={String(service.estimatedPrice)} onChangeText={text => updateServicePrice(index, text)} />
+                  </View>
+                </View>
+              ))}
             </View>
-          </View>
-        ))
-      )}
 
-      {/* LABOR & DISCOUNT BILLING SECTION */}
-      <Text style={styles.heading}>{t("jobs.laborAndAdditionalCharges")}</Text>
-      
-      <View style={styles.row}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.label}>{t("jobs.laborCharge")}</Text>
-          <TextInput
-            onFocus={closeDropdowns}
-            keyboardType="numeric"
-            style={[styles.input, submitted && isLaborInvalid && styles.inputError]}
-            value={laborCost}
-            onChangeText={setLaborCost}
-            placeholder="0"
-          />
-          {submitted && isLaborInvalid && (
-            <Text style={styles.errorText}>{t("jobs.errNonNegativeLabor")}</Text>
-          )}
-        </View>
+            {/* SPARE PARTS */}
+            <View style={styles.sectionCard}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="cube-outline" size={20} color="#2563EB" />
+                <Text style={styles.sectionHeading}>{t("jobs.sparePartsAndInventory")}</Text>
+              </View>
 
-        <View style={{ flex: 1 }}>
-          <Text style={styles.label}>{t("jobs.discountPercent")}</Text>
-          <TextInput
-            onFocus={closeDropdowns}
-            keyboardType="numeric"
-            style={[styles.input, submitted && isDiscountInvalid && styles.inputError]}
-            value={discount}
-            onChangeText={setDiscount}
-            placeholder="0"
-          />
-          {submitted && isDiscountInvalid && (
-            <Text style={styles.errorText}>{t("jobs.errValidDiscount")}</Text>
-          )}
-        </View>
-      </View>
+              <Text style={styles.label}>{t("jobs.partName")}</Text>
+              <TextInput style={styles.input} value={partName} onChangeText={setPartName} />
 
-      {/* GRAND TOTAL SUMMARY CARD */}
-      <View style={styles.totalCard}>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>{t("jobs.servicesSubtotal")}</Text>
-          <Text style={styles.summaryValue}>₹ {servicesSubtotal}</Text>
-        </View>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>{t("jobs.laborFee")}</Text>
-          <Text style={styles.summaryValue}>+ ₹ {parsedLabor}</Text>
-        </View>
-        {parsedDiscount > 0 && (
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>{t("jobs.discountLabel")} ({parsedDiscount}%):</Text>
-            <Text style={[styles.summaryValue, { color: "#059669" }]}>- ₹ {discountAmount.toFixed(2)}</Text>
-          </View>
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>{t("jobs.quantity")}</Text>
+                  <TextInput keyboardType="numeric" style={styles.input} value={partQty} onChangeText={setPartQty} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>{t("jobs.unitPrice")}</Text>
+                  <TextInput keyboardType="numeric" style={styles.input} value={partPrice} onChangeText={setPartPrice} />
+                </View>
+              </View>
+
+              <TouchableOpacity style={styles.addServiceBtn} onPress={addCurrentPart}>
+                <Ionicons name="add-circle-outline" size={18} color="#FFF" style={{ marginRight: 6 }} />
+                <Text style={styles.addServiceText}>{t("jobs.addPart")}</Text>
+              </TouchableOpacity>
+
+              {selectedParts.map((part, index) => (
+                <View key={index} style={styles.selectedServiceCard}>
+                  <View style={styles.selectedHeader}>
+                    <Text style={styles.cardTitle}>{part.name}</Text>
+                    <TouchableOpacity onPress={() => removePart(index)}><Ionicons name="trash-outline" size={20} color="#DC2626" /></TouchableOpacity>
+                  </View>
+                  <View style={styles.totalRow}>
+                    <Text style={styles.totalServiceText}>{part.quantity} x ₹{part.unitPrice}</Text>
+                    <Text style={styles.totalServicePrice}>₹ {part.totalPrice}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </>
         )}
-        <View style={styles.divider} />
-        <View style={styles.summaryRow}>
-          <Text style={styles.totalLabel}>{t("jobs.estimatedBill")}</Text>
-          <Text style={styles.totalAmount}>₹ {grandTotal.toFixed(2)}</Text>
-        </View>
-      </View>
 
-      {/* NOTES & COMPLAINTS */}
-      <Text style={styles.heading}>{t("jobs.customerComplaint")}</Text>
-      <TextInput
-        onFocus={closeDropdowns}
-        multiline
-        style={styles.notes}
-        value={complaint}
-        onChangeText={setComplaint}
-      />
+        {/* STEP 3: BILLING & NOTES */}
+        {currentStep === 3 && (
+          <>
+            <View style={styles.sectionCard}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="receipt-outline" size={20} color="#2563EB" />
+                <Text style={styles.sectionHeading}>{t("jobs.laborAndAdditionalCharges")}</Text>
+              </View>
 
-      <Text style={styles.heading}>{t("jobs.inspectionNotes")}</Text>
-      <TextInput
-        onFocus={closeDropdowns}
-        multiline
-        style={styles.notes}
-        value={inspectionNotes}
-        onChangeText={setInspectionNotes}
-      />
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>{t("jobs.laborCharge")}</Text>
+                  <TextInput keyboardType="numeric" style={styles.input} value={laborCost} onChangeText={setLaborCost} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>{t("jobs.discountPercent")}</Text>
+                  <TextInput keyboardType="numeric" style={styles.input} value={discount} onChangeText={setDiscount} />
+                </View>
+              </View>
 
-      {/* DATE & TIME PICKERS */}
-      {showDatePicker && (
-        <DateTimePicker
-          value={deliveryDate || new Date()}
-          mode="date"
-          minimumDate={new Date()}
-          display="default"
-          onChange={onDateChange}
-        />
-      )}
+              <View style={styles.totalCard}>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>{t("jobs.servicesSubtotal")}</Text>
+                  <Text style={styles.summaryValue}>₹ {servicesSubtotal.toFixed(2)}</Text>
+                </View>
+                
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>{t("jobs.partsSubtotal")}</Text>
+                  <Text style={styles.summaryValue}>+ ₹ {partsSubtotal.toFixed(2)}</Text>
+                </View>
 
-      {showTimePicker && (
-        <DateTimePicker
-          value={deliveryDate || new Date()}
-          mode="time"
-          display="default"
-          onChange={onTimeChange}
-        />
-      )}
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>{t("jobs.laborFee")}</Text>
+                  <Text style={styles.summaryValue}>+ ₹ {parsedLabor.toFixed(2)}</Text>
+                </View>
 
-      {/* CREATE JOB BUTTON */}
-      <TouchableOpacity
-        style={[
-          styles.saveBtn,
-          (hasReachedJobLimit || planUsageError) && { backgroundColor: "#9CA3AF" }
-        ]}
-        disabled={saving || planUsageLoading || hasReachedJobLimit || planUsageError}
-        onPress={saveJob}
-      >
-        {saving || planUsageLoading ? (
-          <ActivityIndicator color="white" />
-        ) : hasReachedJobLimit ? (
-          <Text style={styles.saveText}>{t("jobs.jobLimitReachedBtn")}</Text>
-        ) : planUsageError ? (
-          <Text style={styles.saveText}>{t("jobs.unableToVerifyBtn")}</Text>
+                {parsedDiscount > 0 && (
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { color: "#DC2626" }]}>
+                      Discount {discountType === "percentage" ? `(${parsedDiscount}%)` : ""}
+                    </Text>
+                    <Text style={[styles.summaryValue, { color: "#DC2626" }]}>
+                      - ₹ {discountAmount.toFixed(2)}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.divider} />
+
+                <View style={styles.summaryRow}>
+                  <Text style={styles.totalLabel}>{t("jobs.estimatedBill")}</Text>
+                  <Text style={styles.totalAmount}>₹ {grandTotal.toFixed(2)}</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.sectionCard}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="document-text-outline" size={20} color="#2563EB" />
+                <Text style={styles.sectionHeading}>{t("jobs.customerComplaint")}</Text>
+              </View>
+              <TextInput multiline style={styles.notes} value={complaint} onChangeText={setComplaint} />
+
+              <Text style={[styles.sectionHeading, { fontSize: 15, marginTop: 16 }]}>{t("jobs.inspectionNotes")}</Text>
+              <TextInput multiline style={styles.notes} value={inspectionNotes} onChangeText={setInspectionNotes} />
+            </View>
+          </>
+        )}
+
+        <View style={{ height: 100 }} />
+      </ScrollView>
+
+      {/* FOOTER BUTTONS */}
+      <View style={styles.footerBar}>
+        {currentStep > 1 && (
+          <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
+            <Text style={styles.backBtnText}>{t("jobs.btnBack")}</Text>
+          </TouchableOpacity>
+        )}
+
+        {currentStep < 3 ? (
+          <TouchableOpacity style={styles.nextBtn} onPress={handleNext}>
+            <Text style={styles.nextBtnText}>{t("jobs.btnNext")}</Text>
+          </TouchableOpacity>
         ) : (
-          <Text style={styles.saveText}>{t("jobs.createJob")}</Text>
+          <TouchableOpacity style={[styles.saveBtn, hasReachedJobLimit && { backgroundColor: "#9CA3AF" }]} disabled={saving || hasReachedJobLimit} onPress={saveJob}>
+            {saving ? <ActivityIndicator color="white" /> : <Text style={styles.saveText}>{t("jobs.createJob")}</Text>}
+          </TouchableOpacity>
         )}
-      </TouchableOpacity>
-
-      <View style={{ height: 60 }} />
-    </ScrollView>
+      </View>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: "#F9FAFB" },
+  container: { flex: 1, padding: 16 },
   loader: { flex: 1, justifyContent: "center", alignItems: "center" },
-  heading: { fontSize: 18, fontWeight: "700", marginVertical: 12, color: "#111827" },
-  label: { fontSize: 14, fontWeight: "600", color: "#374151", marginBottom: 6 },
-  smallLabel: { fontSize: 12, color: "#6B7280", marginBottom: 4 },
-  input: { backgroundColor: "white", borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 10, padding: 12, marginBottom: 12 },
-  smallInput: { backgroundColor: "#F3F4F6", borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 8, padding: 8 },
-  inputError: { borderColor: "#EF4444", backgroundColor: "#FEF2F2" },
-  errorText: { color: "#DC2626", fontSize: 12, marginTop: -8, marginBottom: 8, marginLeft: 4 },
-  row: { flexDirection: "row", gap: 12 },
-  typeRow: { flexDirection: "row", gap: 12, marginBottom: 12 },
-  typeButton: { flex: 1, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: "#E5E7EB", alignItems: "center", backgroundColor: "white" },
-  selectedType: { backgroundColor: "#DBEAFE", borderColor: "#2563EB" },
-  inputWrapper: { position: "relative", marginBottom: 8 },
-  suggestionContainer: { backgroundColor: "white", borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 10, position: "absolute", top: 72, left: 0, right: 0, zIndex: 1000, elevation: 10, maxHeight: 200, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8 },
-  suggestionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: "#F3F4F6", flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  workerSuggestion: { padding: 12, borderBottomWidth: 1, borderBottomColor: "#F3F4F6", flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  cardTitle: { fontWeight: "600", color: "#111827" },
-  cardSubtitle: { fontSize: 12, color: "#6B7280" },
-  suggestionPrice: { fontWeight: "700", color: "#059669" },
+  stepContainer: { flexDirection: "row", justifyContent: "space-between", backgroundColor: "#FFF", padding: 14, borderBottomWidth: 1, borderColor: "#E5E7EB" },
+  stepItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+  stepBadge: { width: 24, height: 24, borderRadius: 12, backgroundColor: "#E5E7EB", justifyContent: "center", alignItems: "center" },
+  activeBadge: { backgroundColor: "#2563EB" },
+  completedBadge: { backgroundColor: "#059669" },
+  stepBadgeText: { fontSize: 12, fontWeight: "700", color: "#4B5563" },
+  activeBadgeText: { color: "#FFF" },
+  stepLabel: { fontSize: 12, fontWeight: "500", color: "#6B7280" },
+  activeStepLabel: { color: "#111827", fontWeight: "700" },
+  sectionCard: { backgroundColor: "#FFFFFF", borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: "#E5E7EB" },
+  sectionHeader: { flexDirection: "row", alignItems: "center", marginBottom: 14, borderBottomWidth: 1, borderBottomColor: "#F3F4F6", paddingBottom: 8 },
+  sectionHeading: { fontSize: 16, fontWeight: "700", color: "#1F2937", marginLeft: 8 },
+  label: { fontSize: 13, fontWeight: "600", color: "#374151", marginBottom: 6 },
+  input: { borderWidth: 1, borderColor: "#D1D5DB", backgroundColor: "#FFFFFF", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, marginBottom: 12, color: "#111827" },
+  inputError: { borderColor: "#DC2626" },
+  row: { flexDirection: "row", gap: 10 },
+  typeRow: { flexDirection: "row", gap: 10, marginBottom: 12 },
+  typeButton: { flex: 1, padding: 12, borderWidth: 1, borderColor: "#D1D5DB", borderRadius: 8, alignItems: "center", backgroundColor: "#FFF" },
+  selectedType: { backgroundColor: "#EFF6FF", borderColor: "#2563EB" },
+  typeButtonText: { fontWeight: "500", color: "#374151" },
+  selectedTypeButtonText: { color: "#2563EB", fontWeight: "700" },
   priorityRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
-  priorityButton: { flex: 1, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: "#E5E7EB", alignItems: "center", backgroundColor: "white" },
+  priorityButton: { flex: 1, padding: 10, borderWidth: 1, borderColor: "#D1D5DB", borderRadius: 8, alignItems: "center" },
   selectedPriority: { backgroundColor: "#2563EB", borderColor: "#2563EB" },
-  addServiceBtn: { backgroundColor: "#2563EB", padding: 12, borderRadius: 10, alignItems: "center", marginVertical: 12 },
-  addServiceText: { color: "white", fontWeight: "600" },
-  emptyCard: { padding: 16, backgroundColor: "#F3F4F6", borderRadius: 10, alignItems: "center", marginBottom: 12 },
-  emptyText: { color: "#6B7280" },
-  selectedServiceCard: { backgroundColor: "white", padding: 12, borderRadius: 10, borderBottomWidth: 1, borderColor: "#E5E7EB", marginBottom: 12 },
-  selectedHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
-  totalRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 8 },
-  totalServiceText: { fontSize: 12, color: "#6B7280" },
-  totalServicePrice: { fontWeight: "600", color: "#111827" },
-  totalCard: { backgroundColor: "#1E293B", padding: 16, borderRadius: 12, marginVertical: 12 },
-  summaryRow: { flexDirection: "row", justifyContent: "space-between", marginVertical: 2 },
-  summaryLabel: { color: "#94A3B8", fontSize: 14 },
-  summaryValue: { color: "white", fontSize: 14, fontWeight: "600" },
-  divider: { height: 1, backgroundColor: "#334155", marginVertical: 8 },
-  totalLabel: { color: "white", fontSize: 16, fontWeight: "600" },
-  totalAmount: { color: "#38BDF8", fontSize: 20, fontWeight: "700" },
-  notes: { backgroundColor: "white", borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 10, padding: 12, height: 80, textAlignVertical: "top", marginBottom: 12 },
-  saveBtn: { backgroundColor: "#2563EB", padding: 16, borderRadius: 12, alignItems: "center", marginTop: 24, zIndex: 1, elevation: 1 },
-  saveText: { color: "white", fontSize: 16, fontWeight: "700" }
+  inputWrapper: { position: "relative" },
+  suggestionContainer: { position: "absolute", top: 50, left: 0, right: 0, backgroundColor: "#FFF", borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 8, zIndex: 100 },
+  workerSuggestion: { padding: 12, borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
+  cardTitle: { fontSize: 14, fontWeight: "600", color: "#111827" },
+  addServiceBtn: { flexDirection: "row", backgroundColor: "#2563EB", padding: 12, borderRadius: 8, alignItems: "center", justifyContent: "center", marginVertical: 4 },
+  addServiceText: { color: "#FFF", fontWeight: "600", fontSize: 14 },
+  selectedServiceCard: { backgroundColor: "#F9FAFB", padding: 12, borderRadius: 8, borderWidth: 1, borderColor: "#E5E7EB", marginBottom: 8 },
+  selectedHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  rowAlign: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 },
+  smallLabel: { fontSize: 13, color: "#4B5563" },
+  inlinePriceInput: { borderWidth: 1, borderColor: "#D1D5DB", backgroundColor: "#FFF", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, fontSize: 13, minWidth: 80, textAlign: "right" },
+  totalRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: "#E5E7EB" },
+  totalServiceText: { fontWeight: "500", color: "#4B5563", fontSize: 13 },
+  totalServicePrice: { fontWeight: "700", color: "#111827", fontSize: 13 },
+  totalCard: { backgroundColor: "#F9FAFB", padding: 14, borderRadius: 8, borderWidth: 1, borderColor: "#E5E7EB", marginTop: 12 },
+  summaryRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
+  summaryLabel: { color: "#4B5563", fontSize: 13 },
+  summaryValue: { color: "#111827", fontWeight: "600", fontSize: 13 },
+  divider: { height: 1, backgroundColor: "#E5E7EB", marginVertical: 8 },
+  totalLabel: { fontSize: 15, fontWeight: "700", color: "#111827" },
+  totalAmount: { fontSize: 17, fontWeight: "700", color: "#2563EB" },
+  notes: { borderWidth: 1, borderColor: "#D1D5DB", backgroundColor: "#FFF", borderRadius: 8, padding: 10, height: 70, textAlignVertical: "top", fontSize: 14 },
+  footerBar: { flexDirection: "row", padding: 16, backgroundColor: "#FFF", borderTopWidth: 1, borderColor: "#E5E7EB", gap: 12 },
+  backBtn: { flex: 1, padding: 14, borderRadius: 8, borderWidth: 1, borderColor: "#D1D5DB", alignItems: "center" },
+  backBtnText: { color: "#374151", fontWeight: "600", fontSize: 15 },
+  nextBtn: { flex: 2, padding: 14, borderRadius: 8, backgroundColor: "#2563EB", alignItems: "center" },
+  nextBtnText: { color: "#FFF", fontWeight: "700", fontSize: 15 },
+  saveBtn: { flex: 2, backgroundColor: "#059669", padding: 14, borderRadius: 8, alignItems: "center" },
+  saveText: { color: "#FFF", fontWeight: "700", fontSize: 15 }
 })
