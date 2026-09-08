@@ -444,6 +444,47 @@ export default function AddJobScreen({ navigation }: any) {
                   </TouchableOpacity>
                 ))}
               </View>
+
+              <Text style={styles.label}>{t("jobs.deliveryDate")}</Text>
+              <TouchableOpacity 
+                style={styles.input} 
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Text style={{ color: deliveryDate ? "#000" : "#9CA3AF" }}>
+                  {deliveryDate ? deliveryDate.toLocaleString() : "Select Delivery Date & Time"}
+                </Text>
+              </TouchableOpacity>
+              {showDatePicker && (
+                <DateTimePicker
+                  value={deliveryDate || new Date()}
+                  mode="date"
+                  display="default"
+                  onChange={(event, selectedDate) => {
+                    setShowDatePicker(false);
+                    if (selectedDate) {
+                      setDeliveryDate(selectedDate);
+                      setShowTimePicker(true); // Trigger time picker after date selection
+                    }
+                  }}
+                />
+              )}
+
+              {showTimePicker && (
+                <DateTimePicker
+                  value={deliveryDate || new Date()}
+                  mode="time"
+                  display="default"
+                  onChange={(event, selectedTime) => {
+                    setShowTimePicker(false);
+                    if (selectedTime && deliveryDate) {
+                      const updatedDate = new Date(deliveryDate);
+                      updatedDate.setHours(selectedTime.getHours());
+                      updatedDate.setMinutes(selectedTime.getMinutes());
+                      setDeliveryDate(updatedDate);
+                    }
+                  }}
+                />
+              )}
             </View>
 
             {/* SERVICES */}

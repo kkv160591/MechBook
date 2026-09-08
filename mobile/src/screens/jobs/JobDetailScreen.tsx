@@ -128,7 +128,7 @@ export default function JobDetailScreen({ route, navigation }: any) {
   /* Services Calculations */
   const servicesEstimatedSubtotal = (job.services || []).reduce(
     (sum: number, item: any) => {
-      const quantity = Number(item.quantity || 0)
+      const quantity = Number(item.quantity ?? 1)
       const estimatedPrice = Number(item.estimatedPrice || 0)
       return sum + estimatedPrice * quantity
     },
@@ -137,7 +137,7 @@ export default function JobDetailScreen({ route, navigation }: any) {
 
   const servicesActualSubtotal = (job.services || []).reduce(
     (sum: number, item: any) => {
-      const quantity = Number(item.quantity || 0)
+      const quantity = Number(item.quantity ?? 1)
       const estimatedPrice = Number(item.estimatedPrice || 0)
       const actualPrice =
         item.actualPrice !== null &&
@@ -151,21 +151,49 @@ export default function JobDetailScreen({ route, navigation }: any) {
     0
   )
 
+  /* Parts Calculations */
+  const partsEstimatedSubtotal = (job.parts || []).reduce(
+    (sum: number, item: any) => {
+      const quantity = Number(item.quantity || 1)
+      const estimatedUnitPrice = Number(item.estimatedUnitPrice || item.price || item.unitPrice || 0)
+      return sum + estimatedUnitPrice * quantity
+    },
+    0
+  )
+
+  const partsActualSubtotal = (job.parts || []).reduce(
+    (sum: number, item: any) => {
+      if (item.totalPrice !== undefined && item.totalPrice !== null) {
+        return sum + Number(item.totalPrice)
+      }
+      const quantity = Number(item.quantity || 1)
+      const actualUnitPrice = Number(
+        item.actualUnitPrice !== undefined && item.actualUnitPrice !== null
+          ? item.actualUnitPrice
+          : item.estimatedUnitPrice || 0
+      )
+      return sum + actualUnitPrice * quantity
+    },
+    0
+  )
+
   /* Labor & Discount Calculations */
   const laborCost = Number(job.laborCost || 0)
   const discountPercent = Number(job.discount || 0)
 
   // Estimated Grand Total
-  const rawEstimatedTotal = servicesEstimatedSubtotal + laborCost
+  const rawEstimatedTotal = servicesEstimatedSubtotal + partsEstimatedSubtotal + laborCost
   const estimatedDiscountAmount = (rawEstimatedTotal * Math.min(discountPercent, 100)) / 100
   const estimatedGrandTotal = Math.max(0, rawEstimatedTotal - estimatedDiscountAmount)
 
-  // Actual / Current Grand Total
-  const rawActualTotal = servicesActualSubtotal + laborCost
+  // Actual Grand Total
+  const rawActualTotal = servicesActualSubtotal + partsActualSubtotal + laborCost
   const actualDiscountAmount = (rawActualTotal * Math.min(discountPercent, 100)) / 100
-  const actualGrandTotal = job.totalAmount !== undefined && job.totalAmount !== null
+  const calculatedActualTotal = Math.max(0, rawActualTotal - actualDiscountAmount)
+
+  const actualGrandTotal = job.totalAmount !== undefined && job.totalAmount !== null && Number(job.totalAmount) > 0
     ? Number(job.totalAmount)
-    : Math.max(0, rawActualTotal - actualDiscountAmount)
+    : calculatedActualTotal
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -259,7 +287,7 @@ export default function JobDetailScreen({ route, navigation }: any) {
 
         <View style={styles.detailRow}>
           <Text style={styles.label}>{t("jobs.assignedWorker")}</Text>
-          <Text style={styles.value}>{assignedWorker?.name || "-"}</Text>
+          <Text style={styles.value}>{job.workerName || assignedWorker?.name || "-"}</Text>
         </View>
 
         <View style={styles.detailRow}>
@@ -291,37 +319,82 @@ export default function JobDetailScreen({ route, navigation }: any) {
       <View style={styles.card}>
         <Text style={styles.cardSectionTitle}>{t("jobs.services")}</Text>
 
-        {(job.services || []).map((service: any, index: number) => {
-          const quantity = Number(service.quantity || 0)
-          const estimatedPrice = Number(service.estimatedPrice || 0)
-          const actualPrice =
-            service.actualPrice !== null &&
-            service.actualPrice !== undefined &&
-            service.actualPrice !== ""
-              ? Number(service.actualPrice)
-              : estimatedPrice
+        {(job.services || []).length === 0 ? (
+          <Text style={{ color: "#9CA3AF" }}>No services added</Text>
+        ) : (
+          (job.services || []).map((service: any, index: number) => {
+            const quantity = Number(service.quantity ?? 1)
+            const estimatedPrice = Number(service.estimatedPrice || 0)
+            const actualPrice =
+              service.actualPrice !== null &&
+              service.actualPrice !== undefined &&
+              service.actualPrice !== ""
+                ? Number(service.actualPrice)
+                : estimatedPrice
 
-          return (
-            <View key={index} style={styles.serviceCard}>
-              <View style={styles.serviceHeader}>
-                <Text style={styles.serviceName}>{service.name}</Text>
-                <Text style={styles.serviceQty}>
-                  {t("jobs.qty")}: {quantity}
-                </Text>
-              </View>
+            return (
+              <View key={index} style={styles.serviceCard}>
+                <View style={styles.serviceHeader}>
+                  <Text style={styles.serviceName}>{service.name}</Text>
+                  <Text style={styles.serviceQty}>
+                    {t("jobs.qty")}: {quantity}
+                  </Text>
+                </View>
 
-              <View style={styles.priceRow}>
-                <Text style={styles.priceLabel}>{t("jobs.estimatedPrice")}</Text>
-                <Text style={styles.estimatedPrice}>₹{estimatedPrice * quantity}</Text>
-              </View>
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>{t("jobs.estimatedPrice")}</Text>
+                  <Text style={styles.estimatedPrice}>₹{estimatedPrice * quantity}</Text>
+                </View>
 
-              <View style={styles.priceRow}>
-                <Text style={styles.priceLabel}>{t("jobs.actualPrice")}</Text>
-                <Text style={styles.actualPrice}>₹{actualPrice * quantity}</Text>
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>{t("jobs.actualPrice")}</Text>
+                  <Text style={styles.actualPrice}>₹{actualPrice * quantity}</Text>
+                </View>
               </View>
-            </View>
-          )
-        })}
+            )
+          })
+        )}
+      </View>
+
+      {/* PARTS */}
+      <View style={styles.card}>
+        <Text style={styles.cardSectionTitle}>{t("jobs.sparePartsAndInventory") || "Parts"}</Text>
+
+        {(job.parts || []).length === 0 ? (
+          <Text style={{ color: "#9CA3AF" }}>No parts added</Text>
+        ) : (
+          (job.parts || []).map((part: any, index: number) => {
+            const quantity = Number(part.quantity || 1)
+            const estimatedUnitPrice = Number(part.estimatedUnitPrice || part.price || part.unitPrice || 0)
+            const actualUnitPrice = Number(
+              part.actualUnitPrice !== undefined && part.actualUnitPrice !== null
+                ? part.actualUnitPrice
+                : estimatedUnitPrice
+            )
+            const itemTotal = part.totalPrice ? Number(part.totalPrice) : quantity * actualUnitPrice
+
+            return (
+              <View key={index} style={styles.serviceCard}>
+                <View style={styles.serviceHeader}>
+                  <Text style={styles.serviceName}>{part.name}</Text>
+                  <Text style={styles.serviceQty}>
+                    {t("jobs.qty")}: {quantity}
+                  </Text>
+                </View>
+
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>{t("jobs.estimatedPrice")}</Text>
+                  <Text style={styles.estimatedPrice}>₹{estimatedUnitPrice * quantity}</Text>
+                </View>
+
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>{t("jobs.actualPrice")}</Text>
+                  <Text style={styles.actualPrice}>₹{itemTotal}</Text>
+                </View>
+              </View>
+            )
+          })
+        )}
       </View>
 
       {/* BILLING SUMMARY CARD */}
@@ -331,6 +404,11 @@ export default function JobDetailScreen({ route, navigation }: any) {
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>{t("jobs.servicesSubtotal")}</Text>
           <Text style={styles.summaryValue}>₹{servicesActualSubtotal}</Text>
+        </View>
+
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>{t("jobs.partsSubtotal") || "Parts Subtotal"}</Text>
+          <Text style={styles.summaryValue}>₹{partsActualSubtotal}</Text>
         </View>
 
         <View style={styles.summaryRow}>

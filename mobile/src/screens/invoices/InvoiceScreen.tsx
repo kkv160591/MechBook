@@ -44,7 +44,7 @@ export default function InvoiceScreen({ navigation }: any) {
         getGarageProfile(),
         getGSTSettings(),
         getInvoiceSettings(),
-        getWorkers(),
+        getWorkers()
       ])
 
       setJob(jobRes.job)
@@ -67,11 +67,11 @@ export default function InvoiceScreen({ navigation }: any) {
     )
   }, [job, workers])
 
-  // 1. Calculate Services/Parts Subtotal
-  const partsTotal = useMemo(() => {
+  // 1. Calculate Services Subtotal
+  const servicesTotal = useMemo(() => {
     if (!job?.services) return 0
     return job.services.reduce((sum: number, item: any) => {
-      const quantity = Number(item.quantity || 0)
+      const quantity = Number(item.quantity ?? 1)
       const estimatedPrice = Number(item.estimatedPrice || 0)
       const actualPrice =
         item.actualPrice !== null &&
@@ -84,13 +84,31 @@ export default function InvoiceScreen({ navigation }: any) {
     }, 0)
   }, [job])
 
-  // 2. Labor Cost
+  // 2. Calculate Parts Subtotal
+  const partsTotal = useMemo(() => {
+    if (!job?.parts) return 0
+    return job.parts.reduce((sum: number, item: any) => {
+      if (item.totalPrice !== undefined && item.totalPrice !== null) {
+        return sum + Number(item.totalPrice)
+      }
+      const quantity = Number(item.quantity || 1)
+      const estimatedUnitPrice = Number(item.estimatedUnitPrice || item.price || item.unitPrice || 0)
+      const actualUnitPrice = Number(
+        item.actualUnitPrice !== undefined && item.actualUnitPrice !== null
+          ? item.actualUnitPrice
+          : estimatedUnitPrice
+      )
+      return sum + actualUnitPrice * quantity
+    }, 0)
+  }, [job])
+
+  // 3. Labor Cost
   const laborFee = Number(job?.laborCost ?? invoiceSettings?.defaultLaborCost ?? 0)
 
-  // 3. Raw Subtotal before Discount & GST
-  const subTotal = partsTotal + laborFee
+  // 4. Raw Subtotal before Discount & GST
+  const subTotal = servicesTotal + partsTotal + laborFee
 
-  // 4. Discount Calculation
+  // 5. Discount Calculation
   const discountType = job?.discountType || invoiceSettings?.defaultDiscountType || "percentage"
   const rawDiscountValue = Number(job?.discount ?? invoiceSettings?.defaultDiscount ?? 0)
 
@@ -101,12 +119,12 @@ export default function InvoiceScreen({ navigation }: any) {
     return Math.min(rawDiscountValue, subTotal)
   }, [subTotal, discountType, rawDiscountValue])
 
-  // 5. Taxable Base & GST Calculations
+  // 6. Taxable Base & GST Calculations
   const taxableAmount = Math.max(0, subTotal - discountAmount)
   const gstPercent = gstSettings?.enabled ? Number(gstSettings.defaultRate || 0) : 0
   const gstAmount = (taxableAmount * gstPercent) / 100
 
-  // 6. Final Bill & Rounding
+  // 7. Final Bill & Rounding
   const rawGrandTotal = taxableAmount + gstAmount
   const grandTotal = Math.round(rawGrandTotal)
   const roundOff = grandTotal - rawGrandTotal
@@ -297,34 +315,75 @@ export default function InvoiceScreen({ navigation }: any) {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t("invoice.servicesPerformed") || "Services Performed"}</Text>
         <View style={styles.tableHeader}>
-          <Text style={[styles.tableCell, { flex: 3, fontWeight: "700" }]}>
+          <Text style={[styles.tableCell, { flex: 3, fontWeight: "700", textAlign: "left" }]}>
             {t("invoice.service") || "Service"}
           </Text>
           <Text style={styles.tableCell}>{t("invoice.qty") || "Qty"}</Text>
           <Text style={styles.tableCell}>{t("invoice.rate") || "Rate"}</Text>
-          <Text style={styles.tableCell}>{t("invoice.amount") || "Amount"}</Text>
+          <Text style={[styles.tableCell, { textAlign: "right" }]}>{t("invoice.amount") || "Amount"}</Text>
         </View>
 
-        {(job.services || []).map((service: any, index: number) => {
-          const quantity = Number(service.quantity || 0)
-          const estimatedPrice = Number(service.estimatedPrice || 0)
-          const actualPrice =
-            service.actualPrice !== null &&
-            service.actualPrice !== undefined &&
-            service.actualPrice !== ""
-              ? Number(service.actualPrice)
-              : estimatedPrice
-          const itemTotal = quantity * actualPrice
+        {(job.services || []).length === 0 ? (
+          <Text style={{ color: "#9CA3AF", marginVertical: 8 }}>No services added</Text>
+        ) : (
+          (job.services || []).map((service: any, index: number) => {
+            const quantity = Number(service.quantity ?? 1)
+            const estimatedPrice = Number(service.estimatedPrice || 0)
+            const actualPrice =
+              service.actualPrice !== null &&
+              service.actualPrice !== undefined &&
+              service.actualPrice !== ""
+                ? Number(service.actualPrice)
+                : estimatedPrice
+            const itemTotal = quantity * actualPrice
 
-          return (
-            <View key={index} style={styles.tableRow}>
-              <Text style={[styles.tableCell, { flex: 3 }]}>{service.name}</Text>
-              <Text style={styles.tableCell}>{quantity}</Text>
-              <Text style={styles.tableCell}>₹{actualPrice}</Text>
-              <Text style={styles.tableCell}>₹{itemTotal.toFixed(2)}</Text>
-            </View>
-          )
-        })}
+            return (
+              <View key={index} style={styles.tableRow}>
+                <Text style={[styles.tableCell, { flex: 3, textAlign: "left" }]}>{service.name}</Text>
+                <Text style={styles.tableCell}>{quantity}</Text>
+                <Text style={styles.tableCell}>₹{actualPrice}</Text>
+                <Text style={[styles.tableCell, { textAlign: "right" }]}>₹{itemTotal.toFixed(2)}</Text>
+              </View>
+            )
+          })
+        )}
+      </View>
+
+      {/* PARTS SUPPLIED */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>{t("invoice.partsSupplied") || "Parts Supplied"}</Text>
+        <View style={styles.tableHeader}>
+          <Text style={[styles.tableCell, { flex: 3, fontWeight: "700", textAlign: "left" }]}>
+            {t("invoice.part") || "Part Name"}
+          </Text>
+          <Text style={styles.tableCell}>{t("invoice.qty") || "Qty"}</Text>
+          <Text style={styles.tableCell}>{t("invoice.rate") || "Rate"}</Text>
+          <Text style={[styles.tableCell, { textAlign: "right" }]}>{t("invoice.amount") || "Amount"}</Text>
+        </View>
+
+        {(job.parts || []).length === 0 ? (
+          <Text style={{ color: "#9CA3AF", marginVertical: 8 }}>No parts added</Text>
+        ) : (
+          (job.parts || []).map((part: any, index: number) => {
+            const quantity = Number(part.quantity || 1)
+            const estimatedUnitPrice = Number(part.estimatedUnitPrice || part.price || part.unitPrice || 0)
+            const actualUnitPrice = Number(
+              part.actualUnitPrice !== undefined && part.actualUnitPrice !== null
+                ? part.actualUnitPrice
+                : estimatedUnitPrice
+            )
+            const itemTotal = part.totalPrice ? Number(part.totalPrice) : quantity * actualUnitPrice
+
+            return (
+              <View key={index} style={styles.tableRow}>
+                <Text style={[styles.tableCell, { flex: 3, textAlign: "left" }]}>{part.name}</Text>
+                <Text style={styles.tableCell}>{quantity}</Text>
+                <Text style={styles.tableCell}>₹{actualUnitPrice}</Text>
+                <Text style={[styles.tableCell, { textAlign: "right" }]}>₹{itemTotal.toFixed(2)}</Text>
+              </View>
+            )
+          })
+        )}
       </View>
 
       {/* BILL SUMMARY */}
@@ -333,6 +392,11 @@ export default function InvoiceScreen({ navigation }: any) {
 
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>{t("invoice.servicesSubtotal") || "Services Subtotal"}</Text>
+          <Text style={styles.summaryValue}>₹{servicesTotal.toFixed(2)}</Text>
+        </View>
+
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>{t("invoice.partsSubtotal") || "Parts Subtotal"}</Text>
           <Text style={styles.summaryValue}>₹{partsTotal.toFixed(2)}</Text>
         </View>
 

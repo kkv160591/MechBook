@@ -231,6 +231,10 @@ async (
       services:
         data.services || [],
 
+      // Parts
+      parts:
+        data.parts || [],
+
       createdAt:
         now,
 
