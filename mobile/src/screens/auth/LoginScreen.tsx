@@ -18,7 +18,7 @@ import axios from "axios"
 export default function LoginScreen() {
   const navigation: any = useNavigation()
   const { login } = useAuth()
-  const { t, fetchUserLanguage } = useTranslation()
+  const { t } = useTranslation()
 
   const [phone, setPhone] = useState("")
   const [pin, setPin] = useState("")
@@ -85,8 +85,6 @@ export default function LoginScreen() {
       }
 
       await login(data.user, data.token)
-      await fetchUserLanguage()
-
       navigation.replace("Dashboard")
     } catch (error: any) {
       // API / Network Error -> Popup Alert

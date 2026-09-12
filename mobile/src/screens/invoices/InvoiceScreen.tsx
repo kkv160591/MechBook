@@ -6,11 +6,16 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Image,
-  SafeAreaView
+  SafeAreaView,
+  Alert,
+  Platform
 } from "react-native"
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons"
 import { useEffect, useMemo, useState } from "react"
 import { useRoute } from "@react-navigation/native"
+
+import * as Print from "expo-print"
+import * as Sharing from "expo-sharing"
 
 import { getJobById } from "../../services/jobService"
 import { getGarageProfile } from "../../services/garageService"
@@ -128,6 +133,196 @@ export default function InvoiceScreen({ navigation }: any) {
   const rawGrandTotal = taxableAmount + gstAmount
   const grandTotal = Math.round(rawGrandTotal)
   const roundOff = grandTotal - rawGrandTotal
+
+  // -------------------------------------------------------------
+  // HTML Generator for PDF Printing & Sharing
+  // -------------------------------------------------------------
+  const generateHTML = () => {
+    const servicesRows = (job?.services || []).map((s: any) => {
+      const qty = Number(s.quantity ?? 1);
+      const rate = Number(s.actualPrice ?? s.estimatedPrice ?? 0);
+      return `
+        <tr>
+          <td>${s.name}</td>
+          <td style="text-align:center;">${qty}</td>
+          <td style="text-align:right;">₹${rate.toFixed(2)}</td>
+          <td style="text-align:right;">₹${(qty * rate).toFixed(2)}</td>
+        </tr>`;
+    }).join("");
+
+    const partsRows = (job?.parts || []).map((p: any) => {
+      const qty = Number(p.quantity ?? 1);
+      const rate = Number(p.actualUnitPrice ?? p.estimatedUnitPrice ?? p.price ?? 0);
+      const total = p.totalPrice ? Number(p.totalPrice) : qty * rate;
+      return `
+        <tr>
+          <td>${p.name}</td>
+          <td style="text-align:center;">${qty}</td>
+          <td style="text-align:right;">₹${rate.toFixed(2)}</td>
+          <td style="text-align:right;">₹${total.toFixed(2)}</td>
+        </tr>`;
+    }).join("");
+
+    return `
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+            h1 { color: #2563EB; margin-bottom: 5px; }
+            .header { display: flex; justify-content: space-between; border-bottom: 2px solid #2563EB; padding-bottom: 10px; }
+            .section { margin-top: 20px; }
+            .table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            .table th, .table td { border: 1px solid #ddd; padding: 8px; font-size: 12px; }
+            .table th { background-color: #f2f2f2; text-align: left; }
+            .summary { margin-top: 20px; width: 50%; float: right; }
+            .summary-row { display: flex; justify-content: space-between; padding: 4px 0; }
+            .grand-total { font-weight: bold; font-size: 16px; border-top: 2px solid #333; padding-top: 8px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <h1>${garage?.garageName || "Garage Invoice"}</h1>
+              <p>Owner: ${garage?.ownerName || "-"}<br/>${garage?.address || ""}, ${garage?.city || ""}</p>
+              <p>Phone: ${garage?.phone || "-"}</p>
+            </div>
+            <div style="text-align: right;">
+              <h2>INVOICE</h2>
+              <p><b>Invoice No:</b> INV-${(job._id || job.jobId || "").slice(0, 8).toUpperCase()}</p>
+              <p><b>Date:</b> ${new Date(job.createdAt || Date.now()).toLocaleDateString()}</p>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>Customer & Vehicle Details</h3>
+            <p><b>Customer:</b> ${job.customerName} (${job.phone})</p>
+            <p><b>Vehicle:</b> ${job.vehicleNumber} - ${job.vehicleBrand} ${job.vehicleModel}</p>
+          </div>
+
+          <div class="section">
+            <h3>Services Performed</h3>
+            <table class="table">
+              <thead>
+                <tr><th>Service</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Amount</th></tr>
+              </thead>
+              <tbody>${servicesRows || "<tr><td colspan='4'>No services added</td></tr>"}</tbody>
+            </table>
+          </div>
+
+          <div class="section">
+            <h3>Parts Supplied</h3>
+            <table class="table">
+              <thead>
+                <tr><th>Part</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Rate</th><th style="text-align:right;">Amount</th></tr>
+              </thead>
+              <tbody>${partsRows || "<tr><td colspan='4'>No parts added</td></tr>"}</tbody>
+            </table>
+          </div>
+
+          <div class="summary">
+            <div class="summary-row"><span>Services Subtotal:</span> <span>₹${servicesTotal.toFixed(2)}</span></div>
+            <div class="summary-row"><span>Parts Subtotal:</span> <span>₹${partsTotal.toFixed(2)}</span></div>
+            <div class="summary-row"><span>Labor Fee:</span> <span>₹${laborFee.toFixed(2)}</span></div>
+            ${discountAmount > 0 ? `<div class="summary-row"><span>Discount:</span> <span>-₹${discountAmount.toFixed(2)}</span></div>` : ""}
+            ${gstSettings?.enabled ? `<div class="summary-row"><span>GST (${gstPercent}%):</span> <span>+₹${gstAmount.toFixed(2)}</span></div>` : ""}
+            <div class="summary-row grand-total"><span>Grand Total:</span> <span>₹${grandTotal}</span></div>
+          </div>
+        </body>
+      </html>
+    `;
+  };
+
+  // 1. Generate PDF (Generates and optionally opens file viewer)
+  const handleGeneratePDF = async () => {
+    try {
+      const html = generateHTML()
+
+      if (Platform.OS === "web") {
+        const printWindow = window.open("", "_blank")
+        if (printWindow) {
+          printWindow.document.write(html)
+          printWindow.document.close()
+          printWindow.print()
+        }
+      } else {
+        // Mobile (Android / iOS)
+        const { uri } = await Print.printToFileAsync({ html })
+
+        // Share immediately so user can save or view the file on mobile
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri, {
+            UTI: ".pdf",
+            mimeType: "application/pdf",
+            dialogTitle: "Save or View PDF Invoice",
+          })
+        } else {
+          Alert.alert("Success", `Invoice saved to: ${uri}`)
+        }
+      }
+    } catch (error) {
+      console.error("PDF Generation Error:", error)
+      Alert.alert("Error", "Failed to generate PDF invoice.")
+    }
+  }
+
+  // 2. Share Invoice (Directly opens OS Share Sheet)
+  const handleShareInvoice = async () => {
+    try {
+      const html = generateHTML()
+
+      if (Platform.OS === "web") {
+        if (navigator.share) {
+          await navigator.share({
+            title: `Invoice INV-${(job._id || job.jobId || "").slice(0, 8).toUpperCase()}`,
+            text: `Invoice for ${job.customerName}`,
+            url: window.location.href,
+          })
+        } else {
+          Alert.alert("Notice", "Sharing is not supported on desktop browsers. Please use Print or PDF generation.")
+        }
+      } else {
+        // Mobile (Android / iOS)
+        const { uri } = await Print.printToFileAsync({ html })
+        
+        const canShare = await Sharing.isAvailableAsync()
+        if (canShare) {
+          await Sharing.shareAsync(uri, {
+            UTI: ".pdf",
+            mimeType: "application/pdf",
+            dialogTitle: `Share Invoice for ${job.customerName}`,
+          })
+        } else {
+          Alert.alert("Error", "Sharing is not available on this device.")
+        }
+      }
+    } catch (error) {
+      console.error("Share Invoice Error:", error)
+      Alert.alert("Error", "Failed to share invoice.")
+    }
+  }
+
+  // 3. Print Invoice (Directly opens AirPrint / Android Print Service)
+  const handlePrintInvoice = async () => {
+    try {
+      const html = generateHTML()
+
+      if (Platform.OS === "web") {
+        const printWindow = window.open("", "_blank")
+        if (printWindow) {
+          printWindow.document.write(html)
+          printWindow.document.close()
+          printWindow.focus()
+          printWindow.print()
+        }
+      } else {
+        // Mobile (Android / iOS native printer picker)
+        await Print.printAsync({ html })
+      }
+    } catch (error) {
+      console.error("Print Invoice Error:", error)
+      Alert.alert("Error", "Failed to print invoice.")
+    }
+  }
 
   if (loading || !garage || !gstSettings || !invoiceSettings || !job) {
     return (
@@ -484,6 +679,7 @@ export default function InvoiceScreen({ navigation }: any) {
       {/* ACTIONS */}
       <TouchableOpacity
         disabled={job.status !== "completed"}
+        onPress={handleGeneratePDF}
         style={[
           styles.primaryButton,
           job.status !== "completed" && styles.disabledButton,
@@ -495,14 +691,14 @@ export default function InvoiceScreen({ navigation }: any) {
         </Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.secondaryButton}>
+      <TouchableOpacity style={styles.secondaryButton} onPress={handleShareInvoice}>
         <Ionicons name="share-social-outline" size={22} color="#2563EB" />
         <Text style={styles.secondaryButtonText}>
           {t("invoice.share") || "Share Invoice"}
         </Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.secondaryButton}>
+      <TouchableOpacity style={styles.secondaryButton} onPress={handlePrintInvoice}>
         <Ionicons name="print-outline" size={22} color="#2563EB" />
         <Text style={styles.secondaryButtonText}>
           {t("invoice.print") || "Print Invoice"}
