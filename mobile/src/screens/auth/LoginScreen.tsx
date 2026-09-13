@@ -1,4 +1,7 @@
-import React, { useState } from "react"
+import React, {
+  useState
+} from "react"
+
 import {
   View,
   Text,
@@ -9,211 +12,469 @@ import {
   ActivityIndicator
 } from "react-native"
 
-import { useNavigation } from "@react-navigation/native"
-import { useAuth } from "../../context/AuthContext"
-import { useTranslation } from "../../context/LanguageContext"
-import LanguageSelector from "../../components/LanguageSelector"
-import axios from "axios"
+import {
+  useNavigation
+} from "@react-navigation/native"
+
+import {
+  useAuth
+} from "../../context/AuthContext"
+
+import {
+  useTranslation
+} from "../../context/LanguageContext"
+
+import LanguageSelector
+  from "../../components/LanguageSelector"
+
+import {
+  loginUser
+} from "../../services/authService"
+
 
 export default function LoginScreen() {
-  const navigation: any = useNavigation()
-  const { login } = useAuth()
-  const { t } = useTranslation()
 
-  const [phone, setPhone] = useState("")
-  const [pin, setPin] = useState("")
-  const [loading, setLoading] = useState(false)
+  const navigation: any =
+    useNavigation()
 
-  // Field-level inline errors
-  const [phoneError, setPhoneError] = useState("")
-  const [pinError, setPinError] = useState("")
+  const { login } =
+    useAuth()
 
-  const handlePhoneChange = (text: string) => {
-    const cleaned = text.replace(/[^0-9]/g, "")
-    setPhone(cleaned)
-    if (phoneError) setPhoneError("")
-  }
+  const { t } =
+    useTranslation()
 
-  const handlePinChange = (text: string) => {
-    const cleaned = text.replace(/[^0-9]/g, "")
-    setPin(cleaned)
-    if (pinError) setPinError("")
-  }
 
-  const handleLogin = async () => {
-    const trimmedPhone = phone.trim()
-    const trimmedPin = pin.trim()
+  const [phone, setPhone] =
+    useState("")
 
-    let hasError = false
+  const [pin, setPin] =
+    useState("")
 
-    // Field Validations (Inline Red Text)
-    if (!trimmedPhone) {
-      setPhoneError(t("login.validation.enterPhone"))
-      hasError = true
-    } else if (trimmedPhone.length !== 10) {
-      setPhoneError(t("login.validation.validPhone"))
-      hasError = true
-    }
+  const [loading, setLoading] =
+    useState(false)
 
-    if (!trimmedPin) {
-      setPinError(t("login.validation.enterPin"))
-      hasError = true
-    } else if (trimmedPin.length !== 4) {
-      setPinError("PIN must be exactly 4 digits")
-      hasError = true
-    }
 
-    if (hasError) return
+  // Field-level errors
 
-    try {
-      setLoading(true)
+  const [phoneError, setPhoneError] =
+    useState("")
 
-      const response = await axios.post(`${process.env.EXPO_PUBLIC_API_URL}/auth/login`, {
-        phone: trimmedPhone,
-        pin: trimmedPin,
-      })
+  const [pinError, setPinError] =
+    useState("")
 
-      const data = response.data
 
-      if (!data.success) {
-        // Server Error Response -> Popup Alert
-        Alert.alert(
-          t("login.error.title"),
-          data.message || t("login.error.default")
+  // ==================================================
+  // PHONE CHANGE
+  // ==================================================
+
+  const handlePhoneChange =
+    (text: string) => {
+
+      const cleaned =
+        text.replace(
+          /[^0-9]/g,
+          ""
         )
+
+      setPhone(cleaned)
+
+      if (phoneError) {
+        setPhoneError("")
+      }
+    }
+
+
+  // ==================================================
+  // PIN CHANGE
+  // ==================================================
+
+  const handlePinChange =
+    (text: string) => {
+
+      const cleaned =
+        text.replace(
+          /[^0-9]/g,
+          ""
+        )
+
+      setPin(cleaned)
+
+      if (pinError) {
+        setPinError("")
+      }
+    }
+
+
+  // ==================================================
+  // LOGIN
+  // ==================================================
+
+  const handleLogin =
+    async () => {
+
+      const trimmedPhone =
+        phone.trim()
+
+      const trimmedPin =
+        pin.trim()
+
+
+      let hasError =
+        false
+
+
+      // Phone validation
+
+      if (!trimmedPhone) {
+
+        setPhoneError(
+          t("login.validation.enterPhone")
+        )
+
+        hasError = true
+
+      } else if (
+        trimmedPhone.length !== 10
+      ) {
+
+        setPhoneError(
+          t("login.validation.validPhone")
+        )
+
+        hasError = true
+      }
+
+
+      // PIN validation
+
+      if (!trimmedPin) {
+
+        setPinError(
+          t("login.validation.enterPin")
+        )
+
+        hasError = true
+
+      } else if (
+        trimmedPin.length !== 4
+      ) {
+
+        setPinError(
+          "PIN must be exactly 4 digits"
+        )
+
+        hasError = true
+      }
+
+
+      if (hasError) {
         return
       }
 
-      await login(data.user, data.token)
-      navigation.replace("Dashboard")
-    } catch (error: any) {
-      // API / Network Error -> Popup Alert
-      Alert.alert(
-        t("login.error.title"),
-        error?.response?.data?.message || t("login.error.default")
-      )
-    } finally {
-      setLoading(false)
+
+      try {
+
+        setLoading(true)
+
+
+        const data =
+          await loginUser(
+            trimmedPhone,
+            trimmedPin
+          )
+
+
+        if (!data.success) {
+
+          Alert.alert(
+            t("login.error.title"),
+            data.message ||
+              t("login.error.default")
+          )
+
+          return
+        }
+
+
+        await login(
+          data.user,
+          data.token
+        )
+
+
+        navigation.replace(
+          "Dashboard"
+        )
+
+      } catch (error: any) {
+
+        Alert.alert(
+          t("login.error.title"),
+          error?.response?.data?.message ||
+            t("login.error.default")
+        )
+
+      } finally {
+
+        setLoading(false)
+      }
     }
-  }
+
+
+  // ==================================================
+  // UI
+  // ==================================================
 
   return (
+
     <View style={styles.container}>
+
       <View style={styles.headerRow}>
         <LanguageSelector />
       </View>
 
-      <Text style={styles.logo}>{t("common.appName")}</Text>
-      <Text style={styles.subtitle}>{t("login.subtitle")}</Text>
 
-      {/* Phone Input Wrapper */}
+      <Text style={styles.logo}>
+        {t("common.appName")}
+      </Text>
+
+
+      <Text style={styles.subtitle}>
+        {t("login.subtitle")}
+      </Text>
+
+
+      {/* PHONE */}
+
       <View style={styles.inputWrapper}>
+
         <TextInput
-          placeholder={t("login.phonePlaceholder")}
+          placeholder={
+            t("login.phonePlaceholder")
+          }
+
           value={phone}
-          onChangeText={handlePhoneChange}
+
+          onChangeText={
+            handlePhoneChange
+          }
+
           keyboardType="phone-pad"
+
           maxLength={10}
-          style={[styles.input, phoneError ? styles.inputError : null]}
+
+          style={[
+            styles.input,
+            phoneError
+              ? styles.inputError
+              : null
+          ]}
         />
-        {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
+
+
+        {phoneError ? (
+
+          <Text style={styles.errorText}>
+            {phoneError}
+          </Text>
+
+        ) : null}
+
       </View>
 
-      {/* PIN Input Wrapper */}
+
+      {/* PIN */}
+
       <View style={styles.inputWrapper}>
+
         <TextInput
-          placeholder={t("login.pinPlaceholder")}
+          placeholder={
+            t("login.pinPlaceholder")
+          }
+
           value={pin}
-          onChangeText={handlePinChange}
+
+          onChangeText={
+            handlePinChange
+          }
+
           keyboardType="numeric"
+
           secureTextEntry
+
           maxLength={4}
-          style={[styles.input, pinError ? styles.inputError : null]}
+
+          style={[
+            styles.input,
+            pinError
+              ? styles.inputError
+              : null
+          ]}
         />
-        {pinError ? <Text style={styles.errorText}>{pinError}</Text> : null}
+
+
+        {pinError ? (
+
+          <Text style={styles.errorText}>
+            {pinError}
+          </Text>
+
+        ) : null}
+
       </View>
+
+
+      {/* FORGOT PIN */}
+
+      <TouchableOpacity
+        style={styles.forgotButton}
+        onPress={() =>
+          navigation.navigate(
+            "ForgotPin"
+          )
+        }
+        disabled={loading}
+      >
+
+        <Text style={styles.forgotText}>
+          Forgot PIN?
+        </Text>
+
+      </TouchableOpacity>
+
+
+      {/* LOGIN BUTTON */}
 
       <TouchableOpacity
         style={styles.button}
         onPress={handleLogin}
         disabled={loading}
       >
+
         {loading ? (
-          <ActivityIndicator color="white" />
+
+          <ActivityIndicator
+            color="white"
+          />
+
         ) : (
-          <Text style={styles.buttonText}>{t("login.loginBtn")}</Text>
+
+          <Text style={styles.buttonText}>
+            {t("login.loginBtn")}
+          </Text>
+
         )}
+
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => navigation.navigate("Register")}>
-        <Text style={styles.registerText}>{t("login.registerBtn")}</Text>
+
+      {/* REGISTER */}
+
+      <TouchableOpacity
+        onPress={() =>
+          navigation.navigate(
+            "Register"
+          )
+        }
+      >
+
+        <Text style={styles.registerText}>
+          {t("login.registerBtn")}
+        </Text>
+
       </TouchableOpacity>
+
     </View>
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    padding: 24,
-    backgroundColor: "#F9FAFB"
-  },
-  headerRow: {
-    position: "absolute",
-    top: 50,
-    right: 24,
-    zIndex: 10
-  },
-  logo: {
-    fontSize: 34,
-    fontWeight: "700",
-    textAlign: "center",
-    color: "#111827"
-  },
-  subtitle: {
-    textAlign: "center",
-    color: "#6B7280",
-    marginTop: 8,
-    marginBottom: 36
-  },
-  inputWrapper: {
-    marginBottom: 14
-  },
-  input: {
-    backgroundColor: "white",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 14,
-    padding: 16
-  },
-  inputError: {
-    borderColor: "#EF4444",
-    backgroundColor: "#FEF2F2"
-  },
-  errorText: {
-    color: "#DC2626",
-    fontSize: 12,
-    fontWeight: "500",
-    marginTop: 4,
-    marginLeft: 4
-  },
-  button: {
-    backgroundColor: "#2563EB",
-    padding: 18,
-    borderRadius: 14,
-    marginTop: 6
-  },
-  buttonText: {
-    color: "white",
-    textAlign: "center",
-    fontWeight: "700",
-    fontSize: 16
-  },
-  registerText: {
-    textAlign: "center",
-    marginTop: 24,
-    color: "#2563EB",
-    fontWeight: "600"
-  }
-})
+
+const styles =
+  StyleSheet.create({
+
+    container: {
+      flex: 1,
+      justifyContent: "center",
+      padding: 24,
+      backgroundColor: "#F9FAFB"
+    },
+
+    headerRow: {
+      position: "absolute",
+      top: 50,
+      right: 24,
+      zIndex: 10
+    },
+
+    logo: {
+      fontSize: 34,
+      fontWeight: "700",
+      textAlign: "center",
+      color: "#111827"
+    },
+
+    subtitle: {
+      textAlign: "center",
+      color: "#6B7280",
+      marginTop: 8,
+      marginBottom: 36
+    },
+
+    inputWrapper: {
+      marginBottom: 14
+    },
+
+    input: {
+      backgroundColor: "white",
+      borderWidth: 1,
+      borderColor: "#E5E7EB",
+      borderRadius: 14,
+      padding: 16
+    },
+
+    inputError: {
+      borderColor: "#EF4444",
+      backgroundColor: "#FEF2F2"
+    },
+
+    errorText: {
+      color: "#DC2626",
+      fontSize: 12,
+      fontWeight: "500",
+      marginTop: 4,
+      marginLeft: 4
+    },
+
+    forgotButton: {
+      alignSelf: "flex-end",
+      marginTop: -4,
+      marginBottom: 10
+    },
+
+    forgotText: {
+      color: "#2563EB",
+      fontWeight: "600",
+      fontSize: 14
+    },
+
+    button: {
+      backgroundColor: "#2563EB",
+      padding: 18,
+      borderRadius: 14,
+      marginTop: 6
+    },
+
+    buttonText: {
+      color: "white",
+      textAlign: "center",
+      fontWeight: "700",
+      fontSize: 16
+    },
+
+    registerText: {
+      textAlign: "center",
+      marginTop: 24,
+      color: "#2563EB",
+      fontWeight: "600"
+    }
+  })

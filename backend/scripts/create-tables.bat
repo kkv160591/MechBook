@@ -66,3 +66,11 @@ AttributeName=garageId,KeyType=HASH ^
 --billing-mode PAY_PER_REQUEST ^
 --endpoint-url http://localhost:8000 ^
 --region ap-south-1
+
+aws dynamodb create-table ^
+--table-name PinRecovery ^
+--attribute-definitions AttributeName=phone,AttributeType=S ^
+--key-schema AttributeName=phone,KeyType=HASH ^
+--billing-mode PAY_PER_REQUEST ^
+--endpoint-url http://localhost:8000 ^
+--region ap-south-1

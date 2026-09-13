@@ -374,7 +374,7 @@ export const translations = {
       },
     },
 
-    // Register Screen
+    // Register Screen - English
     register: {
       title: "Register Your Garage",
       subtitle: "Setup your garage and start managing jobs digitally.",
@@ -1073,16 +1073,16 @@ export const translations = {
       },
     },
 
-    // Register Screen (Hindi)
+    // Register Screen - Hindi
     register: {
-      title: "अपना गैराज पंजीकृत करें",
-      subtitle: "अपना गैराज सेट करें और डिजिटल रूप से काम प्रबंधित करें।",
-      ownerProfile: "गैराज मालिक प्रोफ़ाइल",
-      garageDetails: "गैराज विवरण",
+      title: "अपना गैराज रजिस्टर करें",
+      subtitle: "अपना गैराज सेटअप करें और डिजिटल रूप से जॉब्स मैनेज करना शुरू करें।",
+      ownerProfile: "गैराज मालिक की प्रोफाइल",
+      garageDetails: "गैराज का विवरण",
       address: "पता",
       vehicleTypes: "समर्थित वाहन के प्रकार",
-      twoWheeler: "2 पहिया",
-      fourWheeler: "4 पहिया",
+      twoWheeler: "दो पहिया वाहन (2 Wheeler)",
+      fourWheeler: "चार पहिया वाहन (4 Wheeler)",
       uploadLogo: "गैराज लोगो अपलोड करें (वैकल्पिक)",
       submitBtn: "गैराज खाता बनाएं",
       placeholders: {
@@ -1093,8 +1093,8 @@ export const translations = {
         garageName: "गैराज का नाम",
         gstNumber: "जीएसटी नंबर (वैकल्पिक)",
         email: "ईमेल (वैकल्पिक)",
-        address1: "पता पंक्ति 1",
-        address2: "पता पंक्ति 2 (वैकल्पिक)",
+        address1: "पता लाइन 1",
+        address2: "पता लाइन 2 (वैकल्पिक)",
         city: "शहर",
         state: "राज्य",
         pincode: "पिनकोड",
@@ -1102,8 +1102,8 @@ export const translations = {
       },
       validation: {
         ownerNameReq: "मालिक का नाम आवश्यक है",
-        phoneReq: "फोन नंबर आवश्यक है",
-        phoneValid: "अमान्य 10 अंकों का फोन नंबर",
+        phoneReq: "फ़ोन नंबर आवश्यक है",
+        phoneValid: "मान्य 10 अंकों का फ़ोन नंबर दर्ज करें",
         garageNameReq: "गैराज का नाम आवश्यक है",
         addressReq: "पता आवश्यक है",
         cityStateReq: "शहर और राज्य आवश्यक हैं",
@@ -1112,11 +1112,11 @@ export const translations = {
         pinMismatch: "पिन मेल नहीं खाता",
       },
       success: {
-        message: "गैराज सफलतापूर्वक पंजीकृत हो गया",
+        message: "गैराज सफलतापूर्वक पंजीकृत हो गया है",
         loginBtn: "अभी लॉगिन करें",
       },
       error: {
-        title: "पंजीकरण विफल",
+        title: "पंजीकरण विफल रहा",
       },
     },
 

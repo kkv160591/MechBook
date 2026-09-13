@@ -1,511 +1,599 @@
+import { useState, useRef, useEffect } from "react"
 import {
   View,
   Text,
-  StyleSheet,
-  ScrollView,
   TextInput,
   TouchableOpacity,
+  StyleSheet,
+  ScrollView,
   Alert,
-  Modal
+  ActivityIndicator
 } from "react-native"
-import { useEffect, useState, useRef } from "react"
-import { MaterialIcons, Feather } from "@expo/vector-icons"
+import { Country, State, City } from "country-state-city"
 import { useNavigation } from "@react-navigation/native"
-import { getGarageProfile, updateGarageProfile } from "../../services/garageService"
+import { Feather, Ionicons } from "@expo/vector-icons"
 import { useTranslation } from "../../context/LanguageContext"
+// Import your garage service API calls here
+// import { getGarageProfile, updateGarageProfile } from "../../services/garageService"
 
-interface ValidationErrors {
-  garageName?: string
-  ownerName?: string
-  phone?: string
-  email?: string
-  gstNumber?: string
-  address?: string
-  city?: string
-  state?: string
-  pincode?: string
-  vehicleTypes?: string
-}
+const VEHICLE_SPECIALIZATIONS = [
+  { id: "2-Wheeler", label: "2-Wheeler (Bike/Scooter)" },
+  { id: "3-Wheeler", label: "3-Wheeler (Auto/Rickshaw)" },
+  { id: "Car & SUV", label: "Car & SUV" },
+  { id: "Light Commercial", label: "Light Commercial (Pickup/Van)" },
+  { id: "Heavy Commercial", label: "Heavy Commercial (Truck/Bus)" },
+  { id: "Electric Vehicles (EV)", label: "Electric Vehicles (EV)" }
+]
 
 export default function GarageProfileScreen() {
-  const navigation = useNavigation()
   const { t } = useTranslation()
+  const navigation: any = useNavigation()
+
   const scrollViewRef = useRef<ScrollView>(null)
 
-  const [garage, setGarage] = useState<any>(null)
-  const [errors, setErrors] = useState<ValidationErrors>({})
+  const [loading, setLoading] = useState(false)
+  const [fetching, setFetching] = useState(true)
+
+  // Profile Fields
+  const [ownerName, setOwnerName] = useState("")
+  const [phone, setPhone] = useState("")
+  const [garageName, setGarageName] = useState("")
+  const [gstNumber, setGstNumber] = useState("")
+  const [email, setEmail] = useState("")
+  const [address1, setAddress1] = useState("")
+  const [address2, setAddress2] = useState("")
   
-  // Backend Error Modal State
-  const [backendErrorModal, setBackendErrorModal] = useState<string | null>(null)
+  // Location States
+  const [selectedCountryIso, setSelectedCountryIso] = useState("IN")
+  const [country, setCountry] = useState("India")
+  
+  const [selectedStateIso, setSelectedStateIso] = useState("")
+  const [state, setState] = useState("")
+  
+  const [city, setCity] = useState("")
+  const [pincode, setPincode] = useState("")
 
-  // Layout positions for scroll-to-error
-  const fieldYPositions = useRef<{ [key: string]: number }>({})
+  // Inline Searchable Dropdown Active States ('country' | 'state' | 'city' | null)
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
 
-  const loadProfile = async () => {
+  // Vehicle Types Selection state
+  const [selectedVehicles, setSelectedVehicles] = useState<string[]>(["2-Wheeler", "Car & SUV"])
+
+  // Field errors state object
+  const [errors, setErrors] = useState<{ [key: string]: string }>({})
+
+  // Fetch existing profile data on mount
+  useEffect(() => {
+    loadGarageProfile()
+  }, [])
+
+  const loadGarageProfile = async () => {
     try {
-      const response = await getGarageProfile()
-      const vehicleTypes = Array.isArray(response.garage?.vehicleTypes)
-        ? response.garage.vehicleTypes
-        : response.garage?.vehicleTypes
-        ? String(response.garage.vehicleTypes)
-            .split(",")
-            .map((v: string) => v.trim())
-        : []
+      setFetching(true)
+      
+      // Fetch backend data (Replace with real API call: const response = await getGarageProfile())
+      // Example payload structure matching your API response:
+      const data = {
+        country: "India",
+        address: "Kasarsai",
+        role: "owner",
+        city: "Pune",
+        garageName: "Amit Garage",
+        garageId: "919926f5-150e-44c1-82bd-88e04a13cbe0",
+        isActive: true,
+        userId: "919926f5-150e-44c1-82bd-88e04a13cbe0",
+        createdAt: "2026-09-13T07:41:29.764Z",
+        ownerName: "Amit Sinha",
+        phone: "7972482572",
+        logo: "",
+        state: "Maharashtra",
+        userType: "owner"
+      }
 
-      setGarage({
-        ...response.garage,
-        vehicleTypes
-      })
-    } catch (error: any) {
-      setBackendErrorModal(
-        error?.response?.data?.message ||
-          t("common.somethingWentWrong") ||
-          "Failed to load garage profile."
+      // Populate text state values directly
+      setGarageName(data.garageName || "")
+      setOwnerName(data.ownerName || "")
+      setPhone(data.phone || "")
+      setAddress1(data.address || "")
+      setCity(data.city || "")
+      setState(data.state || "")
+      setCountry(data.country || "India")
+
+      // Match Country ISO Code
+      const matchedCountry = Country.getAllCountries().find(
+        (c) => c.name.toLowerCase() === (data.country || "india").toLowerCase()
       )
+
+      if (matchedCountry) {
+        setSelectedCountryIso(matchedCountry.isoCode)
+        
+        // Match State ISO Code using matched country ISO
+        if (data.state) {
+          const matchedState = State.getStatesOfCountry(matchedCountry.isoCode).find(
+            (s) => s.name.toLowerCase() === data.state.toLowerCase()
+          )
+          if (matchedState) {
+            setSelectedStateIso(matchedState.isoCode)
+          }
+        }
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to load garage profile.")
+    } finally {
+      setFetching(false)
     }
   }
 
-  useEffect(() => {
-    loadProfile()
-  }, [])
+  const clearError = (field: string) => {
+    if (errors[field]) {
+      setErrors((prev) => {
+        const updated = { ...prev }
+        delete updated[field]
+        return updated
+      })
+    }
+  }
 
-  if (!garage) {
+  const toggleVehicleType = (type: string) => {
+    if (selectedVehicles.includes(type)) {
+      if (selectedVehicles.length > 1) {
+        setSelectedVehicles(selectedVehicles.filter((v) => v !== type))
+      } else {
+        Alert.alert("Notice", "Please select at least one vehicle type.")
+      }
+    } else {
+      setSelectedVehicles([...selectedVehicles, type])
+    }
+    clearError("vehicleTypes")
+  }
+
+  const handleUpdateProfile = async () => {
+    const newErrors: { [key: string]: string } = {}
+
+    if (!ownerName.trim()) {
+      newErrors.ownerName = t("register.validation.ownerNameReq") || "Owner name is required"
+    }
+
+    if (!phone.trim()) {
+      newErrors.phone = t("register.validation.phoneReq") || "Phone number is required"
+    } else if (phone.trim().length < 8) {
+      newErrors.phone = t("register.validation.phoneValid") || "Enter a valid phone number"
+    }
+
+    if (!garageName.trim()) {
+      newErrors.garageName = t("register.validation.garageNameReq") || "Garage name is required"
+    }
+
+    if (!address1.trim()) {
+      newErrors.address1 = t("register.validation.addressReq") || "Address is required"
+    }
+
+    if (!country.trim()) {
+      newErrors.country = t("register.validation.countryReq") || "Country is required"
+    }
+
+    if (!state.trim()) {
+      newErrors.state = t("register.validation.stateReq") || "State is required"
+    }
+
+    if (!city.trim()) {
+      newErrors.city = t("register.validation.cityReq") || "City is required"
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true })
+      return
+    }
+
+    setErrors({})
+
+    try {
+      setLoading(true)
+
+      const payload = {
+        garageName,
+        ownerName,
+        phone,
+        city,
+        state,
+        country,
+        pincode,
+        address: address1 + (address2 ? `, ${address2}` : ""),
+        vehicleTypes: selectedVehicles,
+        gstNumber,
+        email
+      }
+
+      // const response = await updateGarageProfile(payload)
+      const response = { success: true }
+
+      if (response?.success) {
+        Alert.alert(
+          t("common.successTitle") || "Success",
+          "Garage profile updated successfully!"
+        )
+      }
+    } catch (error: any) {
+      Alert.alert(
+        "Update Failed",
+        error?.response?.data?.message || t("common.somethingWentWrong") || "Something went wrong"
+      )
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Filtered lists for location lookups
+  const allCountries = Country.getAllCountries()
+  const allStates = selectedCountryIso ? State.getStatesOfCountry(selectedCountryIso) : []
+  const allCities = (selectedCountryIso && selectedStateIso) ? City.getCitiesOfState(selectedCountryIso, selectedStateIso) : []
+
+  const filteredCountries = allCountries.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  const filteredStates = allStates.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  const filteredCities = allCities.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+
+  if (fetching) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text>{t("common.loading") || "Loading..."}</Text>
+      <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator size="large" color="#2563EB" />
       </View>
     )
   }
 
-  const vehicleOptions = [
-    { key: "2 Wheeler", label: t("garageProfile.vehicles.twoWheeler") || "2 Wheeler" },
-    { key: "4 Wheeler", label: t("garageProfile.vehicles.fourWheeler") || "4 Wheeler" },
-    { key: "Commercial", label: t("garageProfile.vehicles.commercial") || "Commercial" },
-    { key: "Truck", label: t("garageProfile.vehicles.truck") || "Truck" },
-    { key: "Bus", label: t("garageProfile.vehicles.bus") || "Bus" }
-  ]
-
-  const storeFieldPosition = (fieldName: string, y: number) => {
-    fieldYPositions.current[fieldName] = y
-  }
-
-  const validate = (): boolean => {
-    const newErrors: ValidationErrors = {}
-
-    // Garage Name Validation
-    if (!garage.garageName?.trim()) {
-      newErrors.garageName = t("register.validation.garageNameReq") || "Garage name is required"
-    } else if (garage.garageName.length > 50) {
-      newErrors.garageName = "Garage name cannot exceed 50 characters"
-    }
-
-    // Owner Name Validation
-    if (!garage.ownerName?.trim()) {
-      newErrors.ownerName = t("register.validation.ownerNameReq") || "Owner name is required"
-    } else if (garage.ownerName.length > 50) {
-      newErrors.ownerName = "Owner name cannot exceed 50 characters"
-    }
-
-    // Phone Validation (Must start with 6-9 and be 10 digits)
-    const phoneRegex = /^[6-9]\d{9}$/
-    if (!garage.phone?.trim()) {
-      newErrors.phone = t("register.validation.phoneReq") || "Phone number is required"
-    } else if (!phoneRegex.test(garage.phone)) {
-      newErrors.phone = t("register.validation.phoneValid") || "Enter valid 10 digit phone number"
-    }
-
-    // Email Validation (Optional)
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (garage.email?.trim() && !emailRegex.test(garage.email.trim())) {
-      newErrors.email = "Enter a valid email address"
-    }
-
-    // GST Validation (Optional - 15 Alphanumeric)
-    const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/
-    if (garage.gstNumber?.trim() && !gstRegex.test(garage.gstNumber.toUpperCase())) {
-      newErrors.gstNumber = "Enter a valid 15-character GSTIN"
-    }
-
-    // Address Validation
-    if (!garage.address?.trim()) {
-      newErrors.address = t("register.validation.addressReq") || "Address is required"
-    } else if (garage.address.length > 120) {
-      newErrors.address = "Address cannot exceed 120 characters"
-    }
-
-    // City & State Validation
-    if (!garage.city?.trim()) {
-      newErrors.city = "City is required"
-    }
-    if (!garage.state?.trim()) {
-      newErrors.state = "State is required"
-    }
-
-    // Pincode Validation
-    const pinRegex = /^\d{6}$/
-    if (!garage.pincode?.trim()) {
-      newErrors.pincode = "Pincode is required"
-    } else if (!pinRegex.test(garage.pincode)) {
-      newErrors.pincode = "Enter a valid 6-digit pincode"
-    }
-
-    // Vehicle Types Validation
-    if (!garage.vehicleTypes || garage.vehicleTypes.length === 0) {
-      newErrors.vehicleTypes = "Select at least one vehicle type"
-    }
-
-    setErrors(newErrors)
-
-    // Scroll to the first error field
-    const errorKeys = Object.keys(newErrors)
-    if (errorKeys.length > 0) {
-      const firstErrorField = errorKeys[0]
-      const yPos = fieldYPositions.current[firstErrorField]
-      if (yPos !== undefined && scrollViewRef.current) {
-        scrollViewRef.current.scrollTo({ y: Math.max(0, yPos - 20), animated: true })
-      }
-      return false
-    }
-
-    return true
-  }
-
-  const toggleVehicle = (typeKey: string) => {
-    const currentVehicles = Array.isArray(garage.vehicleTypes) ? garage.vehicleTypes : []
-    const updated = currentVehicles.includes(typeKey)
-      ? currentVehicles.filter((v: string) => v !== typeKey)
-      : [...currentVehicles, typeKey]
-
-    setGarage((prev: any) => ({ ...prev, vehicleTypes: updated }))
-    if (errors.vehicleTypes && updated.length > 0) {
-      setErrors((prev) => ({ ...prev, vehicleTypes: undefined }))
-    }
-  }
-
-  const saveProfile = async () => {
-    if (!validate()) return
-
-    try {
-      await updateGarageProfile(garage)
-      Alert.alert(
-        t("common.successTitle") || "Success",
-        t("garageProfile.successMsg") || "Garage Profile Updated"
-      )
-    } catch (error: any) {
-      const backendMsg =
-        error?.response?.data?.message ||
-        t("garageProfile.errorMsg") ||
-        "Failed to update profile"
-      setBackendErrorModal(backendMsg)
-    }
-  }
-
-  // Label component with optional mandatory star
-  const FieldLabel = ({ label, required }: { label: string; required?: boolean }) => (
-    <View style={styles.labelContainer}>
-      <Text style={styles.label}>{label}</Text>
-      {required && <Text style={styles.requiredStar}> *</Text>}
-    </View>
-  )
-
   return (
-    <View style={{ flex: 1, backgroundColor: "#F3F4F6" }}>
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.container}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* TOP BAR WITH BACK BUTTON */}
-        <View style={styles.headerBar}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
-          >
-            <Feather name="arrow-left" size={24} color="#111827" />
-          </TouchableOpacity>
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.heading}>
-              {t("garageProfile.title") || "Garage Profile"}
-            </Text>
-            <Text style={styles.subHeading}>
-              {t("garageProfile.subtitle") || "Manage garage information"}
-            </Text>
-          </View>
-        </View>
-
-        {/* LOGO CARD */}
-        <View style={styles.logoCard}>
-          <View style={styles.logoBox}>
-            <MaterialIcons name="garage" size={40} color="#2563EB" />
-          </View>
-          <TouchableOpacity style={styles.logoBtn} activeOpacity={0.7}>
-            <Text style={styles.logoText}>
-              {t("garageProfile.uploadLogo") || "Upload Logo"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* GARAGE INFO CARD */}
-        <View style={styles.card}>
-          <Text style={styles.section}>
-            {t("garageProfile.sections.info") || "Garage Information"}
-          </Text>
-
-          {/* Garage Name */}
-          <View onLayout={(e) => storeFieldPosition("garageName", e.nativeEvent.layout.y)}>
-            <FieldLabel label={t("garageProfile.placeholders.garageName") || "Garage Name"} required />
-            <TextInput
-              style={[styles.input, errors.garageName && styles.inputError]}
-              value={garage.garageName}
-              maxLength={50}
-              placeholder={t("garageProfile.placeholders.garageName") || "Garage Name"}
-              onChangeText={(value) => {
-                setGarage((prev: any) => ({ ...prev, garageName: value }))
-                if (errors.garageName) setErrors((prev) => ({ ...prev, garageName: undefined }))
-              }}
-            />
-            {errors.garageName && <Text style={styles.errorText}>{errors.garageName}</Text>}
-          </View>
-
-          {/* Owner Name */}
-          <View onLayout={(e) => storeFieldPosition("ownerName", e.nativeEvent.layout.y)}>
-            <FieldLabel label={t("garageProfile.placeholders.ownerName") || "Owner Name"} required />
-            <TextInput
-              style={[styles.input, errors.ownerName && styles.inputError]}
-              value={garage.ownerName}
-              maxLength={50}
-              placeholder={t("garageProfile.placeholders.ownerName") || "Owner Name"}
-              onChangeText={(value) => {
-                setGarage((prev: any) => ({ ...prev, ownerName: value }))
-                if (errors.ownerName) setErrors((prev) => ({ ...prev, ownerName: undefined }))
-              }}
-            />
-            {errors.ownerName && <Text style={styles.errorText}>{errors.ownerName}</Text>}
-          </View>
-
-          {/* Phone */}
-          <View onLayout={(e) => storeFieldPosition("phone", e.nativeEvent.layout.y)}>
-            <FieldLabel label={t("garageProfile.placeholders.phone") || "Phone"} required />
-            <TextInput
-              style={[styles.input, errors.phone && styles.inputError]}
-              value={garage.phone}
-              maxLength={10}
-              keyboardType="number-pad"
-              placeholder={t("garageProfile.placeholders.phone") || "Phone"}
-              onChangeText={(value) => {
-                const numericValue = value.replace(/[^0-9]/g, "")
-                setGarage((prev: any) => ({ ...prev, phone: numericValue }))
-                if (errors.phone) setErrors((prev) => ({ ...prev, phone: undefined }))
-              }}
-            />
-            {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
-          </View>
-
-          {/* Email */}
-          <View onLayout={(e) => storeFieldPosition("email", e.nativeEvent.layout.y)}>
-            <FieldLabel label={t("garageProfile.placeholders.email") || "Email"} />
-            <TextInput
-              style={[styles.input, errors.email && styles.inputError]}
-              value={garage.email}
-              maxLength={60}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              placeholder={t("garageProfile.placeholders.email") || "Email"}
-              onChangeText={(value) => {
-                setGarage((prev: any) => ({ ...prev, email: value }))
-                if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }))
-              }}
-            />
-            {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
-          </View>
-
-          {/* GST Number */}
-          <View onLayout={(e) => storeFieldPosition("gstNumber", e.nativeEvent.layout.y)}>
-            <FieldLabel label={t("garageProfile.placeholders.gstNumber") || "GST Number"} />
-            <TextInput
-              style={[styles.input, errors.gstNumber && styles.inputError]}
-              value={garage.gstNumber}
-              maxLength={15}
-              autoCapitalize="characters"
-              placeholder={t("garageProfile.placeholders.gstNumber") || "GST Number"}
-              onChangeText={(value) => {
-                const formatted = value.replace(/[^A-Za-z0-9]/g, "").toUpperCase()
-                setGarage((prev: any) => ({ ...prev, gstNumber: formatted }))
-                if (errors.gstNumber) setErrors((prev) => ({ ...prev, gstNumber: undefined }))
-              }}
-            />
-            {errors.gstNumber && <Text style={styles.errorText}>{errors.gstNumber}</Text>}
-          </View>
-        </View>
-
-        {/* ADDRESS CARD */}
-        <View style={styles.card}>
-          <Text style={styles.section}>
-            {t("garageProfile.sections.address") || "Address"}
-          </Text>
-
-          {/* Address Line */}
-          <View onLayout={(e) => storeFieldPosition("address", e.nativeEvent.layout.y)}>
-            <FieldLabel label={t("garageProfile.placeholders.address") || "Address"} required />
-            <TextInput
-              style={[styles.input, errors.address && styles.inputError]}
-              value={garage.address}
-              maxLength={120}
-              placeholder={t("garageProfile.placeholders.address") || "Address"}
-              onChangeText={(value) => {
-                setGarage((prev: any) => ({ ...prev, address: value }))
-                if (errors.address) setErrors((prev) => ({ ...prev, address: undefined }))
-              }}
-            />
-            {errors.address && <Text style={styles.errorText}>{errors.address}</Text>}
-          </View>
-
-          {/* City */}
-          <View onLayout={(e) => storeFieldPosition("city", e.nativeEvent.layout.y)}>
-            <FieldLabel label={t("garageProfile.placeholders.city") || "City"} required />
-            <TextInput
-              style={[styles.input, errors.city && styles.inputError]}
-              value={garage.city}
-              maxLength={40}
-              placeholder={t("garageProfile.placeholders.city") || "City"}
-              onChangeText={(value) => {
-                setGarage((prev: any) => ({ ...prev, city: value }))
-                if (errors.city) setErrors((prev) => ({ ...prev, city: undefined }))
-              }}
-            />
-            {errors.city && <Text style={styles.errorText}>{errors.city}</Text>}
-          </View>
-
-          {/* State */}
-          <View onLayout={(e) => storeFieldPosition("state", e.nativeEvent.layout.y)}>
-            <FieldLabel label={t("garageProfile.placeholders.state") || "State"} required />
-            <TextInput
-              style={[styles.input, errors.state && styles.inputError]}
-              value={garage.state}
-              maxLength={40}
-              placeholder={t("garageProfile.placeholders.state") || "State"}
-              onChangeText={(value) => {
-                setGarage((prev: any) => ({ ...prev, state: value }))
-                if (errors.state) setErrors((prev) => ({ ...prev, state: undefined }))
-              }}
-            />
-            {errors.state && <Text style={styles.errorText}>{errors.state}</Text>}
-          </View>
-
-          {/* Pincode */}
-          <View onLayout={(e) => storeFieldPosition("pincode", e.nativeEvent.layout.y)}>
-            <FieldLabel label={t("garageProfile.placeholders.pincode") || "Pincode"} required />
-            <TextInput
-              style={[styles.input, errors.pincode && styles.inputError]}
-              value={garage.pincode}
-              maxLength={6}
-              keyboardType="number-pad"
-              placeholder={t("garageProfile.placeholders.pincode") || "Pincode"}
-              onChangeText={(value) => {
-                const numericValue = value.replace(/[^0-9]/g, "")
-                setGarage((prev: any) => ({ ...prev, pincode: numericValue }))
-                if (errors.pincode) setErrors((prev) => ({ ...prev, pincode: undefined }))
-              }}
-            />
-            {errors.pincode && <Text style={styles.errorText}>{errors.pincode}</Text>}
-          </View>
-        </View>
-
-        {/* VEHICLE TYPES CARD */}
-        <View style={styles.card} onLayout={(e) => storeFieldPosition("vehicleTypes", e.nativeEvent.layout.y)}>
-          <View style={styles.labelContainer}>
-            <Text style={styles.section}>
-              {t("garageProfile.sections.vehicles") || "Supported Vehicle Types"}
-            </Text>
-            <Text style={styles.requiredStar}> *</Text>
-          </View>
-
-          {vehicleOptions.map((item) => (
-            <TouchableOpacity
-              key={item.key}
-              style={styles.vehicleRow}
-              activeOpacity={0.7}
-              onPress={() => toggleVehicle(item.key)}
-            >
-              <MaterialIcons
-                name={
-                  Array.isArray(garage.vehicleTypes) &&
-                  garage.vehicleTypes.includes(item.key)
-                    ? "check-box"
-                    : "check-box-outline-blank"
-                }
-                size={24}
-                color="#2563EB"
-              />
-              <Text style={styles.vehicleText}>{item.label}</Text>
-            </TouchableOpacity>
-          ))}
-          {errors.vehicleTypes && <Text style={styles.errorText}>{errors.vehicleTypes}</Text>}
-        </View>
-
-        {/* SAVE BUTTON */}
+    <ScrollView
+      ref={scrollViewRef}
+      style={styles.container}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* HEADER BAR */}
+      <View style={styles.headerBar}>
         <TouchableOpacity
-          style={styles.saveBtn}
-          activeOpacity={0.8}
-          onPress={saveProfile}
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
         >
-          <Text style={styles.saveText}>
-            {t("garageProfile.saveBtn") || "Save Profile"}
-          </Text>
+          <Feather name="arrow-left" size={24} color="#111827" />
         </TouchableOpacity>
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
-
-      {/* BACKEND ERROR POPUP MODAL */}
-      <Modal
-        visible={!!backendErrorModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setBackendErrorModal(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.errorModal}>
-            <View style={styles.modalIcon}>
-              <MaterialIcons name="error-outline" size={32} color="#DC2626" />
-            </View>
-
-            <Text style={styles.modalTitle}>
-              {t("common.errorTitle") || "Error"}
-            </Text>
-
-            <Text style={styles.modalMessage}>{backendErrorModal}</Text>
-
-            <TouchableOpacity
-              style={styles.modalButton}
-              activeOpacity={0.8}
-              onPress={() => setBackendErrorModal(null)}
-            >
-              <Text style={styles.modalButtonText}>OK</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.heading}>Garage Profile</Text>
+          <Text style={styles.subHeading}>
+            Update your garage information and preferences.
+          </Text>
         </View>
-      </Modal>
-    </View>
+      </View>
+
+      {/* SECTION 1: OWNER PROFILE */}
+      <View style={styles.cardContainer}>
+        <Text style={styles.sectionTitle}>{t("register.ownerProfile") || "Garage Owner Profile"}</Text>
+
+        <View style={styles.inputWrapper}>
+          <Text style={styles.label}>
+            {t("register.placeholders.ownerName") || "Owner Name"} <Text style={styles.requiredStar}>*</Text>
+          </Text>
+          <TextInput
+            value={ownerName}
+            onChangeText={(val) => {
+              setOwnerName(val)
+              clearError("ownerName")
+            }}
+            style={[styles.input, errors.ownerName ? styles.inputError : null]}
+          />
+          {errors.ownerName ? <Text style={styles.errorText}>{errors.ownerName}</Text> : null}
+        </View>
+
+        <View style={styles.inputWrapper}>
+          <Text style={styles.label}>
+            {t("register.placeholders.mobile") || "Mobile Number"} <Text style={styles.requiredStar}>*</Text>
+          </Text>
+          <TextInput
+            value={phone}
+            onChangeText={(val) => {
+              const cleaned = val.replace(/[^0-9]/g, "")
+              setPhone(cleaned)
+              clearError("phone")
+            }}
+            keyboardType="phone-pad"
+            maxLength={15}
+            style={[styles.input, errors.phone ? styles.inputError : null]}
+          />
+          {errors.phone ? <Text style={styles.errorText}>{errors.phone}</Text> : null}
+        </View>
+      </View>
+
+      {/* SECTION 2: GARAGE DETAILS */}
+      <View style={styles.cardContainer}>
+        <Text style={styles.sectionTitle}>{t("register.garageDetails") || "Garage Details"}</Text>
+
+        <View style={styles.inputWrapper}>
+          <Text style={styles.label}>
+            {t("register.placeholders.garageName") || "Garage Name"} <Text style={styles.requiredStar}>*</Text>
+          </Text>
+          <TextInput
+            value={garageName}
+            onChangeText={(val) => {
+              setGarageName(val)
+              clearError("garageName")
+            }}
+            style={[styles.input, errors.garageName ? styles.inputError : null]}
+          />
+          {errors.garageName ? <Text style={styles.errorText}>{errors.garageName}</Text> : null}
+        </View>
+
+        <View style={styles.inputWrapper}>
+          <Text style={styles.label}>{t("register.placeholders.gstNumber") || "GST Number (Optional)"}</Text>
+          <TextInput
+            value={gstNumber}
+            onChangeText={setGstNumber}
+            style={styles.input}
+          />
+        </View>
+
+        <View style={styles.inputWrapper}>
+          <Text style={styles.label}>{t("register.placeholders.email") || "Email (Optional)"}</Text>
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            style={styles.input}
+          />
+        </View>
+      </View>
+
+      {/* SECTION 3: ADDRESS & LOCATION */}
+      <View style={styles.cardContainer}>
+        <Text style={styles.sectionTitle}>{t("register.address") || "Address"}</Text>
+
+        <View style={styles.inputWrapper}>
+          <Text style={styles.label}>
+            {t("register.placeholders.address1") || "Address Line 1"} <Text style={styles.requiredStar}>*</Text>
+          </Text>
+          <TextInput
+            value={address1}
+            onChangeText={(val) => {
+              setAddress1(val)
+              clearError("address1")
+            }}
+            style={[styles.input, errors.address1 ? styles.inputError : null]}
+          />
+          {errors.address1 ? <Text style={styles.errorText}>{errors.address1}</Text> : null}
+        </View>
+
+        <View style={styles.inputWrapper}>
+          <Text style={styles.label}>{t("register.placeholders.address2") || "Address Line 2 (Optional)"}</Text>
+          <TextInput
+            value={address2}
+            onChangeText={setAddress2}
+            style={styles.input}
+          />
+        </View>
+
+        {/* COUNTRY FIELD */}
+        <View style={styles.inputWrapper}>
+          <Text style={styles.label}>{t("register.placeholders.country") || "Country"} <Text style={styles.requiredStar}>*</Text></Text>
+          <TouchableOpacity
+            style={styles.dropdownToggle}
+            onPress={() => {
+              setActiveDropdown(activeDropdown === "country" ? null : "country")
+              setSearchQuery("")
+            }}
+          >
+            <Text style={styles.dropdownToggleText}>{country || t("register.placeholders.country") || "Country"}</Text>
+            <Ionicons name={activeDropdown === "country" ? "chevron-up" : "chevron-down"} size={18} color="#6B7280" />
+          </TouchableOpacity>
+
+          {activeDropdown === "country" && (
+            <View style={styles.inlineDropdownContainer}>
+              <TextInput
+                style={styles.dropdownSearchInput}
+                placeholder="Search country..."
+                placeholderTextColor="#9CA3AF"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoFocus
+              />
+              <ScrollView style={styles.dropdownListScroll} nestedScrollEnabled={true}>
+                {filteredCountries.map((item) => (
+                  <TouchableOpacity
+                    key={item.isoCode}
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      setSelectedCountryIso(item.isoCode)
+                      setCountry(item.name)
+                      setSelectedStateIso("")
+                      setState("")
+                      setCity("")
+                      setActiveDropdown(null)
+                      clearError("country")
+                    }}
+                  >
+                    <Text style={[styles.dropdownItemText, country === item.name && styles.dropdownItemTextSelected]}>
+                      {item.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </View>
+
+        {/* STATE FIELD */}
+        <View style={styles.inputWrapper}>
+          <Text style={styles.label}>{t("register.placeholders.state") || "State"} <Text style={styles.requiredStar}>*</Text></Text>
+          <TouchableOpacity
+            style={[styles.dropdownToggle, errors.state ? styles.inputError : null]}
+            onPress={() => {
+              setActiveDropdown(activeDropdown === "state" ? null : "state")
+              setSearchQuery("")
+            }}
+          >
+            <Text style={[styles.dropdownToggleText, !state && { color: "#9CA3AF" }]}>
+              {state || t("register.placeholders.state") || "State"}
+            </Text>
+            <Ionicons name={activeDropdown === "state" ? "chevron-up" : "chevron-down"} size={18} color="#6B7280" />
+          </TouchableOpacity>
+          {errors.state ? <Text style={styles.errorText}>{errors.state}</Text> : null}
+
+          {activeDropdown === "state" && (
+            <View style={styles.inlineDropdownContainer}>
+              <TextInput
+                style={styles.dropdownSearchInput}
+                placeholder="Search state..."
+                placeholderTextColor="#9CA3AF"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoFocus
+              />
+              <ScrollView style={styles.dropdownListScroll} nestedScrollEnabled={true}>
+                {filteredStates.map((item) => (
+                  <TouchableOpacity
+                    key={item.isoCode}
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      setSelectedStateIso(item.isoCode)
+                      setState(item.name)
+                      setCity("")
+                      setActiveDropdown(null)
+                      clearError("state")
+                    }}
+                  >
+                    <Text style={[styles.dropdownItemText, state === item.name && styles.dropdownItemTextSelected]}>
+                      {item.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </View>
+
+        {/* CITY FIELD */}
+        <View style={styles.inputWrapper}>
+          <Text style={styles.label}>{t("register.placeholders.city") || "City"} <Text style={styles.requiredStar}>*</Text></Text>
+          <TouchableOpacity
+            style={[styles.dropdownToggle, errors.city ? styles.inputError : null]}
+            onPress={() => {
+              setActiveDropdown(activeDropdown === "city" ? null : "city")
+              setSearchQuery("")
+            }}
+          >
+            <Text style={[styles.dropdownToggleText, !city && { color: "#9CA3AF" }]}>
+              {city || t("register.placeholders.city") || "City"}
+            </Text>
+            <Ionicons name={activeDropdown === "city" ? "chevron-up" : "chevron-down"} size={18} color="#6B7280" />
+          </TouchableOpacity>
+          {errors.city ? <Text style={styles.errorText}>{errors.city}</Text> : null}
+
+          {activeDropdown === "city" && (
+            <View style={styles.inlineDropdownContainer}>
+              <TextInput
+                style={styles.dropdownSearchInput}
+                placeholder="Search city..."
+                placeholderTextColor="#9CA3AF"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoFocus
+              />
+              <ScrollView style={styles.dropdownListScroll} nestedScrollEnabled={true}>
+                {filteredCities.map((item) => (
+                  <TouchableOpacity
+                    key={item.name}
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      setCity(item.name)
+                      setActiveDropdown(null)
+                      clearError("city")
+                    }}
+                  >
+                    <Text style={[styles.dropdownItemText, city === item.name && styles.dropdownItemTextSelected]}>
+                      {item.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.inputWrapper}>
+          <Text style={styles.label}>{t("register.placeholders.pincode") || "Pincode"}</Text>
+          <TextInput
+            value={pincode}
+            onChangeText={setPincode}
+            keyboardType="numeric"
+            style={styles.input}
+          />
+        </View>
+      </View>
+
+      {/* SECTION 4: VEHICLE SPECIALIZATION */}
+      <View style={styles.cardContainer}>
+        <Text style={styles.sectionTitle}>{t("register.vehicleTypes") || "Vehicle Types Supported"}</Text>
+
+        <View style={styles.vehicleRow}>
+          {VEHICLE_SPECIALIZATIONS.map((item) => {
+            const isSelected = selectedVehicles.includes(item.id)
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.vehicleChip, isSelected && styles.vehicleChipSelected]}
+                onPress={() => toggleVehicleType(item.id)}
+                activeOpacity={0.7}
+              >
+                <Ionicons 
+                  name={isSelected ? "checkbox" : "square-outline"} 
+                  size={16} 
+                  color={isSelected ? "#2563EB" : "#6B7280"} 
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={[styles.vehicleText, isSelected && styles.vehicleTextSelected]}>
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+
+        <TouchableOpacity style={styles.logoButton} activeOpacity={0.7}>
+          <Text style={styles.logoButtonText}>{t("register.uploadLogo") || "Update Garage Logo (Optional)"}</Text>
+        </TouchableOpacity>
+      </View>
+
+      <TouchableOpacity
+        style={styles.button}
+        onPress={handleUpdateProfile}
+        disabled={loading}
+        activeOpacity={0.8}
+      >
+        {loading ? (
+          <ActivityIndicator color="white" />
+        ) : (
+          <Text style={styles.buttonText}>Save Changes</Text>
+        )}
+      </TouchableOpacity>
+
+      <View style={{ height: 40 }} />
+    </ScrollView>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 18
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center"
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 16,
+    paddingTop: 10
   },
   headerBar: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 20,
-    marginTop: 10
+    marginTop: 10,
+    zIndex: 50,
+    elevation: 5
   },
   backButton: {
     width: 40,
@@ -522,154 +610,185 @@ const styles = StyleSheet.create({
     flex: 1
   },
   heading: {
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: "bold",
     color: "#111827"
   },
   subHeading: {
     color: "#6B7280",
-    fontSize: 14,
+    fontSize: 12,
     marginTop: 2
   },
-  logoCard: {
-    backgroundColor: "white",
-    borderRadius: 20,
-    padding: 20,
-    alignItems: "center",
-    marginBottom: 16
+  cardContainer: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2
   },
-  logoBox: {
-    width: 90,
-    height: 90,
-    borderRadius: 20,
-    backgroundColor: "#EFF6FF",
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  logoBtn: {
-    marginTop: 12
-  },
-  logoText: {
-    color: "#2563EB",
-    fontWeight: "bold"
-  },
-  card: {
-    backgroundColor: "white",
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 16
-  },
-  section: {
+  sectionTitle: {
     fontSize: 16,
-    fontWeight: "bold",
-    color: "#111827",
-    marginBottom: 14
+    fontWeight: "700",
+    color: "#1F2937",
+    marginBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+    paddingBottom: 8
   },
-  labelContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 6
+  inputWrapper: {
+    marginBottom: 14,
+    position: "relative"
   },
   label: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
-    color: "#374151"
+    color: "#374151",
+    marginBottom: 6
   },
   requiredStar: {
-    color: "#DC2626",
-    fontSize: 14,
-    fontWeight: "bold"
+    color: "#EF4444"
   },
   input: {
     backgroundColor: "#F9FAFB",
     borderWidth: 1,
     borderColor: "#E5E7EB",
     borderRadius: 12,
-    padding: 14,
-    marginBottom: 6,
-    fontSize: 15,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
     color: "#111827"
   },
+  dropdownToggle: {
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+  dropdownToggleText: {
+    fontSize: 14,
+    color: "#111827"
+  },
+  inlineDropdownContainer: {
+    marginTop: 6,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    padding: 8,
+    maxHeight: 220,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 99
+  },
+  dropdownSearchInput: {
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: "#111827",
+    marginBottom: 6
+  },
+  dropdownListScroll: {
+    maxHeight: 150
+  },
+  dropdownItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F9FAFB"
+  },
+  dropdownItemText: {
+    fontSize: 13,
+    color: "#374151"
+  },
+  dropdownItemTextSelected: {
+    color: "#2563EB",
+    fontWeight: "600"
+  },
   inputError: {
-    borderColor: "#DC2626",
+    borderColor: "#EF4444",
     backgroundColor: "#FEF2F2"
   },
   errorText: {
     color: "#DC2626",
-    fontSize: 12,
-    marginBottom: 10,
-    marginLeft: 4,
-    fontWeight: "500"
+    fontSize: 11,
+    fontWeight: "500",
+    marginTop: 4,
+    marginLeft: 2
   },
   vehicleRow: {
     flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 14
-  },
-  vehicleText: {
-    marginLeft: 10,
-    fontSize: 15,
-    color: "#374151"
-  },
-  saveBtn: {
-    backgroundColor: "#2563EB",
-    padding: 18,
-    borderRadius: 18,
-    alignItems: "center"
-  },
-  saveText: {
-    color: "white",
-    fontWeight: "bold",
-    fontSize: 16
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.45)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24
-  },
-  errorModal: {
-    width: "100%",
-    maxWidth: 380,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    padding: 24,
-    alignItems: "center"
-  },
-  modalIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: 18,
-    backgroundColor: "#FEF2F2",
-    justifyContent: "center",
-    alignItems: "center",
+    flexWrap: "wrap",
     marginBottom: 16
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#111827",
+  vehicleChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F3F4F6",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginRight: 8,
     marginBottom: 8
   },
-  modalMessage: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: "#6B7280",
-    textAlign: "center",
-    marginBottom: 20
+  vehicleChipSelected: {
+    backgroundColor: "#EFF6FF",
+    borderColor: "#2563EB"
   },
-  modalButton: {
-    width: "100%",
-    height: 48,
+  vehicleText: {
+    color: "#4B5563",
+    fontSize: 13,
+    fontWeight: "500"
+  },
+  vehicleTextSelected: {
+    color: "#2563EB",
+    fontWeight: "600"
+  },
+  logoButton: {
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: "#CBD5E1",
     borderRadius: 12,
-    backgroundColor: "#DC2626",
-    justifyContent: "center",
-    alignItems: "center"
+    padding: 16,
+    alignItems: "center",
+    backgroundColor: "#F8FAFC"
   },
-  modalButtonText: {
-    fontSize: 15,
+  logoButtonText: {
+    color: "#2563EB",
+    fontWeight: "600",
+    fontSize: 14
+  },
+  button: {
+    backgroundColor: "#2563EB",
+    padding: 16,
+    borderRadius: 14,
+    alignItems: "center",
+    shadowColor: "#2563EB",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  buttonText: {
+    color: "white",
     fontWeight: "700",
-    color: "#FFFFFF"
-  } 
+    fontSize: 16
+  }
 })

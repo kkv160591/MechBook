@@ -4,12 +4,19 @@ import {
   UpdateItemCommand
 } from "@aws-sdk/client-dynamodb"
 
-import { unmarshall } from "@aws-sdk/util-dynamodb"
+import {
+  marshall,
+  unmarshall
+} from "@aws-sdk/util-dynamodb"
 
-import { db } from "../config/dynamodb"
+import {
+  db
+} from "../config/dynamodb"
+
 
 const TABLE =
   process.env.SETTINGS_TABLE_NAME
+
 
 const PLAN_DEFINITIONS: any = {
 
@@ -44,8 +51,8 @@ const PLAN_DEFINITIONS: any = {
     monthlyPrice: 899,
     annualPrice: 629
   }
-
 }
+
 
 const BOOSTERS: any = {
 
@@ -66,149 +73,289 @@ const BOOSTERS: any = {
     jobs: 150,
     price: 249
   }
-
 }
 
-export const getSetting =
-async (
-  garageId: string,
-  settingType: string
-) => {
 
-  const response =
+/**
+ * Get complete garage setting.
+ */
+export const getSetting =
+  async (
+    garageId: string,
+    settingType: string
+  ) => {
+
+    const response =
+      await db.send(
+        new GetItemCommand({
+
+          TableName: TABLE,
+
+          Key: {
+
+            garageId: {
+              S: garageId
+            },
+
+            settingType: {
+              S: settingType
+            }
+          }
+        })
+      )
+
+    if (!response.Item) {
+      return null
+    }
+
+    return unmarshall(
+      response.Item
+    )
+  }
+
+
+/**
+ * Save a complete setting.
+ *
+ * Supports:
+ * - string
+ * - number
+ * - boolean
+ * - arrays
+ * - nested objects
+ */
+export const saveSetting =
+  async (
+    garageId: string,
+    settingType: string,
+    data: any
+  ) => {
+
+    const item = {
+
+      garageId,
+
+      settingType,
+
+      ...data
+    }
+
     await db.send(
-      new GetItemCommand({
+      new PutItemCommand({
+
+        TableName: TABLE,
+
+        Item: marshall(
+          item,
+          {
+            removeUndefinedValues: true
+          }
+        )
+      })
+    )
+
+    return {
+      success: true,
+      setting: item
+    }
+  }
+
+
+/**
+ * Update the current user's language
+ * and other user-level preferences.
+ *
+ * IMPORTANT:
+ * userId comes from authenticated req.user.
+ */
+export const updateUserLanguageSetting =
+  async (
+    garageId: string,
+    userId: string,
+    data: any
+  ) => {
+
+    const existing =
+      await getSetting(
+        garageId,
+        "LANGUAGE"
+      )
+
+    const existingUsers =
+      Array.isArray(existing?.users)
+        ? existing.users
+        : []
+
+    /*
+     * Make a copy so we never mutate
+     * the object returned from DynamoDB.
+     */
+    const users =
+      [...existingUsers]
+
+    const index =
+      users.findIndex(
+        (item: any) =>
+          item?.userId === userId
+      )
+
+    const currentUserSettings =
+      index >= 0
+        ? users[index]
+        : {
+            userId
+          }
+
+    const updatedUserSettings = {
+
+      ...currentUserSettings,
+
+      userId,
+
+      ...data
+    }
+
+    if (index >= 0) {
+
+      users[index] =
+        updatedUserSettings
+
+    } else {
+
+      users.push(
+        updatedUserSettings
+      )
+    }
+
+    const setting = {
+
+      garageId,
+
+      settingType:
+        "LANGUAGE",
+
+      users
+    }
+
+    await db.send(
+      new PutItemCommand({
+
+        TableName: TABLE,
+
+        Item: marshall(
+          setting,
+          {
+            removeUndefinedValues: true
+          }
+        )
+      })
+    )
+
+    return setting
+  }
+
+
+/**
+ * Get ONLY the current user's language/preferences.
+ *
+ * The database can contain all users,
+ * but the API doesn't need to expose
+ * everyone else's preferences.
+ */
+export const getUserLanguageSetting =
+  async (
+    garageId: string,
+    userId: string
+  ) => {
+
+    const setting =
+      await getSetting(
+        garageId,
+        "LANGUAGE"
+      )
+
+    if (!setting) {
+
+      return {
+
+        settingType:
+          "LANGUAGE",
+
+        garageId,
+
+        userId,
+
+        language: "en"
+      }
+    }
+
+    const userSettings =
+      Array.isArray(setting.users)
+        ? setting.users.find(
+            (item: any) =>
+              item?.userId === userId
+          )
+        : null
+
+    return {
+
+      settingType:
+        "LANGUAGE",
+
+      garageId,
+
+      userId,
+
+      language:
+        userSettings?.language ||
+        "en",
+
+      /*
+       * Future user-level settings
+       * are returned too.
+       */
+      ...userSettings
+    }
+  }
+
+
+export const runBackup =
+  async (
+    garageId: string
+  ) => {
+
+    const lastBackup =
+      new Date().toISOString()
+
+    await db.send(
+      new UpdateItemCommand({
 
         TableName: TABLE,
 
         Key: {
+
           garageId: {
             S: garageId
           },
+
           settingType: {
-            S: settingType
+            S: "BACKUP"
+          }
+        },
+
+        UpdateExpression:
+          "SET lastBackup = :lastBackup",
+
+        ExpressionAttributeValues: {
+
+          ":lastBackup": {
+            S: lastBackup
           }
         }
-
       })
     )
 
-  if (!response.Item) {
-    return null
-  }
-
-  return unmarshall(
-    response.Item
-  )
-
-}
-
-export const saveSetting =
-async (
-  garageId: string,
-  settingType: string,
-  data: any
-) => {
-
-  const item: any = {
-
-    garageId: {
-      S: garageId
-    },
-
-    settingType: {
-      S: settingType
+    return {
+      lastBackup
     }
-
   }
-
-  Object.entries(data)
-    .forEach(([key, value]) => {
-
-      if (typeof value === "string") {
-
-        item[key] = {
-          S: value
-        }
-
-      }
-
-      else if (
-        typeof value === "number"
-      ) {
-
-        item[key] = {
-          N: value.toString()
-        }
-
-      }
-
-      else if (
-        typeof value === "boolean"
-      ) {
-
-        item[key] = {
-          BOOL: value
-        }
-
-      }
-
-    })
-
-  await db.send(
-    new PutItemCommand({
-
-      TableName: TABLE,
-
-      Item: item
-
-    })
-  )
-
-  return {
-    success: true
-  }
-
-}
-
-export const runBackup =
-async (
-  garageId: string
-) => {
-
-  const lastBackup =
-    new Date().toISOString()
-
-  await db.send(
-    new UpdateItemCommand({
-
-      TableName: TABLE,
-
-      Key: {
-        garageId: {
-          S: garageId
-        },
-        settingType: {
-          S: "BACKUP"
-        }
-      },
-
-      UpdateExpression:
-        "SET lastBackup = :lastBackup",
-
-      ExpressionAttributeValues: {
-
-        ":lastBackup": {
-          S: lastBackup
-        }
-
-      }
-
-    })
-  )
-
-  return {
-    lastBackup
-  }
-
-}

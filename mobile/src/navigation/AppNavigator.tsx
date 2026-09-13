@@ -4,6 +4,9 @@ import {
 
 import LoginScreen from "../screens/auth/LoginScreen"
 import RegisterScreen from "../screens/auth/RegisterScreen"
+import ForgotPinScreen from "../screens/auth/ForgotPinScreen"
+import VerifyPinOtpScreen from "../screens/auth/VerifyPinOtpScreen"
+import ResetPinScreen from "../screens/auth/ResetPinScreen"
 
 import BottomTabs from "./BottomTabs"
 
@@ -78,6 +81,21 @@ export default function AppNavigator() {
         <Stack.Screen
           name="Register"
           component={RegisterScreen}
+        />
+
+        <Stack.Screen
+          name="ForgotPin"
+          component={ForgotPinScreen}
+        />
+
+        <Stack.Screen
+          name="VerifyPinOtp"
+          component={VerifyPinOtpScreen}
+        />
+
+        <Stack.Screen
+          name="ResetPin"
+          component={ResetPinScreen}
         />
 
       </Stack.Navigator>
