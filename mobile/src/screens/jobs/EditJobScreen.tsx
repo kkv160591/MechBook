@@ -347,13 +347,26 @@ export default function EditJobScreen({ route, navigation }: any) {
   // ==============================
 
   const searchedServices = useMemo(() => {
-    if (!serviceName.trim() || !Array.isArray(serviceTypes)) {
+    const query = serviceName.trim().toLowerCase()
+
+    if (!query) {
       return []
     }
 
-    return serviceTypes.filter((service) =>
-      (service?.name || "").toLowerCase().includes(serviceName.toLowerCase()),
-    )
+    return serviceTypes
+      .filter((service: any) => {
+        const name =
+          String(service.name || "").toLowerCase()
+
+        const category =
+          String(service.category || "").toLowerCase()
+
+        return (
+          name.includes(query) ||
+          category.includes(query)
+        )
+      })
+      .slice(0, 10)
   }, [serviceName, serviceTypes])
 
   // ==============================
@@ -395,26 +408,56 @@ export default function EditJobScreen({ route, navigation }: any) {
     if (!serviceName.trim()) {
       Alert.alert(
         t("jobs.alertValidationTitle"),
-        t("jobs.serviceRequired") || "Please enter a service",
+        t("jobs.serviceRequired") ||
+          "Please enter a service"
       )
 
       return
     }
 
-    const price = Number(servicePrice) || 0
+    const price =
+      Number(servicePrice) || 0
 
-    setSelectedServices((prev) => [
+    /*
+    * Try to identify the selected service
+    * from the master service list.
+    */
+    const matchedService =
+      serviceTypes.find(
+        (service: any) =>
+          String(service.name || "")
+            .trim()
+            .toLowerCase() ===
+          serviceName.trim().toLowerCase()
+      )
+
+    const serviceId =
+      matchedService?.serviceTypeId ||
+      matchedService?.id ||
+      matchedService?._id ||
+      null
+
+    setSelectedServices(prev => [
       ...prev,
       {
-        serviceId: null,
-        name: serviceName.trim(),
-        estimatedPrice: price,
-        actualPrice: price,
-      },
+        serviceId,
+
+        name:
+          serviceName.trim(),
+
+        quantity: 1,
+
+        estimatedPrice:
+          price,
+
+        actualPrice:
+          price
+      }
     ])
 
     setServiceName("")
     setServicePrice("")
+
     closeDropdowns()
   }
 
@@ -588,6 +631,38 @@ export default function EditJobScreen({ route, navigation }: any) {
       rawSubtotal - discountAmount,
     )
   }, [rawSubtotal, discountAmount])
+
+  // ==============================
+  // SELECTSEVICE HANDLE
+  // ==============================
+
+  const handleSelectService = (service: any) => {
+    const serviceId =
+      service.serviceTypeId ||
+      service.id ||
+      service._id ||
+      null
+
+    const price = Number(
+      service.defaultPrice ??
+      service.price ??
+      service.estimatedPrice ??
+      0
+    )
+
+    setServiceName(
+      String(service.name || "")
+    )
+
+    setServicePrice(
+      String(price)
+    )
+
+    setShowSuggestions(false)
+
+    setShowWorkerSuggestions(false)
+    setShowPartSuggestions(false)
+  }
 
   // ==============================
   // STEP VALIDATION
@@ -1189,12 +1264,16 @@ export default function EditJobScreen({ route, navigation }: any) {
 
               <Text style={styles.label}>{t("jobs.service")}</Text>
 
-              <View style={[styles.inputWrapper, { zIndex: 20 }]}>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  { zIndex: 20 }
+                ]}
+              >
                 <TextInput
                   style={styles.input}
-
                   value={serviceName}
-
+                  placeholder={t("jobs.service")}
                   onFocus={() => {
                     setShowSuggestions(true)
 
@@ -1202,45 +1281,96 @@ export default function EditJobScreen({ route, navigation }: any) {
 
                     setShowPartSuggestions(false)
                   }}
-
-                  onChangeText={(text) => {
+                  onChangeText={text => {
                     setServiceName(text)
 
                     setShowSuggestions(true)
                   }}
                 />
 
-                {showSuggestions && searchedServices.length > 0 && (
-                  <View style={styles.suggestionContainer}>
-                    {searchedServices.map((service) => (
-                      <TouchableOpacity
-                        key={service.serviceTypeId || service.id || service._id}
+                {showSuggestions &&
+                  serviceName.trim().length > 0 &&
+                  searchedServices.length > 0 && (
 
-                        style={styles.workerSuggestion}
+                    <View
+                      style={
+                        styles.suggestionContainer
+                      }
+                    >
 
-                        onPress={() => {
-                          setServiceName(service.name)
+                      {searchedServices.map(
+                        (service: any) => {
 
-                          setServicePrice(String(service.defaultPrice || 0))
+                          const serviceId =
+                            service.serviceTypeId ||
+                            service.id ||
+                            service._id
 
-                          setShowSuggestions(false)
-                        }}
-                      >
-                        <View>
-                          <Text style={styles.cardTitle}>{service.name}</Text>
+                          const price =
+                            Number(
+                              service.defaultPrice ??
+                              service.price ??
+                              service.estimatedPrice ??
+                              0
+                            )
 
-                          <Text style={styles.cardSubtitle}>
-                            {service.category}
-                          </Text>
-                        </View>
+                          return (
+                            <TouchableOpacity
+                              key={
+                                serviceId ||
+                                service.name
+                              }
+                              style={
+                                styles.workerSuggestion
+                              }
+                              onPress={() =>
+                                handleSelectService(
+                                  service
+                                )
+                              }
+                            >
 
-                        <Text style={styles.suggestionPrice}>
-                          ₹ {service.defaultPrice}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
+                              <View
+                                style={{
+                                  flex: 1
+                                }}
+                              >
+
+                                <Text
+                                  style={
+                                    styles.cardTitle
+                                  }
+                                >
+                                  {service.name}
+                                </Text>
+
+                                {service.category ? (
+                                  <Text
+                                    style={
+                                      styles.cardSubtitle
+                                    }
+                                  >
+                                    {service.category}
+                                  </Text>
+                                ) : null}
+
+                              </View>
+
+                              <Text
+                                style={
+                                  styles.suggestionPrice
+                                }
+                              >
+                                ₹ {price}
+                              </Text>
+
+                            </TouchableOpacity>
+                          )
+                        }
+                      )}
+
+                    </View>
+                  )}
               </View>
 
               <Text style={styles.label}>{t("jobs.estimatePrice")}</Text>
