@@ -1,112 +1,277 @@
 import {
   PutCommand,
   ScanCommand,
-  GetCommand
+  GetCommand,
 } from "@aws-sdk/lib-dynamodb"
 
 import { db } from "../config/dynamodb"
-
 import { v4 as uuidv4 } from "uuid"
 
-export const createCustomer =
-  async (
-    garageId: string,
-    data: any
-  ) => {
+const CUSTOMERS_TABLE = "Customers"
 
-    const customer = {
+/*
+|--------------------------------------------------------------------------
+| CREATE CUSTOMER
+|--------------------------------------------------------------------------
+*/
 
-      customerId: uuidv4(),
+export const createCustomer = async (
+  garageId: string,
+  data: any
+) => {
 
-      garageId,
+  const customer = {
+    customerId: uuidv4(),
 
-      name: data.name,
-      phone: data.phone,
+    garageId,
 
-      alternatePhone:
-        data.alternatePhone || "",
+    name: String(data.name || "").trim(),
 
-      address:
-        data.address || "",
+    phone: String(data.phone || "").trim(),
 
-      notes:
-        data.notes || "",
+    alternatePhone:
+      String(data.alternatePhone || "").trim(),
 
-      totalVehicles: 0,
-      totalJobs: 0,
-      totalSpent: 0,
-      pendingAmount: 0,
+    address:
+      String(data.address || "").trim(),
 
-      createdAt:
-        new Date().toISOString()
+    notes:
+      String(data.notes || "").trim(),
 
-    }
+    totalVehicles: 0,
 
-    await db.send(
+    totalJobs: 0,
 
-      new PutCommand({
+    totalSpent: 0,
 
-        TableName: "Customers",
+    pendingAmount: 0,
 
-        Item: customer
+    createdAt:
+      new Date().toISOString(),
 
-      })
-
-    )
-
-    return customer
-
+    updatedAt:
+      new Date().toISOString(),
   }
+
+  await db.send(
+    new PutCommand({
+      TableName: CUSTOMERS_TABLE,
+
+      Item: customer,
+
+      ConditionExpression:
+        "attribute_not_exists(customerId)",
+    })
+  )
+
+  return customer
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| GET CUSTOMERS
+|--------------------------------------------------------------------------
+*/
 
 export const getCustomers =
-  async (garageId: string) => {
+async (
+  garageId: string
+) => {
 
-    const result =
-      await db.send(
+  const result =
+    await db.send(
+      new ScanCommand({
 
-        new ScanCommand({
+        TableName:
+          CUSTOMERS_TABLE,
 
-          TableName: "Customers",
+        FilterExpression:
+          "garageId = :garageId",
 
-          FilterExpression:
-            "garageId = :garageId",
+        ExpressionAttributeValues: {
+          ":garageId": garageId,
+        },
 
-          ExpressionAttributeValues: {
+      })
+    )
 
-            ":garageId": garageId
+  return result.Items || []
+}
 
-          }
 
-        })
-
-      )
-
-    return result.Items || []
-
-  }
+/*
+|--------------------------------------------------------------------------
+| GET CUSTOMER BY ID
+|--------------------------------------------------------------------------
+*/
 
 export const getCustomerById =
-  async (
-    customerId: string
-  ) => {
+async (
+  customerId: string
+) => {
 
-    const result =
-      await db.send(
+  const result =
+    await db.send(
+      new GetCommand({
 
-        new GetCommand({
+        TableName:
+          CUSTOMERS_TABLE,
 
-          TableName: "Customers",
+        Key: {
+          customerId,
+        },
 
-          Key: {
+      })
+    )
 
-            customerId
+  return result.Item
+}
 
-          }
 
-        })
+/*
+|--------------------------------------------------------------------------
+| FIND CUSTOMER
+|--------------------------------------------------------------------------
+|
+| We use phone as the primary identity because customer names can
+| be duplicated.
+|
+| IMPORTANT:
+| Ideally later add a DynamoDB GSI:
+|
+|   garageId-phone-index
+|
+| Then replace this Scan with QueryCommand.
+|
+|--------------------------------------------------------------------------
+*/
 
-      )
+export const findCustomer =
+async (
+  garageId: string,
+  phone: string
+) => {
 
-    return result.Item
+  const normalizedPhone =
+    String(phone || "")
+      .replace(/\D/g, "")
+      .trim()
+
+  if (!normalizedPhone) {
+    return null
+  }
+
+  const result =
+    await db.send(
+      new ScanCommand({
+
+        TableName:
+          CUSTOMERS_TABLE,
+
+        FilterExpression:
+          "garageId = :garageId AND phone = :phone",
+
+        ExpressionAttributeValues: {
+
+          ":garageId":
+            garageId,
+
+          ":phone":
+            normalizedPhone,
+
+        },
+
+      })
+    )
+
+  return result.Items?.[0] || null
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| FIND OR CREATE CUSTOMER
+|--------------------------------------------------------------------------
+*/
+
+export const findOrCreateCustomer =
+async (
+  garageId: string,
+  data: any
+) => {
+
+  const phone =
+    String(data.phone || "")
+      .replace(/\D/g, "")
+      .trim()
+
+  const name =
+    String(data.name || "")
+      .trim()
+
+  const address =
+    String(data.address || "")
+      .trim()
+
+
+  /*
+   * Phone is required for reliable customer identity.
+   */
+
+  if (!phone) {
+
+    throw new Error(
+      "Customer phone number is required"
+    )
 
   }
+
+
+  /*
+   * FIRST: LOOK FOR EXISTING CUSTOMER
+   */
+
+  const existing =
+    await findCustomer(
+      garageId,
+      phone
+    )
+
+  if (existing) {
+
+    /*
+     * If customer already exists, return it.
+     *
+     * We intentionally do not overwrite the existing
+     * customer name/address here.
+     */
+
+    return {
+      customer: existing,
+      created: false,
+    }
+
+  }
+
+
+  /*
+   * SECOND: CREATE CUSTOMER
+   */
+
+  const customer =
+    await createCustomer(
+      garageId,
+      {
+        name,
+        phone,
+        address,
+      }
+    )
+
+  return {
+    customer,
+    created: true,
+  }
+
+}

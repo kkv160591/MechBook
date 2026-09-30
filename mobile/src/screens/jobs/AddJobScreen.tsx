@@ -16,6 +16,7 @@ import { createJob } from "../../services/jobService"
 import { getWorkers } from "../../services/workerService"
 import { getServiceTypes } from "../../services/serviceTypesService"
 import { getInventory } from "../../services/inventoryService"
+import { getCustomers } from "../../services/customerService"
 import {
   getPlanUsage,
   PlanUsageResponse,
@@ -57,6 +58,7 @@ export default function AddJobScreen({ navigation }: any) {
   const [workers, setWorkers] = useState<any[]>([])
   const [serviceTypes, setServiceTypes] = useState<any[]>([])
   const [inventoryList, setInventoryList] = useState<any[]>([])
+  const [customers, setCustomers] = useState<any[]>([])
   const [planUsage, setPlanUsage] =
     useState<PlanUsageResponse | null>(null)
 
@@ -64,9 +66,11 @@ export default function AddJobScreen({ navigation }: any) {
   // CUSTOMER
   // ==============================
 
+  const [customerId, setCustomerId] = useState<string | null>(null)
   const [customerName, setCustomerName] = useState("")
   const [phone, setPhone] = useState("")
   const [customerAddress, setCustomerAddress] = useState("")
+  const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false)
 
   // ==============================
   // VEHICLE
@@ -208,7 +212,7 @@ export default function AddJobScreen({ navigation }: any) {
 
   const closeDropdowns = () => {
     Keyboard.dismiss()
-
+    setShowCustomerSuggestions(false)
     setShowSuggestions(false)
     setShowPartSuggestions(false)
     setShowWorkerSuggestions(false)
@@ -263,6 +267,78 @@ export default function AddJobScreen({ navigation }: any) {
   }, [partName, inventoryList])
 
   // ==============================
+  // SEARCH CUSTOMERS (BY NAME OR PHONE)
+  // ==============================
+
+  const searchedCustomers = useMemo(() => {
+    const searchName = customerName.trim().toLowerCase()
+    const searchPhone = phone.trim()
+
+    if (!searchName && !searchPhone) {
+      return []
+    }
+
+    return customers.filter((cust) => {
+      const nameMatch =
+        searchName &&
+        (cust.name || cust.customerName || "")
+          .toLowerCase()
+          .includes(searchName)
+
+      const phoneMatch =
+        searchPhone && (cust.phone || cust.phoneNumber || "").includes(searchPhone)
+
+      return nameMatch || phoneMatch
+    })
+  }, [customerName, phone, customers])
+
+  const getCustomerId = (cust: any) => cust._id || cust.id || cust.customerId || null
+
+  const populateCustomer = (customer: any) => {
+    setCustomerId(getCustomerId(customer))
+    setCustomerName(customer.name || customer.customerName || "")
+    setPhone(customer.phone || customer.phoneNumber || "")
+    setCustomerAddress(customer.address || customer.customerAddress || "")
+    setShowCustomerSuggestions(false)
+  }
+
+  const handleCustomerNameChange = (
+    text: string
+  ) => {
+
+    setCustomerName(text)
+
+    // User is manually changing the customer.
+    // Therefore the previous selected customer is no longer valid.
+    setCustomerId(null)
+
+    setShowCustomerSuggestions(
+      text.trim().length > 0
+    )
+  }
+
+  const handleCustomerPhoneChange = (
+    text: string
+  ) => {
+
+    const cleaned =
+      text.replace(
+        /[^0-9]/g,
+        ""
+      )
+
+    setPhone(cleaned)
+
+    // Manual editing means we no longer know
+    // whether the selected customer is still valid.
+    setCustomerId(null)
+
+    setShowCustomerSuggestions(
+      cleaned.length > 0
+    )
+  }
+
+  // ==============================
   // LOAD DATA
   // ==============================
 
@@ -280,6 +356,7 @@ export default function AddJobScreen({ navigation }: any) {
         workersRes,
         servicesRes,
         inventoryRes,
+        customersRes,
         planUsageRes,
       ] = await Promise.all([
         getWorkers(),
@@ -287,6 +364,7 @@ export default function AddJobScreen({ navigation }: any) {
         getInventory
           ? getInventory()
           : Promise.resolve([]),
+        getCustomers ? getCustomers() : Promise.resolve([]),
         getPlanUsage(),
       ])
 
@@ -336,6 +414,10 @@ export default function AddJobScreen({ navigation }: any) {
           ? inventoryParts
           : []
       )
+
+      const fetchedCustomers =
+        customersRes?.customers || customersRes?.data || customersRes || []
+      setCustomers(Array.isArray(fetchedCustomers) ? fetchedCustomers : [])
 
       // ==============================
       // PLAN USAGE
@@ -851,13 +933,16 @@ export default function AddJobScreen({ navigation }: any) {
       setSaving(true)
 
       await createJob({
+        customerId: customerId || null,
+
         customerName:
           customerName.trim(),
 
         phone:
           phone.trim(),
 
-        customerAddress,
+        customerAddress:
+          customerAddress.trim(),
 
         vehicleNumber:
           vehicleNumber.trim(),
@@ -1050,100 +1135,113 @@ export default function AddJobScreen({ navigation }: any) {
         {currentStep === 1 && (
           <>
             {/* CUSTOMER */}
-            <View
-              style={styles.sectionCard}
-            >
-              <View
-                style={styles.sectionHeader}
-              >
-                <Ionicons
-                  name="person-outline"
-                  size={20}
-                  color="#2563EB"
-                />
-
-                <Text
-                  style={
-                    styles.sectionHeading
-                  }
-                >
-                  {t(
-                    "jobs.customerDetails"
-                  )}
-                </Text>
+            <View style={[styles.sectionCard, { zIndex: 100 }]}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="person-outline" size={20} color="#2563EB" />
+                <Text style={styles.sectionHeading}>{t("jobs.customerDetails")}</Text>
               </View>
 
-              <RequiredLabel
-                text={t(
-                  "jobs.customerName"
+              {/* CUSTOMER NAME INPUT & SUGGESTIONS */}
+              <RequiredLabel text={t("jobs.customerName")} />
+              <View style={[styles.customerInputWrapper, { zIndex: 1000, elevation: 10 }]}>
+                <TextInput
+                  ref={customerNameRef}
+                  style={[
+                    styles.input,
+                    submitted && !customerName.trim() && styles.inputError,
+                  ]}
+                  value={customerName}
+                  onChangeText={handleCustomerNameChange}
+                  onFocus={() => setShowCustomerSuggestions(true)}
+                  placeholder="Enter customer name"
+                  placeholderTextColor="#9CA3AF"
+                />
+
+                {showCustomerSuggestions && customerName.trim().length > 0 && searchedCustomers.length > 0 && (
+                  <View style={styles.customerSuggestionContainer}>
+                    {searchedCustomers.map((customer, index) => (
+                      <TouchableOpacity
+                        key={getCustomerId(customer) || `${customer.name}-${customer.phone}-${index}`}
+                        style={styles.customerSuggestion}
+                        onPress={() => populateCustomer(customer)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.customerSuggestionIcon}>
+                          <Ionicons name="person" size={18} color="#2563EB" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.customerSuggestionName}>{customer.name || customer.customerName}</Text>
+                          <Text style={styles.customerSuggestionPhone}>{customer.phone || customer.phoneNumber || "-"}</Text>
+                          {customer.address || customer.customerAddress ? (
+                            <Text style={styles.customerSuggestionAddress} numberOfLines={1}>
+                              {customer.address || customer.customerAddress}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 )}
-              />
+              </View>
 
-              <TextInput
-                ref={
-                  customerNameRef
-                }
-                onFocus={
-                  closeDropdowns
-                }
-                style={[
-                  styles.input,
-                  submitted &&
-                    !customerName.trim() &&
-                    styles.inputError,
-                ]}
-                value={customerName}
-                onChangeText={
-                  setCustomerName
-                }
-              />
+              {/* EXISTING CUSTOMER BADGE */}
+              {customerId && (
+                <View style={styles.customerFoundBadge}>
+                  <Ionicons name="checkmark-circle" size={17} color="#059669" />
+                  <Text style={styles.customerFoundText}>Existing customer selected</Text>
+                </View>
+              )}
 
-              <RequiredLabel
-                text={t(
-                  "jobs.phoneNumber"
+              {/* PHONE NUMBER INPUT & SUGGESTIONS */}
+              <RequiredLabel text={t("jobs.phoneNumber")} />
+              <View style={[styles.customerInputWrapper, { zIndex: 100, elevation: 5 }]}>
+                <TextInput
+                  ref={phoneRef}
+                  keyboardType="phone-pad"
+                  maxLength={10}
+                  style={[
+                    styles.input,
+                    submitted && phone.trim().length !== 10 && styles.inputError,
+                  ]}
+                  value={phone}
+                  onChangeText={handleCustomerPhoneChange}
+                  onFocus={() => setShowCustomerSuggestions(true)}
+                  placeholder="Enter 10 digit phone number"
+                  placeholderTextColor="#9CA3AF"
+                />
+
+                {showCustomerSuggestions && phone.length > 0 && searchedCustomers.length > 0 && (
+                  <View style={styles.customerSuggestionContainer}>
+                    {searchedCustomers.map((customer, index) => (
+                      <TouchableOpacity
+                        key={getCustomerId(customer) || `${customer.name}-${customer.phone}-${index}`}
+                        style={styles.customerSuggestion}
+                        onPress={() => populateCustomer(customer)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.customerSuggestionIcon}>
+                          <Ionicons name="person" size={18} color="#2563EB" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.customerSuggestionName}>{customer.name || customer.customerName}</Text>
+                          <Text style={styles.customerSuggestionPhone}>{customer.phone || customer.phoneNumber || "-"}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 )}
-              />
+              </View>
 
+              {/* CUSTOMER ADDRESS */}
+              <Text style={styles.label}>{t("jobs.customerAddress")}</Text>
               <TextInput
-                ref={phoneRef}
-                onFocus={
-                  closeDropdowns
-                }
-                keyboardType="phone-pad"
-                maxLength={10}
-                style={[
-                  styles.input,
-                  submitted &&
-                    phone.trim()
-                      .length !==
-                      10 &&
-                    styles.inputError,
-                ]}
-                value={phone}
-                onChangeText={
-                  setPhone
-                }
-              />
-
-              <Text
-                style={styles.label}
-              >
-                {t(
-                  "jobs.customerAddress"
-                )}
-              </Text>
-
-              <TextInput
-                onFocus={
-                  closeDropdowns
-                }
                 style={styles.input}
-                value={
-                  customerAddress
-                }
-                onChangeText={
-                  setCustomerAddress
-                }
+                value={customerAddress}
+                onFocus={closeDropdowns}
+                onChangeText={setCustomerAddress}
+                multiline
+                placeholder="Customer address"
+                placeholderTextColor="#9CA3AF"
               />
             </View>
 
@@ -3081,4 +3179,72 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 15,
   },
+
+  customerInputWrapper: {
+    position: "relative",
+  },
+  customerSuggestionContainer: {
+    position: "absolute",
+    top: 48,
+    left: 0,
+    right: 0,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    maxHeight: 200,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 10,
+    zIndex: 9999,
+  },
+  customerSuggestion: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  customerSuggestionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+  },
+  customerSuggestionName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  customerSuggestionPhone: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  customerSuggestionAddress: {
+    fontSize: 11,
+    color: "#9CA3AF",
+    marginTop: 1,
+  },
+  customerFoundBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#D1FAE5",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginBottom: 12,
+    marginTop: -4,
+  },
+  customerFoundText: {
+    fontSize: 12,
+    color: "#065F46",
+    fontWeight: "600",
+    marginLeft: 6,
+  }
 })

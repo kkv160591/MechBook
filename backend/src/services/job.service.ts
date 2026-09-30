@@ -20,12 +20,25 @@ import {
   getOrCreateSubscription,
 } from "./subscription.service"
 
+import {
+  findOrCreateCustomer,
+} from "./customer.service"
+
 
 const JOBS_TABLE =
   process.env.JOBS_TABLE_NAME!
 
+const CUSTOMERS_TABLE =
+  process.env.CUSTOMERS_TABLE_NAME ||
+  "Customers"
+
+const INVENTORY_TABLE =
+  process.env.INVENTORY_TABLE_NAME ||
+  "Inventory"
+
 const SUBSCRIPTIONS_TABLE =
-  process.env.SUBSCRIPTIONS_TABLE_NAME || "Subscriptions"
+  process.env.SUBSCRIPTIONS_TABLE_NAME ||
+  "Subscriptions"
 
 
 /*
@@ -54,20 +67,147 @@ export class JobLimitReachedError extends Error {
 
 /*
 |--------------------------------------------------------------------------
-| CREATE JOB
+| INVENTORY STOCK ERROR
+|--------------------------------------------------------------------------
+*/
+
+export class InsufficientStockError extends Error {
+
+  code = "INSUFFICIENT_STOCK"
+
+  partName: string
+
+  available: number
+
+  requested: number
+
+  constructor(
+    partName: string,
+    available: number,
+    requested: number
+  ) {
+
+    super(
+      `Insufficient stock for ${partName}. Available: ${available}, requested: ${requested}`
+    )
+
+    this.name =
+      "InsufficientStockError"
+
+    this.partName =
+      partName
+
+    this.available =
+      available
+
+    this.requested =
+      requested
+
+  }
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| NORMALIZE PARTS
 |--------------------------------------------------------------------------
 |
-| IMPORTANT:
+| If the same inventory part is added twice to a job, combine the
+| quantities before creating DynamoDB inventory updates.
 |
-| Job creation and subscription usage update
-| happen inside ONE DynamoDB transaction.
-|
-| This prevents:
-|
-| 1. Job being created without jobsUsed increasing
-| 2. jobsUsed increasing without a job
-| 3. Two workers creating jobs beyond the plan limit
-|
+|--------------------------------------------------------------------------
+*/
+
+const normalizeParts =
+(
+  parts: any[]
+) => {
+
+  const map =
+    new Map<string, any>()
+
+  for (
+    const part of parts || []
+  ) {
+
+    const inventoryId =
+      part.inventoryId ||
+      part.partId ||
+      part.id ||
+      part._id
+
+    /*
+     * Manual parts do not belong to inventory.
+     */
+
+    if (!inventoryId) {
+
+      continue
+
+    }
+
+    const quantity =
+      Math.max(
+        1,
+        Number(part.quantity) || 1
+      )
+
+    const existing =
+      map.get(
+        String(inventoryId)
+      )
+
+    if (existing) {
+
+      existing.quantity +=
+        quantity
+
+      existing.totalPrice =
+        existing.quantity *
+        existing.unitPrice
+
+    } else {
+
+      map.set(
+        String(inventoryId),
+        {
+          ...part,
+
+          inventoryId,
+
+          partId:
+            inventoryId,
+
+          quantity,
+
+          unitPrice:
+            Number(
+              part.unitPrice || 0
+            ),
+
+          totalPrice:
+            quantity *
+            Number(
+              part.unitPrice || 0
+            ),
+        }
+      )
+
+    }
+
+  }
+
+  return Array.from(
+    map.values()
+  )
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| CREATE JOB
 |--------------------------------------------------------------------------
 */
 
@@ -79,7 +219,234 @@ async (
 
   /*
    * ---------------------------------------------------------------
-   * CREATE / GET SUBSCRIPTION
+   * CUSTOMER
+   * ---------------------------------------------------------------
+   *
+   * If frontend supplied customerId, use it.
+   *
+   * Otherwise find/create customer using phone.
+   */
+
+  let customerId =
+    data.customerId || null
+
+  let customer: any = null
+
+
+  if (customerId) {
+
+    const customerResponse =
+      await db.send(
+        new GetItemCommand({
+
+          TableName:
+            CUSTOMERS_TABLE,
+
+          Key: {
+
+            customerId: {
+              S: customerId,
+            },
+
+          },
+
+        })
+      )
+
+    if (!customerResponse.Item) {
+
+      throw new Error(
+        "Selected customer was not found"
+      )
+
+    }
+
+    customer =
+      unmarshall(
+        customerResponse.Item
+      )
+
+
+    /*
+     * Security check:
+     *
+     * Do not allow one garage to attach another garage's
+     * customer to its job.
+     */
+
+    if (
+      customer.garageId !==
+      garageId
+    ) {
+
+      throw new Error(
+        "Invalid customer"
+      )
+
+    }
+
+  } else {
+
+    const result =
+      await findOrCreateCustomer(
+        garageId,
+        {
+          name:
+            data.customerName,
+
+          phone:
+            data.phone,
+
+          address:
+            data.customerAddress,
+        }
+      )
+
+    customer =
+      result.customer
+
+    customerId =
+      customer.customerId
+
+  }
+
+
+  /*
+   * ---------------------------------------------------------------
+   * INVENTORY PARTS
+   * ---------------------------------------------------------------
+   */
+
+  const normalizedParts =
+    normalizeParts(
+      data.parts || []
+    )
+
+
+  /*
+   * ---------------------------------------------------------------
+   * VALIDATE INVENTORY IDS
+   * ---------------------------------------------------------------
+   *
+   * Fetch each inventory item before the transaction so we can
+   * provide useful errors.
+   */
+
+  for (
+    const part of normalizedParts
+  ) {
+
+    const inventoryResponse =
+      await db.send(
+
+        new GetItemCommand({
+
+          TableName:
+            INVENTORY_TABLE,
+
+          Key: {
+
+            partId: {
+              S:
+                String(
+                  part.inventoryId
+                ),
+            },
+
+          },
+
+        })
+
+      )
+
+
+    if (
+      !inventoryResponse.Item
+    ) {
+
+      throw new Error(
+        `Inventory item not found: ${part.name || part.inventoryId}`
+      )
+
+    }
+
+
+    const inventoryItem =
+      unmarshall(
+        inventoryResponse.Item
+      )
+
+
+    /*
+     * Make sure inventory belongs to this garage.
+     */
+
+    if (
+      inventoryItem.garageId !==
+      garageId
+    ) {
+
+      throw new Error(
+        `Invalid inventory item: ${part.name || part.inventoryId}`
+      )
+
+    }
+
+
+    const available =
+      Number(
+        inventoryItem.stock ?? 0
+      )
+
+    const requested =
+      Number(
+        part.quantity ?? 0
+      )
+
+
+    if (
+      requested <= 0
+    ) {
+
+      throw new Error(
+        `Invalid quantity for ${part.name || part.inventoryId}`
+      )
+
+    }
+
+
+    if (
+      requested >
+      available
+    ) {
+
+      throw new InsufficientStockError(
+        part.name ||
+          inventoryItem.name ||
+          "Inventory item",
+
+        available,
+
+        requested
+      )
+
+    }
+
+
+    /*
+     * Keep the current stock available to the rest of the
+     * function if needed.
+     */
+
+    part.availableStock =
+      available
+
+  }
+
+
+  /*
+   * ---------------------------------------------------------------
+   * SUBSCRIPTION
    * ---------------------------------------------------------------
    */
 
@@ -93,13 +460,6 @@ async (
    * ---------------------------------------------------------------
    * RETRY LOOP
    * ---------------------------------------------------------------
-   *
-   * The subscription can be changed by another request at the
-   * same time.
-   *
-   * We use optimistic concurrency by checking that the subscription
-   * values we read are still the same when the transaction executes.
-   *
    */
 
   for (
@@ -124,16 +484,11 @@ async (
       )
 
 
-    /*
-     * -------------------------------------------------------------
-     * CALCULATE TOTAL AVAILABLE JOBS
-     * -------------------------------------------------------------
-     */
-
     const totalAvailable =
       jobLimit === -1
         ? -1
-        : jobLimit + boosterJobs
+        : jobLimit +
+          boosterJobs
 
 
     /*
@@ -144,7 +499,8 @@ async (
 
     if (
       totalAvailable !== -1 &&
-      jobsUsed >= totalAvailable
+      jobsUsed >=
+        totalAvailable
     ) {
 
       throw new JobLimitReachedError()
@@ -171,18 +527,33 @@ async (
 
       garageId,
 
-      // Customer
+
+      /*
+       * CUSTOMER
+       */
+
+      customerId,
+
       customerName:
-        data.customerName || "",
+        data.customerName ||
+        customer.name ||
+        "",
 
       phone:
-        data.phone || "",
+        data.phone ||
+        customer.phone ||
+        "",
 
       customerAddress:
-        data.customerAddress || "",
+        data.customerAddress ||
+        customer.address ||
+        "",
 
 
-      // Vehicle
+      /*
+       * VEHICLE
+       */
+
       vehicleNumber:
         data.vehicleNumber || "",
 
@@ -193,70 +564,368 @@ async (
         data.vehicleModel || "",
 
       vehicleType:
-        data.vehicleType || "2 Wheeler",
+        data.vehicleType ||
+        "2 Wheeler",
 
       odometer:
         data.odometer || "",
 
 
-      // Job
+      /*
+       * JOB
+       */
+
       status:
         "pending",
 
       workerId:
         data.workerId || null,
 
+      workerName:
+        data.workerName || "",
+
       priority:
-        data.priority || "Normal",
+        data.priority ||
+        "Normal",
 
       deliveryDate:
         data.deliveryDate || "",
 
       discount:
-        data.discount || "",
+        Number(data.discount || 0),
 
       laborCost:
-        data.laborCost || "",
+        Number(data.laborCost || 0),
 
-      // Complaint
+      totalAmount:
+        Number(data.totalAmount || 0),
+
+
+      /*
+       * COMPLAINT
+       */
+
       complaint:
         data.complaint || "",
 
 
-      // Inspection
+      /*
+       * INSPECTION
+       */
+
       inspectionNotes:
         data.inspectionNotes || "",
 
-      // Services
+
+      /*
+       * SERVICES
+       */
+
       services:
         data.services || [],
 
-      // Parts
+
+      /*
+       * PARTS
+       */
+
       parts:
-        data.parts || [],
+        normalizedParts.map(
+          (part) => {
+
+            const {
+              availableStock,
+              ...cleanPart
+            } = part
+
+            return cleanPart
+
+          }
+        ),
+
 
       createdAt:
         now,
 
       updatedAt:
-        now
+        now,
 
     }
 
 
     /*
      * -------------------------------------------------------------
-     * ATOMIC TRANSACTION
+     * TRANSACTION ITEMS
+     * -------------------------------------------------------------
+     */
+
+    const transactItems: any[] = []
+
+
+    /*
+     * -------------------------------------------------------------
+     * 1. CREATE JOB
+     * -------------------------------------------------------------
+     */
+
+    transactItems.push({
+
+      Put: {
+
+        TableName:
+          JOBS_TABLE,
+
+        Item:
+          marshall(
+            item,
+            {
+              removeUndefinedValues:
+                true
+            }
+          ),
+
+        ConditionExpression:
+          "attribute_not_exists(jobId)",
+
+      },
+
+    })
+
+
+    /*
+     * -------------------------------------------------------------
+     * 2. UPDATE CUSTOMER STATS
      * -------------------------------------------------------------
      *
-     * Operation 1:
-     *     Create Job
+     * Every completed/created job increments totalJobs.
      *
-     * Operation 2:
-     *     Increment Subscription.jobsUsed
+     * totalSpent is increased using job total.
      *
-     * Both must succeed.
+     * pendingAmount is increased because new jobs start as pending.
+     */
+
+    transactItems.push({
+
+      Update: {
+
+        TableName:
+          CUSTOMERS_TABLE,
+
+        Key: {
+
+          customerId: {
+            S:
+              customerId,
+          },
+
+        },
+
+        UpdateExpression: `
+          SET
+            totalJobs = if_not_exists(totalJobs, :zero) + :one,
+            totalSpent = if_not_exists(totalSpent, :zero) + :totalAmount,
+            pendingAmount = if_not_exists(pendingAmount, :zero) + :totalAmount,
+            updatedAt = :updatedAt
+        `,
+
+        ExpressionAttributeValues: {
+
+          ":zero": {
+            N: "0",
+          },
+
+          ":one": {
+            N: "1",
+          },
+
+          ":totalAmount": {
+            N:
+              Number(
+                data.totalAmount || 0
+              ).toString(),
+          },
+
+          ":garageId": {
+            S:
+              garageId,
+          },
+
+          ":updatedAt": {
+            S:
+              now,
+          },
+
+        },
+
+        ConditionExpression:
+          "attribute_exists(customerId) AND garageId = :garageId",
+
+      },
+
+    })
+
+
+    /*
+     * -------------------------------------------------------------
+     * 3. DECREASE INVENTORY
+     * -------------------------------------------------------------
      *
+     * IMPORTANT:
+     *
+     * stock = stock - requestedQty
+     *
+     * AND
+     *
+     * stock >= requestedQty
+     *
+     * This prevents negative stock and also protects against
+     * two workers trying to sell the same final stock.
+     */
+
+    for (
+      const part of normalizedParts
+    ) {
+
+      transactItems.push({
+
+        Update: {
+
+          TableName:
+            INVENTORY_TABLE,
+
+          Key: {
+
+            partId: {
+
+              S:
+                String(
+                  part.inventoryId
+                ),
+
+            },
+
+          },
+
+          UpdateExpression:
+            "SET stock = stock - :quantity, updatedAt = :updatedAt",
+
+          ConditionExpression:
+            "attribute_exists(partId) AND garageId = :garageId AND stock >= :quantity",
+
+          ExpressionAttributeValues: {
+
+            ":quantity": {
+
+              N:
+                Number(
+                  part.quantity
+                ).toString(),
+
+            },
+
+            ":garageId": {
+
+              S:
+                garageId,
+
+            },
+
+            ":updatedAt": {
+
+              S:
+                now,
+
+            },
+
+          },
+
+        },
+
+      })
+
+    }
+
+
+    /*
+     * -------------------------------------------------------------
+     * 4. UPDATE SUBSCRIPTION
+     * -------------------------------------------------------------
+     */
+
+    transactItems.push({
+
+      Update: {
+
+        TableName:
+          SUBSCRIPTIONS_TABLE,
+
+        Key: {
+
+          garageId: {
+
+            S:
+              garageId,
+
+          },
+
+        },
+
+        UpdateExpression:
+          "SET jobsUsed = :newJobsUsed, updatedAt = :updatedAt",
+
+        ConditionExpression:
+          "jobsUsed = :currentJobsUsed AND jobLimit = :currentJobLimit AND boosterJobs = :currentBoosterJobs",
+
+        ExpressionAttributeValues: {
+
+          ":currentJobsUsed": {
+
+            N:
+              jobsUsed.toString(),
+
+          },
+
+          ":currentJobLimit": {
+
+            N:
+              jobLimit.toString(),
+
+          },
+
+          ":currentBoosterJobs": {
+
+            N:
+              boosterJobs.toString(),
+
+          },
+
+          ":newJobsUsed": {
+
+            N:
+              (
+                jobsUsed + 1
+              ).toString(),
+
+          },
+
+          ":updatedAt": {
+
+            S:
+              now,
+
+          },
+
+        },
+
+      },
+
+    })
+
+
+    /*
+     * -------------------------------------------------------------
+     * EXECUTE EVERYTHING ATOMICALLY
+     * -------------------------------------------------------------
      */
 
     try {
@@ -265,134 +934,8 @@ async (
 
         new TransactWriteItemsCommand({
 
-          TransactItems: [
-
-            /*
-             * ---------------------------------------------------
-             * CREATE JOB
-             * ---------------------------------------------------
-             */
-
-            {
-
-              Put: {
-
-                TableName:
-                  JOBS_TABLE,
-
-                Item:
-                  marshall(
-                    item,
-                    {
-                      removeUndefinedValues:
-                        true
-                    }
-                  ),
-
-                /*
-                 * Prevent accidental overwrite if the UUID
-                 * ever happens to collide.
-                 */
-
-                ConditionExpression:
-                  "attribute_not_exists(jobId)"
-
-              }
-
-            },
-
-
-            /*
-             * ---------------------------------------------------
-             * UPDATE SUBSCRIPTION
-             * ---------------------------------------------------
-             */
-
-            {
-
-              Update: {
-
-                TableName:
-                  SUBSCRIPTIONS_TABLE,
-
-                Key: {
-
-                  garageId: {
-
-                    S:
-                      garageId
-
-                  }
-
-                },
-
-
-                UpdateExpression:
-                  "SET jobsUsed = :newJobsUsed, updatedAt = :updatedAt",
-
-
-                /*
-                 * ------------------------------------------------
-                 * OPTIMISTIC CONCURRENCY CHECK
-                 * ------------------------------------------------
-                 *
-                 * Only update the subscription if the values we
-                 * originally read are still current.
-                 *
-                 * This prevents two workers from both consuming
-                 * the same final job slot.
-                 */
-
-                ConditionExpression:
-                  "jobsUsed = :currentJobsUsed AND jobLimit = :currentJobLimit AND boosterJobs = :currentBoosterJobs",
-
-
-                ExpressionAttributeValues: {
-
-                  ":currentJobsUsed": {
-
-                    N:
-                      jobsUsed.toString()
-
-                  },
-
-                  ":currentJobLimit": {
-
-                    N:
-                      jobLimit.toString()
-
-                  },
-
-                  ":currentBoosterJobs": {
-
-                    N:
-                      boosterJobs.toString()
-
-                  },
-
-                  ":newJobsUsed": {
-
-                    N:
-                      (
-                        jobsUsed + 1
-                      ).toString()
-
-                  },
-
-                  ":updatedAt": {
-
-                    S:
-                      now
-
-                  }
-
-                }
-
-              }
-
-            }
-
-          ]
+          TransactItems:
+            transactItems,
 
         })
 
@@ -400,9 +943,7 @@ async (
 
 
       /*
-       * -----------------------------------------------------------
        * SUCCESS
-       * -----------------------------------------------------------
        */
 
       return item
@@ -416,11 +957,6 @@ async (
        * -----------------------------------------------------------
        * TRANSACTION CONFLICT
        * -----------------------------------------------------------
-       *
-       * Another request changed the subscription between our
-       * initial read and transaction.
-       *
-       * Re-read it and try again.
        */
 
       if (
@@ -428,15 +964,16 @@ async (
         "TransactionCanceledException"
       ) {
 
+        /*
+         * Re-read subscription because another request may have
+         * consumed a job slot.
+         */
+
         subscription =
           await getOrCreateSubscription(
             garageId
           )
 
-        /*
-         * If the newly-read subscription is already full,
-         * return the proper plan-limit error.
-         */
 
         const latestJobsUsed =
           Number(
@@ -452,6 +989,7 @@ async (
           Number(
             subscription.boosterJobs ?? 0
           )
+
 
         const latestTotalAvailable =
           latestJobLimit === -1
@@ -472,8 +1010,7 @@ async (
 
 
         /*
-         * Otherwise another update probably happened.
-         * Retry the transaction with the latest subscription.
+         * Retry transaction.
          */
 
         if (
@@ -493,12 +1030,6 @@ async (
 
   }
 
-
-  /*
-   * ---------------------------------------------------------------
-   * SHOULD NOT REACH HERE
-   * ---------------------------------------------------------------
-   */
 
   throw new Error(
     "Unable to create job"
@@ -524,7 +1055,7 @@ async (
       new ScanCommand({
 
         TableName:
-          JOBS_TABLE
+          JOBS_TABLE,
 
       })
 
@@ -533,8 +1064,9 @@ async (
 
   const jobs =
     (response.Items || [])
-      .map(item =>
-        unmarshall(item)
+      .map(
+        item =>
+          unmarshall(item)
       )
       .filter(
         (job: any) =>
@@ -542,17 +1074,13 @@ async (
           garageId
       )
       .sort(
-
         (a: any, b: any) =>
-
           new Date(
             b.createdAt
           ).getTime() -
-
           new Date(
             a.createdAt
           ).getTime()
-
       )
 
 
@@ -585,11 +1113,11 @@ async (
           jobId: {
 
             S:
-              jobId
+              jobId,
 
-          }
+          },
 
-        }
+        },
 
       })
 
@@ -644,7 +1172,7 @@ async (
     ...data,
 
     updatedAt:
-      new Date().toISOString()
+      new Date().toISOString(),
 
   }
 
@@ -663,7 +1191,7 @@ async (
             removeUndefinedValues:
               true
           }
-        )
+        ),
 
     })
 
@@ -699,9 +1227,9 @@ async (
         jobId: {
 
           S:
-            jobId
+            jobId,
 
-        }
+        },
 
       },
 
@@ -713,18 +1241,18 @@ async (
         ":workerId": {
 
           S:
-            workerId
+            workerId,
 
         },
 
         ":updatedAt": {
 
           S:
-            new Date().toISOString()
+            new Date().toISOString(),
 
-        }
+        },
 
-      }
+      },
 
     })
 
@@ -757,9 +1285,9 @@ async (
         jobId: {
 
           S:
-            jobId
+            jobId,
 
-        }
+        },
 
       },
 
@@ -769,7 +1297,7 @@ async (
       ExpressionAttributeNames: {
 
         "#status":
-          "status"
+          "status",
 
       },
 
@@ -778,18 +1306,18 @@ async (
         ":status": {
 
           S:
-            status
+            status,
 
         },
 
         ":updatedAt": {
 
           S:
-            new Date().toISOString()
+            new Date().toISOString(),
 
-        }
+        },
 
-      }
+      },
 
     })
 
@@ -821,11 +1349,11 @@ async (
         jobId: {
 
           S:
-            jobId
+            jobId,
 
-        }
+        },
 
-      }
+      },
 
     })
 
