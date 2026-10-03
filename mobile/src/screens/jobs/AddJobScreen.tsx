@@ -212,10 +212,13 @@ export default function AddJobScreen({ navigation }: any) {
 
   const closeDropdowns = () => {
     Keyboard.dismiss()
+
     setShowCustomerSuggestions(false)
     setShowSuggestions(false)
     setShowPartSuggestions(false)
     setShowWorkerSuggestions(false)
+
+    setCustomerSearchField(null)
   }
 
   // ==============================
@@ -267,60 +270,158 @@ export default function AddJobScreen({ navigation }: any) {
   }, [partName, inventoryList])
 
   // ==============================
-  // SEARCH CUSTOMERS (BY NAME OR PHONE)
+  // CUSTOMER SEARCH FIELD
+  // ==============================
+
+  type CustomerSearchField = "name" | "phone" | null
+
+  const [customerSearchField, setCustomerSearchField] =
+    useState<CustomerSearchField>(null)
+
+
+  // ==============================
+  // CUSTOMER HELPERS
+  // ==============================
+
+  const getCustomerId = (cust: any) =>
+    cust._id ||
+    cust.id ||
+    cust.customerId ||
+    null
+
+  const getCustomerName = (cust: any) =>
+    cust.name ||
+    cust.customerName ||
+    ""
+
+  const getCustomerPhone = (cust: any) =>
+    cust.phone ||
+    cust.phoneNumber ||
+    ""
+
+  const getCustomerAddress = (cust: any) =>
+    cust.address ||
+    cust.customerAddress ||
+    ""
+
+
+  // ==============================
+  // SEARCH CUSTOMERS
   // ==============================
 
   const searchedCustomers = useMemo(() => {
-    const searchName = customerName.trim().toLowerCase()
-    const searchPhone = phone.trim()
+    // IMPORTANT:
+    // Only search using the field that the user
+    // is currently editing.
+    //
+    // This prevents the old phone number from causing
+    // the previously selected customer to appear again
+    // when the user changes the customer name.
 
-    if (!searchName && !searchPhone) {
-      return []
+    if (customerSearchField === "name") {
+      const searchName =
+        customerName.trim().toLowerCase()
+
+      if (!searchName) {
+        return []
+      }
+
+      return customers.filter((cust) => {
+        const name =
+          getCustomerName(cust)
+            .toLowerCase()
+
+        return name.includes(searchName)
+      })
     }
 
-    return customers.filter((cust) => {
-      const nameMatch =
-        searchName &&
-        (cust.name || cust.customerName || "")
-          .toLowerCase()
-          .includes(searchName)
+    if (customerSearchField === "phone") {
+      const searchPhone =
+        phone.trim()
 
-      const phoneMatch =
-        searchPhone && (cust.phone || cust.phoneNumber || "").includes(searchPhone)
+      if (!searchPhone) {
+        return []
+      }
 
-      return nameMatch || phoneMatch
-    })
-  }, [customerName, phone, customers])
+      return customers.filter((cust) => {
+        const customerPhone =
+          getCustomerPhone(cust)
 
-  const getCustomerId = (cust: any) => cust._id || cust.id || cust.customerId || null
+        return customerPhone.includes(
+          searchPhone
+        )
+      })
+    }
+
+    return []
+  }, [
+    customerName,
+    phone,
+    customers,
+    customerSearchField,
+  ])
+
+
+  // ==============================
+  // POPULATE CUSTOMER
+  // ==============================
 
   const populateCustomer = (customer: any) => {
-    setCustomerId(getCustomerId(customer))
-    setCustomerName(customer.name || customer.customerName || "")
-    setPhone(customer.phone || customer.phoneNumber || "")
-    setCustomerAddress(customer.address || customer.customerAddress || "")
+    const id = getCustomerId(customer)
+    const name = getCustomerName(customer)
+    const customerPhone = getCustomerPhone(customer)
+    const address = getCustomerAddress(customer)
+
+    setCustomerId(id)
+
+    setCustomerName(name)
+
+    setPhone(customerPhone)
+
+    setCustomerAddress(address)
+
+    setCustomerSearchField(null)
+
     setShowCustomerSuggestions(false)
+
+    Keyboard.dismiss()
   }
+
+
+  // ==============================
+  // CUSTOMER NAME CHANGE
+  // ==============================
 
   const handleCustomerNameChange = (
     text: string
   ) => {
-
     setCustomerName(text)
 
-    // User is manually changing the customer.
-    // Therefore the previous selected customer is no longer valid.
+    // The user is manually changing the customer name.
+    // Therefore the previously selected customer ID
+    // is no longer valid.
+
     setCustomerId(null)
+
+    // IMPORTANT:
+    // Do NOT allow the old phone number to participate
+    // in this search.
+
+    setCustomerSearchField("name")
 
     setShowCustomerSuggestions(
       text.trim().length > 0
     )
   }
 
+
+  // ==============================
+  // CUSTOMER PHONE CHANGE
+  // ==============================
+
   const handleCustomerPhoneChange = (
     text: string
   ) => {
-
     const cleaned =
       text.replace(
         /[^0-9]/g,
@@ -329,9 +430,15 @@ export default function AddJobScreen({ navigation }: any) {
 
     setPhone(cleaned)
 
-    // Manual editing means we no longer know
-    // whether the selected customer is still valid.
+    // The user is manually changing the phone number.
+    // Therefore the previously selected customer ID
+    // is no longer valid.
+
     setCustomerId(null)
+
+    // Search ONLY by phone while editing phone.
+
+    setCustomerSearchField("phone")
 
     setShowCustomerSuggestions(
       cleaned.length > 0
@@ -1148,38 +1255,83 @@ export default function AddJobScreen({ navigation }: any) {
                   ref={customerNameRef}
                   style={[
                     styles.input,
-                    submitted && !customerName.trim() && styles.inputError,
+                    submitted &&
+                      !customerName.trim() &&
+                      styles.inputError,
                   ]}
                   value={customerName}
                   onChangeText={handleCustomerNameChange}
-                  onFocus={() => setShowCustomerSuggestions(true)}
+                  onFocus={() => {
+                    setCustomerSearchField("name")
+                    setShowCustomerSuggestions(
+                      customerName.trim().length > 0
+                    )
+                  }}
                   placeholder="Enter customer name"
                   placeholderTextColor="#9CA3AF"
                 />
 
-                {showCustomerSuggestions && customerName.trim().length > 0 && searchedCustomers.length > 0 && (
+                {showCustomerSuggestions &&
+                customerSearchField === "name" &&
+                customerName.trim().length > 0 &&
+                searchedCustomers.length > 0 && (
                   <View style={styles.customerSuggestionContainer}>
-                    {searchedCustomers.map((customer, index) => (
-                      <TouchableOpacity
-                        key={getCustomerId(customer) || `${customer.name}-${customer.phone}-${index}`}
-                        style={styles.customerSuggestion}
-                        onPress={() => populateCustomer(customer)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.customerSuggestionIcon}>
-                          <Ionicons name="person" size={18} color="#2563EB" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.customerSuggestionName}>{customer.name || customer.customerName}</Text>
-                          <Text style={styles.customerSuggestionPhone}>{customer.phone || customer.phoneNumber || "-"}</Text>
-                          {customer.address || customer.customerAddress ? (
-                            <Text style={styles.customerSuggestionAddress} numberOfLines={1}>
-                              {customer.address || customer.customerAddress}
+                    {searchedCustomers.map(
+                      (customer, index) => (
+                        <TouchableOpacity
+                          key={
+                            getCustomerId(customer) ||
+                            `${getCustomerName(customer)}-${getCustomerPhone(customer)}-${index}`
+                          }
+                          style={styles.customerSuggestion}
+                          onPress={() =>
+                            populateCustomer(customer)
+                          }
+                          activeOpacity={0.7}
+                        >
+                          <View
+                            style={
+                              styles.customerSuggestionIcon
+                            }
+                          >
+                            <Ionicons
+                              name="person"
+                              size={18}
+                              color="#2563EB"
+                            />
+                          </View>
+
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={
+                                styles.customerSuggestionName
+                              }
+                            >
+                              {getCustomerName(customer)}
                             </Text>
-                          ) : null}
-                        </View>
-                      </TouchableOpacity>
-                    ))}
+
+                            <Text
+                              style={
+                                styles.customerSuggestionPhone
+                              }
+                            >
+                              {getCustomerPhone(customer) || "-"}
+                            </Text>
+
+                            {!!getCustomerAddress(customer) && (
+                              <Text
+                                style={
+                                  styles.customerSuggestionAddress
+                                }
+                                numberOfLines={1}
+                              >
+                                {getCustomerAddress(customer)}
+                              </Text>
+                            )}
+                          </View>
+                        </TouchableOpacity>
+                      )
+                    )}
                   </View>
                 )}
               </View>
@@ -1201,35 +1353,74 @@ export default function AddJobScreen({ navigation }: any) {
                   maxLength={10}
                   style={[
                     styles.input,
-                    submitted && phone.trim().length !== 10 && styles.inputError,
+                    submitted &&
+                      phone.trim().length !== 10 &&
+                      styles.inputError,
                   ]}
                   value={phone}
                   onChangeText={handleCustomerPhoneChange}
-                  onFocus={() => setShowCustomerSuggestions(true)}
+                  onFocus={() => {
+                    setCustomerSearchField("phone")
+                    setShowCustomerSuggestions(
+                      phone.length > 0
+                    )
+                  }}
                   placeholder="Enter 10 digit phone number"
                   placeholderTextColor="#9CA3AF"
                 />
 
-                {showCustomerSuggestions && phone.length > 0 && searchedCustomers.length > 0 && (
-                  <View style={styles.customerSuggestionContainer}>
-                    {searchedCustomers.map((customer, index) => (
-                      <TouchableOpacity
-                        key={getCustomerId(customer) || `${customer.name}-${customer.phone}-${index}`}
-                        style={styles.customerSuggestion}
-                        onPress={() => populateCustomer(customer)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.customerSuggestionIcon}>
-                          <Ionicons name="person" size={18} color="#2563EB" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.customerSuggestionName}>{customer.name || customer.customerName}</Text>
-                          <Text style={styles.customerSuggestionPhone}>{customer.phone || customer.phoneNumber || "-"}</Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
+                {showCustomerSuggestions &&
+                  customerSearchField === "phone" &&
+                  phone.length > 0 &&
+                  searchedCustomers.length > 0 && (
+                    <View style={styles.customerSuggestionContainer}>
+                      {searchedCustomers.map(
+                        (customer, index) => (
+                          <TouchableOpacity
+                            key={
+                              getCustomerId(customer) ||
+                              `${getCustomerName(customer)}-${getCustomerPhone(customer)}-${index}`
+                            }
+                            style={styles.customerSuggestion}
+                            onPress={() =>
+                              populateCustomer(customer)
+                            }
+                            activeOpacity={0.7}
+                          >
+                            <View
+                              style={
+                                styles.customerSuggestionIcon
+                              }
+                            >
+                              <Ionicons
+                                name="person"
+                                size={18}
+                                color="#2563EB"
+                              />
+                            </View>
+
+                            <View style={{ flex: 1 }}>
+                              <Text
+                                style={
+                                  styles.customerSuggestionName
+                                }
+                              >
+                                {getCustomerName(customer)}
+                              </Text>
+
+                              <Text
+                                style={
+                                  styles.customerSuggestionPhone
+                                }
+                              >
+                                {getCustomerPhone(customer) || "-"}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        )
+                      )}
+                    </View>
+                  )}
               </View>
 
               {/* CUSTOMER ADDRESS */}

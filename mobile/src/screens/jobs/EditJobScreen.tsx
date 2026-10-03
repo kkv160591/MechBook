@@ -22,6 +22,8 @@ import { getServiceTypes } from "../../services/serviceTypesService"
 
 import { getInventory } from "../../services/inventoryService"
 
+import { getCustomers } from "../../services/customerService"
+
 import { useSettings } from "../../context/SettingsContext"
 import { useTranslation } from "../../context/LanguageContext"
 
@@ -58,14 +60,20 @@ export default function EditJobScreen({ route, navigation }: any) {
   const [workers, setWorkers] = useState<any[]>([])
   const [serviceTypes, setServiceTypes] = useState<any[]>([])
   const [inventoryList, setInventoryList] = useState<any[]>([])
+  const [customers, setCustomers] = useState<any[]>([])
 
   // ==============================
   // CUSTOMER
   // ==============================
 
+  const [customerId, setCustomerId] = useState<string | null>(null)
+
   const [customerName, setCustomerName] = useState("")
   const [phone, setPhone] = useState("")
   const [customerAddress, setCustomerAddress] = useState("")
+
+  const [showCustomerSuggestions, setShowCustomerSuggestions] =
+    useState(false)
 
   // ==============================
   // VEHICLE
@@ -139,6 +147,10 @@ export default function EditJobScreen({ route, navigation }: any) {
 
   const [showPartSuggestions, setShowPartSuggestions] = useState(false)
 
+  // Keep a snapshot of the parts that existed when the job was loaded.
+  // This is needed because editing a job is different from creating a job.
+  const originalPartsRef = useRef<any[]>([])
+
   // ==============================
   // LOAD DATA
   // ==============================
@@ -151,154 +163,327 @@ export default function EditJobScreen({ route, navigation }: any) {
     try {
       setLoading(true)
 
-      const [workersRes, servicesRes, inventoryRes, jobRes] = await Promise.all(
-        [
-          getWorkers(),
-
-          getServiceTypes(),
-
-          getInventory(),
-
-          getJobById(job.jobId),
-        ],
-      )
+      const [
+        workersRes,
+        servicesRes,
+        inventoryRes,
+        customersRes,
+        jobRes,
+      ] = await Promise.all([
+        getWorkers(),
+        getServiceTypes(),
+        getInventory(),
+        getCustomers(),
+        getJobById(job.jobId),
+      ])
 
       const latestJob = jobRes?.job || jobRes
 
-      const workersData = workersRes?.workers || workersRes || []
+      const workersData =
+        workersRes?.workers ||
+        workersRes ||
+        []
 
-      const rawInventory = 
-        inventoryRes?.parts || 
-        inventoryRes?.inventory || 
-        inventoryRes?.items || 
-        inventoryRes?.data || 
-        [];
+      const servicesData =
+        servicesRes?.services ||
+        servicesRes ||
+        []
 
-      setWorkers(workersData)
+      const rawInventory =
+        inventoryRes?.parts ||
+        inventoryRes?.inventory ||
+        inventoryRes?.items ||
+        inventoryRes?.data ||
+        []
 
-      setServiceTypes(servicesRes?.services || servicesRes || [])
+      const customersData =
+        customersRes?.customers ||
+        customersRes?.customersList ||
+        customersRes?.data ||
+        customersRes ||
+        []
 
-      setInventoryList(Array.isArray(rawInventory) ? rawInventory : []);
+      setWorkers(
+        Array.isArray(workersData)
+          ? workersData
+          : [],
+      )
+
+      setServiceTypes(
+        Array.isArray(servicesData)
+          ? servicesData
+          : [],
+      )
+
+      setInventoryList(
+        Array.isArray(rawInventory)
+          ? rawInventory
+          : [],
+      )
+
+      setCustomers(
+        Array.isArray(customersData)
+          ? customersData
+          : [],
+      )
 
       // ==============================
       // POPULATE CUSTOMER
       // ==============================
 
-      setCustomerName(latestJob?.customerName || "")
+      setCustomerId(
+        latestJob?.customerId ||
+        latestJob?.customer?.customerId ||
+        latestJob?.customer?._id ||
+        latestJob?.customer?.id ||
+        null,
+      )
 
-      setPhone(latestJob?.phone || "")
+      setCustomerName(
+        latestJob?.customerName ||
+        latestJob?.customer?.name ||
+        "",
+      )
 
-      setCustomerAddress(latestJob?.customerAddress || "")
+      setPhone(
+        latestJob?.phone ||
+        latestJob?.customer?.phone ||
+        latestJob?.customer?.phoneNumber ||
+        "",
+      )
+
+      setCustomerAddress(
+        latestJob?.customerAddress ||
+        latestJob?.customer?.address ||
+        "",
+      )
 
       // ==============================
       // POPULATE VEHICLE
       // ==============================
 
-      setVehicleNumber(latestJob?.vehicleNumber || "")
-
-      setVehicleBrand(latestJob?.vehicleBrand || "")
-
-      setVehicleModel(latestJob?.vehicleModel || "")
-
-      setVehicleType(latestJob?.vehicleType || t("jobs.twoWheeler"))
-
-      setOdometer(
-        latestJob?.odometer !== undefined ? String(latestJob.odometer) : "",
+      setVehicleNumber(
+        latestJob?.vehicleNumber || "",
       )
 
-      setComplaint(latestJob?.complaint || "")
+      setVehicleBrand(
+        latestJob?.vehicleBrand || "",
+      )
+
+      setVehicleModel(
+        latestJob?.vehicleModel || "",
+      )
+
+      setVehicleType(
+        latestJob?.vehicleType ||
+        t("jobs.twoWheeler"),
+      )
+
+      setOdometer(
+        latestJob?.odometer !== undefined
+          ? String(latestJob.odometer)
+          : "",
+      )
+
+      setComplaint(
+        latestJob?.complaint || "",
+      )
 
       // ==============================
       // POPULATE WORKER
       // ==============================
 
-      setWorkerId(latestJob?.workerId || "")
+      setWorkerId(
+        latestJob?.workerId || "",
+      )
 
       const assignedWorker = workersData.find(
         (worker: any) =>
-          String(worker.workerId || worker.id || worker._id) ===
+          String(
+            worker.workerId ||
+            worker.id ||
+            worker._id,
+          ) ===
           String(latestJob?.workerId),
       )
 
-      setWorkerName(assignedWorker?.name || "")
+      setWorkerName(
+        latestJob?.workerName ||
+        assignedWorker?.name ||
+        "",
+      )
 
       // ==============================
       // JOB DETAILS
       // ==============================
 
-      setPriority(latestJob?.priority || t("jobs.priorityNormal"))
+      setPriority(
+        latestJob?.priority ||
+        t("jobs.priorityNormal"),
+      )
 
-      if (latestJob?.deliveryDate && latestJob.deliveryDate !== "") {
-        setDeliveryDate(new Date(latestJob.deliveryDate))
+      if (
+        latestJob?.deliveryDate &&
+        latestJob.deliveryDate !== ""
+      ) {
+        const parsedDate = new Date(
+          latestJob.deliveryDate,
+        )
+
+        if (!isNaN(parsedDate.getTime())) {
+          setDeliveryDate(parsedDate)
+        } else {
+          setDeliveryDate(null)
+        }
       } else {
         setDeliveryDate(null)
       }
 
-      setInspectionNotes(latestJob?.inspectionNotes || "")
+      setInspectionNotes(
+        latestJob?.inspectionNotes || "",
+      )
 
       // ==============================
       // SERVICES
       // ==============================
 
-      setSelectedServices(
+      const loadedServices =
         Array.isArray(latestJob?.services)
-          ? latestJob.services.map((service: any) => {
-              const estimatedPrice = Number(
-                service.estimatedPrice ?? service.defaultPrice ?? service.actualPrice ?? 0,
-              )
-              const actualPrice = Number(
-                service.actualPrice ?? service.estimatedPrice ?? service.defaultPrice ?? 0,
-              )
-              return {
-                serviceId: service.serviceId || null,
-                name: service.name || "",
-                estimatedPrice,
-                actualPrice,
-              }
-            })
-          : [],
+          ? latestJob.services.map(
+              (service: any) => {
+                const estimatedPrice = Number(
+                  service.estimatedPrice ??
+                    service.defaultPrice ??
+                    service.actualPrice ??
+                    0,
+                )
+
+                const actualPrice = Number(
+                  service.actualPrice ??
+                    service.estimatedPrice ??
+                    service.defaultPrice ??
+                    0,
+                )
+
+                return {
+                  serviceId:
+                    service.serviceTypeId ||
+                    service.serviceId ||
+                    service.id ||
+                    service._id ||
+                    null,
+
+                  name:
+                    service.name || "",
+
+                  quantity:
+                    Number(service.quantity) || 1,
+
+                  estimatedPrice,
+
+                  actualPrice,
+                }
+              },
+            )
+          : []
+
+      setSelectedServices(
+        loadedServices,
       )
 
       // ==============================
       // PARTS
       // ==============================
 
-      setSelectedParts(
+      const loadedParts =
         Array.isArray(latestJob?.parts)
-          ? latestJob.parts.map((part: any) => {
-              const quantity = Number(part.quantity) || 1
-              const estimatedUnitPrice = Number(
-                part.estimatedUnitPrice ?? part.unitPrice ?? part.price ?? 0,
-              )
-              const actualUnitPrice = Number(
-                part.actualUnitPrice ?? part.unitPrice ?? part.price ?? 0,
-              )
+          ? latestJob.parts.map(
+              (part: any) => {
+                const quantity =
+                  Number(part.quantity) || 1
 
-              return {
-                inventoryId: part.inventoryId || part.partId || null,
-                name: part.name || "",
-                quantity,
-                estimatedUnitPrice,
-                actualUnitPrice,
-                totalPrice: Number(part.totalPrice ?? quantity * actualUnitPrice),
-              }
-            })
-          : [],
+                const inventoryId =
+                  part.partId ||
+                  part.inventoryId ||
+                  part.id ||
+                  part._id ||
+                  null
+
+                const estimatedUnitPrice =
+                  Number(
+                    part.estimatedUnitPrice ??
+                      part.unitPrice ??
+                      part.sellingPrice ??
+                      part.price ??
+                      0,
+                  )
+
+                const actualUnitPrice =
+                  Number(
+                    part.actualUnitPrice ??
+                      part.unitPrice ??
+                      part.sellingPrice ??
+                      part.price ??
+                      0,
+                  )
+
+                return {
+                  inventoryId,
+
+                  partId: inventoryId,
+
+                  name:
+                    part.name || "",
+
+                  quantity,
+
+                  estimatedUnitPrice,
+
+                  actualUnitPrice,
+
+                  totalPrice: Number(
+                    part.totalPrice ??
+                      quantity *
+                        actualUnitPrice,
+                  ),
+                }
+              },
+            )
+          : []
+
+      setSelectedParts(
+        loadedParts,
       )
+
+      // Preserve the original state of the job's parts.
+      originalPartsRef.current =
+        loadedParts.map(
+          (part: any) => ({
+            ...part,
+          }),
+        )
 
       // ==============================
       // BILLING
       // ==============================
 
       setLaborCost(
-        latestJob?.laborCost !== undefined && latestJob?.laborCost !== null
-          ? String(latestJob.laborCost)
+        latestJob?.laborCost !==
+          undefined &&
+          latestJob?.laborCost !== null
+          ? String(
+              latestJob.laborCost,
+            )
           : "",
       )
 
       setDiscount(
-        latestJob?.discount !== undefined && latestJob?.discount !== null
-          ? String(latestJob.discount)
+        latestJob?.discount !==
+          undefined &&
+          latestJob?.discount !== null
+          ? String(
+              latestJob.discount,
+            )
           : "",
       )
     } catch (err: any) {
@@ -306,7 +491,9 @@ export default function EditJobScreen({ route, navigation }: any) {
         t("jobs.alertErrorTitle"),
 
         err?.response?.data?.message ||
-          t("jobs.unableToLoadJobDetails") ||
+          t(
+            "jobs.unableToLoadJobDetails",
+          ) ||
           "Unable to load job details",
       )
     } finally {
@@ -321,6 +508,8 @@ export default function EditJobScreen({ route, navigation }: any) {
   const closeDropdowns = () => {
     Keyboard.dismiss()
 
+    setShowCustomerSuggestions(false)
+
     setShowSuggestions(false)
 
     setShowWorkerSuggestions(false)
@@ -329,37 +518,194 @@ export default function EditJobScreen({ route, navigation }: any) {
   }
 
   // ==============================
+  // CUSTOMER HELPERS
+  // ==============================
+
+  const getCustomerId = (customer: any) => {
+    return (
+      customer?.customerId ||
+      customer?.id ||
+      customer?._id ||
+      null
+    )
+  }
+
+  const searchedCustomers = useMemo(() => {
+    const nameQuery =
+      customerName.trim().toLowerCase()
+
+    const phoneQuery =
+      phone.trim()
+
+    if (
+      !nameQuery &&
+      !phoneQuery
+    ) {
+      return []
+    }
+
+    if (!Array.isArray(customers)) {
+      return []
+    }
+
+    return customers
+      .filter((customer: any) => {
+        const customerCustomerName =
+          String(
+            customer?.name ||
+              customer?.customerName ||
+              "",
+          ).toLowerCase()
+
+        const customerPhone =
+          String(
+            customer?.phone ||
+              customer?.phoneNumber ||
+              "",
+          )
+
+        const nameMatch =
+          !!nameQuery &&
+          customerCustomerName.includes(
+            nameQuery,
+          )
+
+        const phoneMatch =
+          !!phoneQuery &&
+          customerPhone.includes(
+            phoneQuery,
+          )
+
+        return (
+          nameMatch ||
+          phoneMatch
+        )
+      })
+      .slice(0, 10)
+  }, [
+    customerName,
+    phone,
+    customers,
+  ])
+
+  const populateCustomer = (
+    customer: any,
+  ) => {
+    const selectedId =
+      getCustomerId(customer)
+
+    setCustomerId(
+      selectedId,
+    )
+
+    setCustomerName(
+      customer?.name ||
+        customer?.customerName ||
+        "",
+    )
+
+    setPhone(
+      customer?.phone ||
+        customer?.phoneNumber ||
+        "",
+    )
+
+    setCustomerAddress(
+      customer?.address ||
+        customer?.customerAddress ||
+        "",
+    )
+
+    setShowCustomerSuggestions(
+      false,
+    )
+  }
+
+  const handleCustomerNameChange = (
+    text: string,
+  ) => {
+    setCustomerName(text)
+
+    // Manual modification means the old
+    // customer selection may no longer match.
+    setCustomerId(null)
+
+    setShowCustomerSuggestions(
+      text.trim().length > 0,
+    )
+  }
+
+  const handleCustomerPhoneChange = (
+    text: string,
+  ) => {
+    const cleaned = text.replace(
+      /[^0-9]/g,
+      "",
+    )
+
+    setPhone(cleaned)
+
+    setCustomerId(null)
+
+    setShowCustomerSuggestions(
+      cleaned.length > 0,
+    )
+  }
+
+  // ==============================
   // SEARCH WORKERS
   // ==============================
 
   const searchedWorkers = useMemo(() => {
-    if (!workerName.trim() || !Array.isArray(workers)) {
+    if (
+      !workerName.trim() ||
+      !Array.isArray(workers)
+    ) {
       return workers || []
     }
 
-    return workers.filter((worker) =>
-      (worker?.name || "").toLowerCase().includes(workerName.toLowerCase()),
+    return workers.filter(
+      (worker) =>
+        (
+          worker?.name || ""
+        )
+          .toLowerCase()
+          .includes(
+            workerName.toLowerCase(),
+          ),
     )
-  }, [workerName, workers])
+  }, [
+    workerName,
+    workers,
+  ])
 
   // ==============================
   // SEARCH SERVICES
   // ==============================
 
   const searchedServices = useMemo(() => {
-    const query = serviceName.trim().toLowerCase()
+    const query =
+      serviceName.trim().toLowerCase()
 
     if (!query) {
+      return []
+    }
+
+    if (!Array.isArray(serviceTypes)) {
       return []
     }
 
     return serviceTypes
       .filter((service: any) => {
         const name =
-          String(service.name || "").toLowerCase()
+          String(
+            service?.name || "",
+          ).toLowerCase()
 
         const category =
-          String(service.category || "").toLowerCase()
+          String(
+            service?.category || "",
+          ).toLowerCase()
 
         return (
           name.includes(query) ||
@@ -367,49 +713,167 @@ export default function EditJobScreen({ route, navigation }: any) {
         )
       })
       .slice(0, 10)
-  }, [serviceName, serviceTypes])
+  }, [
+    serviceName,
+    serviceTypes,
+  ])
 
   // ==============================
   // SEARCH PARTS
   // ==============================
 
   const searchedParts = useMemo(() => {
-    if (!partName.trim() || !Array.isArray(inventoryList)) {
+    const query =
+      partName.trim().toLowerCase()
+
+    if (
+      !query ||
+      !Array.isArray(inventoryList)
+    ) {
       return []
     }
 
-    return inventoryList.filter((item) =>
-      (item?.name || "").toLowerCase().includes(partName.toLowerCase()),
+    return inventoryList
+      .filter((item: any) =>
+        String(
+          item?.name || "",
+        )
+          .toLowerCase()
+          .includes(query),
+      )
+      .slice(0, 10)
+  }, [
+    partName,
+    inventoryList,
+  ])
+
+  // ==============================
+  // INVENTORY HELPERS
+  // ==============================
+
+  const getInventoryId = (
+    item: any,
+  ) => {
+    return (
+      item?.partId ||
+      item?.inventoryId ||
+      item?.id ||
+      item?._id ||
+      null
     )
-  }, [partName, inventoryList])
+  }
+
+  const getInventoryStock = (
+    item: any,
+  ) => {
+    return Number(
+      item?.stock ??
+        item?.currentStock ??
+        item?.quantity ??
+        0,
+    )
+  }
+
+  const getInventoryPrice = (
+    item: any,
+  ) => {
+    return Number(
+      item?.sellingPrice ??
+        item?.price ??
+        item?.unitPrice ??
+        0,
+    )
+  }
 
   // ==============================
   // SERVICE HANDLERS
   // ==============================
 
-  const removeService = (index: number) => {
-    setSelectedServices((prev) => prev.filter((_, i) => i !== index))
+  const removeService = (
+    index: number,
+  ) => {
+    setSelectedServices(
+      (prev) =>
+        prev.filter(
+          (_, i) =>
+            i !== index,
+        ),
+    )
   }
 
-  const updateActualServicePrice = (index: number, value: string) => {
-    const numValue = Number(value) || 0
+  const updateActualServicePrice = (
+    index: number,
+    value: string,
+  ) => {
+    const numValue =
+      Number(value) || 0
 
-    setSelectedServices((prev) => {
-      const copy = [...prev]
-      copy[index] = {
-        ...copy[index],
-        actualPrice: numValue,
-      }
-      return copy
-    })
+    setSelectedServices(
+      (prev) => {
+        const copy = [
+          ...prev,
+        ]
+
+        copy[index] = {
+          ...copy[index],
+          actualPrice:
+            numValue,
+        }
+
+        return copy
+      },
+    )
+  }
+
+  const handleSelectService = (
+    service: any,
+  ) => {
+    const serviceId =
+      service?.serviceTypeId ||
+      service?.serviceId ||
+      service?.id ||
+      service?._id ||
+      null
+
+    const price = Number(
+      service?.defaultPrice ??
+        service?.price ??
+        service?.estimatedPrice ??
+        0,
+    )
+
+    setServiceName(
+      String(
+        service?.name || "",
+      ),
+    )
+
+    setServicePrice(
+      String(price),
+    )
+
+    setShowSuggestions(false)
+
+    setShowWorkerSuggestions(
+      false,
+    )
+
+    setShowPartSuggestions(
+      false,
+    )
+
+    setShowCustomerSuggestions(
+      false,
+    )
   }
 
   const addCurrentService = () => {
     if (!serviceName.trim()) {
       Alert.alert(
         t("jobs.alertValidationTitle"),
+
         t("jobs.serviceRequired") ||
-          "Please enter a service"
+          "Please enter a service",
       )
 
       return
@@ -418,44 +882,48 @@ export default function EditJobScreen({ route, navigation }: any) {
     const price =
       Number(servicePrice) || 0
 
-    /*
-    * Try to identify the selected service
-    * from the master service list.
-    */
     const matchedService =
       serviceTypes.find(
         (service: any) =>
-          String(service.name || "")
+          String(
+            service?.name || "",
+          )
             .trim()
             .toLowerCase() ===
-          serviceName.trim().toLowerCase()
+          serviceName
+            .trim()
+            .toLowerCase(),
       )
 
     const serviceId =
       matchedService?.serviceTypeId ||
+      matchedService?.serviceId ||
       matchedService?.id ||
       matchedService?._id ||
       null
 
-    setSelectedServices(prev => [
-      ...prev,
-      {
-        serviceId,
+    setSelectedServices(
+      (prev) => [
+        ...prev,
+        {
+          serviceId,
 
-        name:
-          serviceName.trim(),
+          name:
+            serviceName.trim(),
 
-        quantity: 1,
+          quantity: 1,
 
-        estimatedPrice:
-          price,
+          estimatedPrice:
+            price,
 
-        actualPrice:
-          price
-      }
-    ])
+          actualPrice:
+            price,
+        },
+      ],
+    )
 
     setServiceName("")
+
     setServicePrice("")
 
     closeDropdowns()
@@ -465,204 +933,420 @@ export default function EditJobScreen({ route, navigation }: any) {
   // PART HANDLERS
   // ==============================
 
-  const handleSelectInventoryItem = (item: any) => {
+  const handleSelectInventoryItem = (
+    item: any,
+  ) => {
     setSelectedPartItem(item)
 
-    setPartName(item.name || "")
+    setPartName(
+      item?.name || "",
+    )
 
-    setPartPrice(String(item.price ?? item.unitPrice ?? item.sellingPrice ?? 0))
+    setPartPrice(
+      String(
+        getInventoryPrice(item),
+      ),
+    )
 
-    setShowPartSuggestions(false)
+    setShowPartSuggestions(
+      false,
+    )
+
+    setShowSuggestions(
+      false,
+    )
+
+    setShowWorkerSuggestions(
+      false,
+    )
+
+    setShowCustomerSuggestions(
+      false,
+    )
   }
 
   const addCurrentPart = () => {
     if (!partName.trim()) {
       Alert.alert(
         t("jobs.alertErrorTitle"),
-        t("jobs.valErrPartName") || "Part name is required",
+
+        t("jobs.valErrPartName") ||
+          "Part name is required",
       )
 
       return
     }
 
-    const requestedQty = parseInt(partQty) || 1
-    const price = parseFloat(partPrice) || 0
+    const requestedQty =
+      parseInt(partQty) || 1
+
+    if (requestedQty <= 0) {
+      Alert.alert(
+        t("jobs.alertErrorTitle"),
+        "Quantity must be greater than 0",
+      )
+
+      return
+    }
+
+    const price =
+      parseFloat(partPrice) || 0
+
+    // ==========================================
+    // STOCK CHECK FOR EDIT MODE
+    // ==========================================
+    //
+    // Existing job parts may already have been
+    // deducted from inventory.
+    //
+    // Therefore we only check the quantity that
+    // is ADDITIONAL to the original job quantity.
+    //
 
     if (selectedPartItem) {
-      const availableStock =
-        selectedPartItem.stock ??
-        selectedPartItem.quantity ??
-        selectedPartItem.currentStock ??
-        0
-
       const partId =
-        selectedPartItem.inventoryId ||
-        selectedPartItem.id ||
-        selectedPartItem._id
+        getInventoryId(
+          selectedPartItem,
+        )
 
-      const alreadyAddedQty = selectedParts
-        .filter((p) => String(p.inventoryId) === String(partId))
-        .reduce((sum, p) => sum + Number(p.quantity || 0), 0)
+      const availableStock =
+        getInventoryStock(
+          selectedPartItem,
+        )
+
+      const originalQtyForPart =
+        originalPartsRef.current
+          .filter(
+            (part: any) =>
+              String(
+                part?.inventoryId,
+              ) ===
+              String(partId),
+          )
+          .reduce(
+            (
+              sum: number,
+              part: any,
+            ) =>
+              sum +
+              Number(
+                part?.quantity || 0,
+              ),
+            0,
+          )
+
+      const currentQtyForPart =
+        selectedParts
+          .filter(
+            (part: any) =>
+              String(
+                part?.inventoryId,
+              ) ===
+              String(partId),
+          )
+          .reduce(
+            (
+              sum: number,
+              part: any,
+            ) =>
+              sum +
+              Number(
+                part?.quantity || 0,
+              ),
+            0,
+          )
+
+      const additionalQty =
+        Math.max(
+          0,
+          currentQtyForPart +
+            requestedQty -
+            originalQtyForPart,
+        )
 
       if (
-        availableStock > 0 &&
-        alreadyAddedQty + requestedQty > availableStock
+        additionalQty > 0 &&
+        availableStock <
+          additionalQty
       ) {
         Alert.alert(
-          t("jobs.outOfStock") || "Insufficient Stock",
+          t("jobs.outOfStock") ||
+            "Insufficient Stock",
 
-          t("jobs.insufficientStock") ||
-            "Requested quantity exceeds available stock",
+          t(
+            "jobs.insufficientStock",
+          ) ||
+            `Only ${availableStock} additional units are available`,
         )
 
         return
       }
     }
 
-    setSelectedParts((prev) => [
-      ...prev,
-      {
-        inventoryId: selectedPartItem
-          ? selectedPartItem.inventoryId ||
-            selectedPartItem.id ||
-            selectedPartItem._id
-          : null,
-        name: partName.trim(),
-        quantity: requestedQty,
-        estimatedUnitPrice: price,
-        actualUnitPrice: price,
-        totalPrice: requestedQty * price,
-      },
-    ])
+    const inventoryId =
+      selectedPartItem
+        ? getInventoryId(
+            selectedPartItem,
+          )
+        : null
 
-    setSelectedPartItem(null)
+    setSelectedParts(
+      (prev) => [
+        ...prev,
+        {
+          inventoryId,
+
+          partId:
+            inventoryId,
+
+          name:
+            partName.trim(),
+
+          quantity:
+            requestedQty,
+
+          estimatedUnitPrice:
+            price,
+
+          actualUnitPrice:
+            price,
+
+          totalPrice:
+            requestedQty *
+            price,
+        },
+      ],
+    )
+
+    setSelectedPartItem(
+      null,
+    )
+
     setPartName("")
+
     setPartPrice("")
+
     setPartQty("1")
+
     closeDropdowns()
   }
 
-  const removePart = (index: number) => {
-    setSelectedParts((prev) => prev.filter((_, i) => i !== index))
+  const removePart = (
+    index: number,
+  ) => {
+    setSelectedParts(
+      (prev) =>
+        prev.filter(
+          (_, i) =>
+            i !== index,
+        ),
+    )
   }
 
-  const updatePartQuantity = (index: number, qtyString: string) => {
-    const qty = parseInt(qtyString) || 0
+  const updatePartQuantity = (
+    index: number,
+    qtyString: string,
+  ) => {
+    const qty =
+      parseInt(qtyString) || 0
 
-    setSelectedParts((prev) => {
-      const copy = [...prev]
-      const actualPrice = copy[index].actualUnitPrice || 0
-      copy[index] = {
-        ...copy[index],
-        quantity: qty,
-        totalPrice: qty * actualPrice,
-      }
-      return copy
-    })
+    setSelectedParts(
+      (prev) => {
+        const copy = [
+          ...prev,
+        ]
+
+        const actualPrice =
+          Number(
+            copy[index]
+              ?.actualUnitPrice ||
+              0,
+          )
+
+        copy[index] = {
+          ...copy[index],
+
+          quantity: qty,
+
+          totalPrice:
+            qty *
+            actualPrice,
+        }
+
+        return copy
+      },
+    )
   }
 
-  const updateActualPartPrice = (index: number, value: string) => {
-    const actualPrice = Number(value) || 0
+  const updateActualPartPrice = (
+    index: number,
+    value: string,
+  ) => {
+    const actualPrice =
+      Number(value) || 0
 
-    setSelectedParts((prev) => {
-      const copy = [...prev]
-      const qty = copy[index].quantity || 0
-      copy[index] = {
-        ...copy[index],
-        actualUnitPrice: actualPrice,
-        totalPrice: qty * actualPrice,
-      }
-      return copy
-    })
+    setSelectedParts(
+      (prev) => {
+        const copy = [
+          ...prev,
+        ]
+
+        const qty =
+          Number(
+            copy[index]
+              ?.quantity || 0,
+          )
+
+        copy[index] = {
+          ...copy[index],
+
+          actualUnitPrice:
+            actualPrice,
+
+          totalPrice:
+            qty *
+            actualPrice,
+        }
+
+        return copy
+      },
+    )
   }
 
   // ==============================
   // BILLING
   // ==============================
 
-  const discountType = settings?.invoice?.defaultDiscountType || "percentage"
+  const discountType =
+    settings?.invoice
+      ?.defaultDiscountType ||
+    "percentage"
 
-  const servicesSubtotal = useMemo(() => {
-    return selectedServices.reduce(
-      (sum, item) => sum + Number(item.actualPrice ?? item.estimatedPrice ?? 0),
-      0,
-    )
-  }, [selectedServices])
+  const servicesSubtotal =
+    useMemo(() => {
+      return selectedServices.reduce(
+        (
+          sum,
+          item,
+        ) =>
+          sum +
+          Number(
+            item.actualPrice ??
+              item.estimatedPrice ??
+              0,
+          ),
+        0,
+      )
+    }, [
+      selectedServices,
+    ])
 
-  const partsSubtotal = useMemo(() => {
-    return selectedParts.reduce(
-      (sum, item) => sum + Number(item.totalPrice || 0),
-      0,
-    )
-  }, [selectedParts])
+  const partsSubtotal =
+    useMemo(() => {
+      return selectedParts.reduce(
+        (
+          sum,
+          item,
+        ) =>
+          sum +
+          Number(
+            item.totalPrice ||
+              0,
+          ),
+        0,
+      )
+    }, [
+      selectedParts,
+    ])
 
-  const parsedLabor = useMemo(() => {
-    const value = parseFloat(laborCost)
+  const parsedLabor =
+    useMemo(() => {
+      const value =
+        parseFloat(
+          laborCost,
+        )
 
-    return isNaN(value) || value < 0 ? 0 : value
-  }, [laborCost])
+      return isNaN(value) ||
+        value < 0
+        ? 0
+        : value
+    }, [
+      laborCost,
+    ])
 
-  const rawSubtotal = useMemo(() => {
-    return servicesSubtotal + partsSubtotal + parsedLabor
-  }, [servicesSubtotal, partsSubtotal, parsedLabor])
+  const rawSubtotal =
+    useMemo(() => {
+      return (
+        servicesSubtotal +
+        partsSubtotal +
+        parsedLabor
+      )
+    }, [
+      servicesSubtotal,
+      partsSubtotal,
+      parsedLabor,
+    ])
 
-  const parsedDiscount = useMemo(() => {
-    const value = parseFloat(discount)
+  const parsedDiscount =
+    useMemo(() => {
+      const value =
+        parseFloat(
+          discount,
+        )
 
-    if (isNaN(value) || value < 0) {
-      return 0
-    }
+      if (
+        isNaN(value) ||
+        value < 0
+      ) {
+        return 0
+      }
 
-    return discountType === "percentage" ? Math.min(value, 100) : value
-  }, [discount, discountType])
+      return discountType ===
+        "percentage"
+        ? Math.min(
+            value,
+            100,
+          )
+        : value
+    }, [
+      discount,
+      discountType,
+    ])
 
-  const discountAmount = useMemo(() => {
-    if (discountType === "percentage") {
-      return (rawSubtotal * parsedDiscount) / 100
-    }
+  const discountAmount =
+    useMemo(() => {
+      if (
+        discountType ===
+        "percentage"
+      ) {
+        return (
+          (rawSubtotal *
+            parsedDiscount) /
+          100
+        )
+      }
 
-    return Math.min(parsedDiscount, rawSubtotal)
-  }, [rawSubtotal, parsedDiscount, discountType])
+      return Math.min(
+        parsedDiscount,
+        rawSubtotal,
+      )
+    }, [
+      rawSubtotal,
+      parsedDiscount,
+      discountType,
+    ])
 
-  const grandTotal = useMemo(() => {
-    return Math.max(
-      0,
-
-      rawSubtotal - discountAmount,
-    )
-  }, [rawSubtotal, discountAmount])
-
-  // ==============================
-  // SELECTSEVICE HANDLE
-  // ==============================
-
-  const handleSelectService = (service: any) => {
-    const serviceId =
-      service.serviceTypeId ||
-      service.id ||
-      service._id ||
-      null
-
-    const price = Number(
-      service.defaultPrice ??
-      service.price ??
-      service.estimatedPrice ??
-      0
-    )
-
-    setServiceName(
-      String(service.name || "")
-    )
-
-    setServicePrice(
-      String(price)
-    )
-
-    setShowSuggestions(false)
-
-    setShowWorkerSuggestions(false)
-    setShowPartSuggestions(false)
-  }
+  const grandTotal =
+    useMemo(() => {
+      return Math.max(
+        0,
+        rawSubtotal -
+          discountAmount,
+      )
+    }, [
+      rawSubtotal,
+      discountAmount,
+    ])
 
   // ==============================
   // STEP VALIDATION
@@ -671,29 +1355,48 @@ export default function EditJobScreen({ route, navigation }: any) {
   const handleNext = () => {
     setSubmitted(true)
 
-    if (currentStep === 1) {
+    if (
+      currentStep === 1
+    ) {
       if (
         !customerName.trim() ||
-        phone.trim().length !== 10 ||
+        phone.trim()
+          .length !== 10 ||
         !vehicleNumber.trim() ||
         !vehicleModel.trim()
       ) {
         Alert.alert(
-          t("jobs.alertValidationTitle"),
+          t(
+            "jobs.alertValidationTitle",
+          ),
 
-          t("jobs.fillStep1Alert") || "Please fill all required fields",
+          t(
+            "jobs.fillStep1Alert",
+          ) ||
+            "Please fill all required fields",
         )
 
         return
       }
     }
 
-    if (currentStep === 2) {
-      if (selectedServices.length === 0 && selectedParts.length === 0) {
+    if (
+      currentStep === 2
+    ) {
+      if (
+        selectedServices.length ===
+          0 &&
+        selectedParts.length ===
+          0
+      ) {
         Alert.alert(
-          t("jobs.alertValidationTitle"),
+          t(
+            "jobs.alertValidationTitle",
+          ),
 
-          t("jobs.atLeastOneServiceField") ||
+          t(
+            "jobs.atLeastOneServiceField",
+          ) ||
             "Please add at least one service or part",
         )
 
@@ -703,107 +1406,162 @@ export default function EditJobScreen({ route, navigation }: any) {
 
     setSubmitted(false)
 
-    setCurrentStep((prev) => Math.min(prev + 1, 3))
+    setCurrentStep(
+      (prev) =>
+        Math.min(
+          prev + 1,
+          3,
+        ),
+    )
 
-    scrollRef.current?.scrollTo({
-      y: 0,
-      animated: true,
-    })
+    scrollRef.current?.scrollTo(
+      {
+        y: 0,
+        animated: true,
+      },
+    )
   }
 
   const handleBack = () => {
-    setCurrentStep((prev) => Math.max(prev - 1, 1))
+    setCurrentStep(
+      (prev) =>
+        Math.max(
+          prev - 1,
+          1,
+        ),
+    )
 
-    scrollRef.current?.scrollTo({
-      y: 0,
-      animated: true,
-    })
+    scrollRef.current?.scrollTo(
+      {
+        y: 0,
+        animated: true,
+      },
+    )
   }
 
   // ==============================
   // UPDATE JOB
   // ==============================
 
-  const updateCurrentJob = async () => {
-    try {
-      setSaving(true)
+  const updateCurrentJob =
+    async () => {
+      try {
+        setSaving(true)
 
-      await updateJob(
-        job.jobId,
+        await updateJob(
+          job.jobId,
 
-        {
-          customerName: customerName.trim(),
+          {
+            customerId:
+              customerId || null,
 
-          phone: phone.trim(),
+            customerName:
+              customerName.trim(),
 
-          customerAddress,
+            phone:
+              phone.trim(),
 
-          vehicleNumber: vehicleNumber.trim().toUpperCase(),
+            customerAddress,
 
-          vehicleModel: vehicleModel.trim(),
+            vehicleNumber:
+              vehicleNumber
+                .trim()
+                .toUpperCase(),
 
-          vehicleBrand,
+            vehicleModel:
+              vehicleModel.trim(),
 
-          vehicleType,
+            vehicleBrand,
 
-          odometer,
+            vehicleType,
 
-          complaint,
+            odometer,
 
-          inspectionNotes,
+            complaint,
 
-          workerId: workerId || null,
+            inspectionNotes,
 
-          workerName,
+            workerId:
+              workerId || null,
 
-          priority,
+            workerName,
 
-          deliveryDate: deliveryDate ? deliveryDate.toISOString() : "",
+            priority,
 
-          laborCost: parsedLabor,
+            deliveryDate:
+              deliveryDate
+                ? deliveryDate.toISOString()
+                : "",
 
-          discount: parsedDiscount,
+            laborCost:
+              parsedLabor,
 
-          discountType,
+            discount:
+              parsedDiscount,
 
-          totalAmount: grandTotal,
+            discountType,
 
-          services: selectedServices,
+            totalAmount:
+              grandTotal,
 
-          parts: selectedParts,
-        },
-      )
+            services:
+              selectedServices,
 
-      Alert.alert(
-        t("jobs.alertSuccessTitle"),
+            parts:
+              selectedParts,
+          },
+        )
 
-        t("jobs.jobUpdatedSuccess") || "Job updated successfully",
-      )
+        Alert.alert(
+          t(
+            "jobs.alertSuccessTitle",
+          ),
 
-      navigation.goBack()
-    } catch (err: any) {
-      Alert.alert(
-        t("jobs.alertErrorTitle"),
+          t(
+            "jobs.jobUpdatedSuccess",
+          ) ||
+            "Job updated successfully",
+        )
 
-        err?.response?.data?.message ||
-          t("jobs.unableToUpdateJob") ||
-          "Unable to update job",
-      )
-    } finally {
-      setSaving(false)
+        navigation.goBack()
+      } catch (err: any) {
+        Alert.alert(
+          t(
+            "jobs.alertErrorTitle",
+          ),
+
+          err?.response
+            ?.data?.message ||
+            t(
+              "jobs.unableToUpdateJob",
+            ) ||
+            "Unable to update job",
+        )
+      } finally {
+        setSaving(false)
+      }
     }
-  }
 
   // ==============================
   // DATE PICKER
   // ==============================
 
-  const onDateChange = (event: any, selectedDate?: Date) => {
+  const onDateChange = (
+    event: any,
+    selectedDate?: Date,
+  ) => {
     setShowDatePicker(false)
 
-    if (!selectedDate) return
+    if (!selectedDate) {
+      return
+    }
 
-    const current = deliveryDate || new Date()
+    const current =
+      deliveryDate
+        ? new Date(
+            deliveryDate,
+          )
+        : new Date()
 
     current.setFullYear(
       selectedDate.getFullYear(),
@@ -811,45 +1569,88 @@ export default function EditJobScreen({ route, navigation }: any) {
       selectedDate.getDate(),
     )
 
-    setDeliveryDate(new Date(current))
+    setDeliveryDate(
+      new Date(current),
+    )
 
     setShowTimePicker(true)
   }
 
-  const onTimeChange = (event: any, selectedTime?: Date) => {
+  const onTimeChange = (
+    event: any,
+    selectedTime?: Date,
+  ) => {
     setShowTimePicker(false)
 
-    if (!selectedTime) return
+    if (!selectedTime) {
+      return
+    }
 
-    const current = deliveryDate || new Date()
+    const current =
+      deliveryDate
+        ? new Date(
+            deliveryDate,
+          )
+        : new Date()
 
-    current.setHours(selectedTime.getHours(), selectedTime.getMinutes())
+    current.setHours(
+      selectedTime.getHours(),
+      selectedTime.getMinutes(),
+    )
 
-    setDeliveryDate(new Date(current))
+    setDeliveryDate(
+      new Date(current),
+    )
   }
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
+  const formatDate = (
+    date: Date,
+  ) => {
+    return date.toLocaleString(
+      "en-IN",
+      {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      },
+    )
   }
 
-  const RequiredLabel = ({ text }: { text: string }) => (
-    <Text style={styles.label}>
+  const RequiredLabel = ({
+    text,
+  }: {
+    text: string
+  }) => (
+    <Text
+      style={
+        styles.label
+      }
+    >
       {text}
 
-      <Text style={{ color: "#DC2626" }}>{" *"}</Text>
+      <Text
+        style={{
+          color: "#DC2626",
+        }}
+      >
+        {" *"}
+      </Text>
     </Text>
   )
 
   if (loading) {
     return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#2563EB" />
+      <View
+        style={
+          styles.loader
+        }
+      >
+        <ActivityIndicator
+          size="large"
+          color="#2563EB"
+        />
       </View>
     )
   }
@@ -858,246 +1659,566 @@ export default function EditJobScreen({ route, navigation }: any) {
     <View
       style={{
         flex: 1,
-        backgroundColor: "#F3F4F6",
+        backgroundColor:
+          "#F3F4F6",
       }}
     >
       {/* ============================== */}
       {/* STEP INDICATOR */}
       {/* ============================== */}
 
-      <View style={styles.stepContainer}>
+      <View
+        style={
+          styles.stepContainer
+        }
+      >
         {[
           {
             step: 1,
-            label: t("jobs.stepCustomer"),
+            label: t(
+              "jobs.stepCustomer",
+            ),
           },
-
           {
             step: 2,
-            label: t("jobs.stepServices"),
+            label: t(
+              "jobs.stepServices",
+            ),
           },
-
           {
             step: 3,
-            label: t("jobs.stepBilling"),
+            label: t(
+              "jobs.stepBilling",
+            ),
           },
-        ].map((item) => (
-          <View key={item.step} style={styles.stepItem}>
+        ].map(
+          (item) => (
             <View
-              style={[
-                styles.stepBadge,
-
-                currentStep === item.step && styles.activeBadge,
-
-                currentStep > item.step && styles.completedBadge,
-              ]}
+              key={
+                item.step
+              }
+              style={
+                styles.stepItem
+              }
             >
-              <Text
+              <View
                 style={[
-                  styles.stepBadgeText,
+                  styles.stepBadge,
 
-                  currentStep >= item.step && styles.activeBadgeText,
+                  currentStep ===
+                    item.step &&
+                    styles.activeBadge,
+
+                  currentStep >
+                    item.step &&
+                    styles.completedBadge,
                 ]}
               >
-                {currentStep > item.step ? "✓" : item.step}
+                <Text
+                  style={[
+                    styles.stepBadgeText,
+
+                    currentStep >=
+                      item.step &&
+                      styles.activeBadgeText,
+                  ]}
+                >
+                  {currentStep >
+                  item.step
+                    ? "✓"
+                    : item.step}
+                </Text>
+              </View>
+
+              <Text
+                style={[
+                  styles.stepLabel,
+
+                  currentStep ===
+                    item.step &&
+                    styles.activeStepLabel,
+                ]}
+              >
+                {item.label}
               </Text>
             </View>
-
-            <Text
-              style={[
-                styles.stepLabel,
-
-                currentStep === item.step && styles.activeStepLabel,
-              ]}
-            >
-              {item.label}
-            </Text>
-          </View>
-        ))}
+          ),
+        )}
       </View>
 
       <ScrollView
-        ref={scrollRef}
-
-        style={styles.container}
-
+        ref={
+          scrollRef
+        }
+        style={
+          styles.container
+        }
         keyboardShouldPersistTaps="handled"
-
-        onScrollBeginDrag={closeDropdowns}
+        onScrollBeginDrag={
+          closeDropdowns
+        }
       >
         {/* ============================== */}
         {/* STEP 1 */}
         {/* CUSTOMER & VEHICLE */}
         {/* ============================== */}
 
-        {currentStep === 1 && (
+        {currentStep ===
+          1 && (
           <>
             {/* CUSTOMER */}
 
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="person-outline" size={20} color="#2563EB" />
+            <View
+              style={
+                styles.sectionCard
+              }
+            >
+              <View
+                style={
+                  styles.sectionHeader
+                }
+              >
+                <Ionicons
+                  name="person-outline"
+                  size={20}
+                  color="#2563EB"
+                />
 
-                <Text style={styles.sectionHeading}>
-                  {t("jobs.customerDetails")}
+                <Text
+                  style={
+                    styles.sectionHeading
+                  }
+                >
+                  {t(
+                    "jobs.customerDetails",
+                  )}
                 </Text>
               </View>
 
-              <RequiredLabel text={t("jobs.customerName")} />
-
-              <TextInput
-                ref={customerNameRef}
-
-                onFocus={closeDropdowns}
-
-                style={[
-                  styles.input,
-
-                  submitted && !customerName.trim() && styles.inputError,
-                ]}
-
-                value={customerName}
-
-                onChangeText={setCustomerName}
+              <RequiredLabel
+                text={t(
+                  "jobs.customerName",
+                )}
               />
 
-              <RequiredLabel text={t("jobs.phoneNumber")} />
-
-              <TextInput
-                ref={phoneRef}
-
-                onFocus={closeDropdowns}
-
-                keyboardType="phone-pad"
-
-                maxLength={10}
-
+              <View
                 style={[
-                  styles.input,
-
-                  submitted && phone.trim().length !== 10 && styles.inputError,
+                  styles.inputWrapper,
+                  {
+                    zIndex: 50,
+                    elevation: 20,
+                  },
                 ]}
+              >
+                <TextInput
+                  ref={
+                    customerNameRef
+                  }
+                  onFocus={() => {
+                    setShowCustomerSuggestions(
+                      true,
+                    )
 
-                value={phone}
+                    setShowSuggestions(
+                      false,
+                    )
 
-                onChangeText={setPhone}
+                    setShowWorkerSuggestions(
+                      false,
+                    )
+
+                    setShowPartSuggestions(
+                      false,
+                    )
+                  }}
+                  style={[
+                    styles.input,
+
+                    submitted &&
+                      !customerName.trim() &&
+                      styles.inputError,
+                  ]}
+                  value={
+                    customerName
+                  }
+                  onChangeText={
+                    handleCustomerNameChange
+                  }
+                  placeholder={t(
+                    "jobs.customerName",
+                  )}
+                />
+
+                {showCustomerSuggestions &&
+                  searchedCustomers.length >
+                    0 && (
+                    <View
+                      style={
+                        styles.suggestionContainer
+                      }
+                    >
+                      {searchedCustomers.map(
+                        (
+                          customer,
+                        ) => (
+                          <TouchableOpacity
+                            key={
+                              getCustomerId(
+                                customer,
+                              ) ||
+                              customer?.phone ||
+                              customer?.phoneNumber ||
+                              customer?.name
+                            }
+                            style={
+                              styles.workerSuggestion
+                            }
+                            onPress={() =>
+                              populateCustomer(
+                                customer,
+                              )
+                            }
+                          >
+                            <View
+                              style={{
+                                flex: 1,
+                              }}
+                            >
+                              <Text
+                                style={
+                                  styles.cardTitle
+                                }
+                              >
+                                {customer?.name ||
+                                  customer?.customerName ||
+                                  ""}
+                              </Text>
+
+                              <Text
+                                style={
+                                  styles.cardSubtitle
+                                }
+                              >
+                                {customer?.phone ||
+                                  customer?.phoneNumber ||
+                                  ""}
+                              </Text>
+
+                              {(
+                                customer?.address ||
+                                customer?.customerAddress
+                              ) ? (
+                                <Text
+                                  style={
+                                    styles.cardSubtitle
+                                  }
+                                >
+                                  {customer?.address ||
+                                    customer?.customerAddress}
+                                </Text>
+                              ) : null}
+                            </View>
+
+                            <Ionicons
+                              name="person-circle"
+                              size={26}
+                              color="#2563EB"
+                            />
+                          </TouchableOpacity>
+                        ),
+                      )}
+                    </View>
+                  )}
+              </View>
+
+              <RequiredLabel
+                text={t(
+                  "jobs.phoneNumber",
+                )}
               />
 
-              <Text style={styles.label}>{t("jobs.customerAddress")}</Text>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  {
+                    zIndex: 40,
+                    elevation: 15,
+                  },
+                ]}
+              >
+                <TextInput
+                  ref={
+                    phoneRef
+                  }
+                  onFocus={() => {
+                    setShowCustomerSuggestions(
+                      true,
+                    )
+
+                    setShowSuggestions(
+                      false,
+                    )
+
+                    setShowWorkerSuggestions(
+                      false,
+                    )
+
+                    setShowPartSuggestions(
+                      false,
+                    )
+                  }}
+                  keyboardType="phone-pad"
+                  maxLength={10}
+                  style={[
+                    styles.input,
+
+                    submitted &&
+                      phone.trim()
+                        .length !==
+                        10 &&
+                      styles.inputError,
+                  ]}
+                  value={
+                    phone
+                  }
+                  onChangeText={
+                    handleCustomerPhoneChange
+                  }
+                  placeholder={t(
+                    "jobs.phoneNumber",
+                  )}
+                />
+              </View>
+
+              <Text
+                style={
+                  styles.label
+                }
+              >
+                {t(
+                  "jobs.customerAddress",
+                )}
+              </Text>
 
               <TextInput
-                onFocus={closeDropdowns}
-
-                style={styles.input}
-
-                value={customerAddress}
-
-                onChangeText={setCustomerAddress}
+                onFocus={
+                  closeDropdowns
+                }
+                style={
+                  styles.input
+                }
+                value={
+                  customerAddress
+                }
+                onChangeText={
+                  setCustomerAddress
+                }
               />
             </View>
 
             {/* VEHICLE */}
 
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="car-outline" size={20} color="#2563EB" />
+            <View
+              style={
+                styles.sectionCard
+              }
+            >
+              <View
+                style={
+                  styles.sectionHeader
+                }
+              >
+                <Ionicons
+                  name="car-outline"
+                  size={20}
+                  color="#2563EB"
+                />
 
-                <Text style={styles.sectionHeading}>
-                  {t("jobs.vehicleDetails")}
+                <Text
+                  style={
+                    styles.sectionHeading
+                  }
+                >
+                  {t(
+                    "jobs.vehicleDetails",
+                  )}
                 </Text>
               </View>
 
-              <RequiredLabel text={t("jobs.vehicleNumber")} />
+              <RequiredLabel
+                text={t(
+                  "jobs.vehicleNumber",
+                )}
+              />
 
               <TextInput
-                ref={vehicleNumberRef}
-
-                onFocus={closeDropdowns}
-
+                ref={
+                  vehicleNumberRef
+                }
+                onFocus={
+                  closeDropdowns
+                }
                 style={[
                   styles.input,
 
-                  submitted && !vehicleNumber.trim() && styles.inputError,
+                  submitted &&
+                    !vehicleNumber.trim() &&
+                    styles.inputError,
                 ]}
-
-                value={vehicleNumber}
-
-                onChangeText={(text) => setVehicleNumber(text.toUpperCase())}
+                value={
+                  vehicleNumber
+                }
+                onChangeText={(
+                  text,
+                ) =>
+                  setVehicleNumber(
+                    text.toUpperCase(),
+                  )
+                }
               />
 
-              <View style={styles.row}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>{t("jobs.vehicleBrand")}</Text>
+              <View
+                style={
+                  styles.row
+                }
+              >
+                <View
+                  style={{
+                    flex: 1,
+                  }}
+                >
+                  <Text
+                    style={
+                      styles.label
+                    }
+                  >
+                    {t(
+                      "jobs.vehicleBrand",
+                    )}
+                  </Text>
 
                   <TextInput
-                    onFocus={closeDropdowns}
-
-                    style={styles.input}
-
-                    value={vehicleBrand}
-
-                    onChangeText={setVehicleBrand}
+                    onFocus={
+                      closeDropdowns
+                    }
+                    style={
+                      styles.input
+                    }
+                    value={
+                      vehicleBrand
+                    }
+                    onChangeText={
+                      setVehicleBrand
+                    }
                   />
                 </View>
 
-                <View style={{ flex: 1 }}>
-                  <RequiredLabel text={t("jobs.vehicleModel")} />
+                <View
+                  style={{
+                    flex: 1,
+                  }}
+                >
+                  <RequiredLabel
+                    text={t(
+                      "jobs.vehicleModel",
+                    )}
+                  />
 
                   <TextInput
-                    ref={vehicleModelRef}
-
-                    onFocus={closeDropdowns}
-
+                    ref={
+                      vehicleModelRef
+                    }
+                    onFocus={
+                      closeDropdowns
+                    }
                     style={[
                       styles.input,
 
-                      submitted && !vehicleModel.trim() && styles.inputError,
+                      submitted &&
+                        !vehicleModel.trim() &&
+                        styles.inputError,
                     ]}
-
-                    value={vehicleModel}
-
-                    onChangeText={setVehicleModel}
+                    value={
+                      vehicleModel
+                    }
+                    onChangeText={
+                      setVehicleModel
+                    }
                   />
                 </View>
               </View>
 
-              <Text style={styles.label}>{t("jobs.odometer")}</Text>
+              <Text
+                style={
+                  styles.label
+                }
+              >
+                {t(
+                  "jobs.odometer",
+                )}
+              </Text>
 
               <TextInput
-                onFocus={closeDropdowns}
-
+                onFocus={
+                  closeDropdowns
+                }
                 keyboardType="numeric"
-
                 maxLength={7}
-
-                style={styles.input}
-
-                value={odometer}
-
-                onChangeText={setOdometer}
+                style={
+                  styles.input
+                }
+                value={
+                  odometer
+                }
+                onChangeText={
+                  setOdometer
+                }
               />
 
-              <RequiredLabel text={t("jobs.vehicleType")} />
+              <RequiredLabel
+                text={t(
+                  "jobs.vehicleType",
+                )}
+              />
 
-              <View style={styles.typeRow}>
+              <View
+                style={
+                  styles.typeRow
+                }
+              >
                 <TouchableOpacity
                   style={[
                     styles.typeButton,
 
-                    vehicleType === t("jobs.twoWheeler") && styles.selectedType,
+                    vehicleType ===
+                      t(
+                        "jobs.twoWheeler",
+                      ) &&
+                      styles.selectedType,
                   ]}
-
-                  onPress={() => setVehicleType(t("jobs.twoWheeler"))}
+                  onPress={() =>
+                    setVehicleType(
+                      t(
+                        "jobs.twoWheeler",
+                      ),
+                    )
+                  }
                 >
                   <Text
                     style={[
                       styles.typeButtonText,
 
-                      vehicleType === t("jobs.twoWheeler") &&
+                      vehicleType ===
+                        t(
+                          "jobs.twoWheeler",
+                        ) &&
                         styles.selectedTypeButtonText,
                     ]}
                   >
-                    🏍 {t("jobs.twoWheeler")}
+                    🏍{" "}
+                    {t(
+                      "jobs.twoWheeler",
+                    )}
                   </Text>
                 </TouchableOpacity>
 
@@ -1105,21 +2226,35 @@ export default function EditJobScreen({ route, navigation }: any) {
                   style={[
                     styles.typeButton,
 
-                    vehicleType === t("jobs.fourWheeler") &&
+                    vehicleType ===
+                      t(
+                        "jobs.fourWheeler",
+                      ) &&
                       styles.selectedType,
                   ]}
-
-                  onPress={() => setVehicleType(t("jobs.fourWheeler"))}
+                  onPress={() =>
+                    setVehicleType(
+                      t(
+                        "jobs.fourWheeler",
+                      ),
+                    )
+                  }
                 >
                   <Text
                     style={[
                       styles.typeButtonText,
 
-                      vehicleType === t("jobs.fourWheeler") &&
+                      vehicleType ===
+                        t(
+                          "jobs.fourWheeler",
+                        ) &&
                         styles.selectedTypeButtonText,
                     ]}
                   >
-                    🚗 {t("jobs.fourWheeler")}
+                    🚗{" "}
+                    {t(
+                      "jobs.fourWheeler",
+                    )}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1132,228 +2267,429 @@ export default function EditJobScreen({ route, navigation }: any) {
         {/* WORKER + SERVICES + PARTS */}
         {/* ============================== */}
 
-        {currentStep === 2 && (
+        {currentStep ===
+          2 && (
           <>
             {/* WORKER */}
 
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="people-outline" size={20} color="#2563EB" />
+            <View
+              style={
+                styles.sectionCard
+              }
+            >
+              <View
+                style={
+                  styles.sectionHeader
+                }
+              >
+                <Ionicons
+                  name="people-outline"
+                  size={20}
+                  color="#2563EB"
+                />
 
-                <Text style={styles.sectionHeading}>
-                  {t("jobs.workerAndAssignment")}
+                <Text
+                  style={
+                    styles.sectionHeading
+                  }
+                >
+                  {t(
+                    "jobs.workerAndAssignment",
+                  )}
                 </Text>
               </View>
 
-              <Text style={styles.label}>{t("jobs.assignWorker")}</Text>
+              <Text
+                style={
+                  styles.label
+                }
+              >
+                {t(
+                  "jobs.assignWorker",
+                )}
+              </Text>
 
-              <View style={[styles.inputWrapper, { zIndex: 10 }]}>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  {
+                    zIndex: 30,
+                    elevation: 10,
+                  },
+                ]}
+              >
                 <TextInput
-                  style={styles.input}
-
-                  value={workerName}
-
+                  style={
+                    styles.input
+                  }
+                  value={
+                    workerName
+                  }
                   onFocus={() => {
-                    setShowWorkerSuggestions(true)
+                    setShowWorkerSuggestions(
+                      true,
+                    )
 
-                    setShowSuggestions(false)
+                    setShowSuggestions(
+                      false,
+                    )
 
-                    setShowPartSuggestions(false)
+                    setShowPartSuggestions(
+                      false,
+                    )
+
+                    setShowCustomerSuggestions(
+                      false,
+                    )
                   }}
+                  onChangeText={(
+                    text,
+                  ) => {
+                    setWorkerName(
+                      text,
+                    )
 
-                  onChangeText={(text) => {
-                    setWorkerName(text)
+                    setWorkerId(
+                      "",
+                    )
 
-                    setWorkerId("")
-
-                    setShowWorkerSuggestions(true)
+                    setShowWorkerSuggestions(
+                      true,
+                    )
                   }}
                 />
 
                 {showWorkerSuggestions && (
-                  <View style={styles.suggestionContainer}>
-                    {searchedWorkers.map((worker) => (
-                      <TouchableOpacity
-                        key={worker.workerId || worker.id || worker._id}
+                  <View
+                    style={
+                      styles.suggestionContainer
+                    }
+                  >
+                    {searchedWorkers.map(
+                      (
+                        worker,
+                      ) => (
+                        <TouchableOpacity
+                          key={
+                            worker.workerId ||
+                            worker.id ||
+                            worker._id
+                          }
+                          style={
+                            styles.workerSuggestion
+                          }
+                          onPress={() => {
+                            setWorkerId(
+                              worker.workerId ||
+                                worker.id ||
+                                worker._id,
+                            )
 
-                        style={styles.workerSuggestion}
+                            setWorkerName(
+                              worker.name,
+                            )
 
-                        onPress={() => {
-                          setWorkerId(
-                            worker.workerId || worker.id || worker._id,
-                          )
+                            setShowWorkerSuggestions(
+                              false,
+                            )
+                          }}
+                        >
+                          <View>
+                            <Text
+                              style={
+                                styles.cardTitle
+                              }
+                            >
+                              {
+                                worker.name
+                              }
+                            </Text>
 
-                          setWorkerName(worker.name)
+                            <Text
+                              style={
+                                styles.cardSubtitle
+                              }
+                            >
+                              {
+                                worker.role
+                              }
+                            </Text>
+                          </View>
 
-                          setShowWorkerSuggestions(false)
-                        }}
-                      >
-                        <View>
-                          <Text style={styles.cardTitle}>{worker.name}</Text>
-
-                          <Text style={styles.cardSubtitle}>{worker.role}</Text>
-                        </View>
-
-                        <Ionicons
-                          name="person-circle"
-                          size={26}
-                          color="#2563EB"
-                        />
-                      </TouchableOpacity>
-                    ))}
+                          <Ionicons
+                            name="person-circle"
+                            size={26}
+                            color="#2563EB"
+                          />
+                        </TouchableOpacity>
+                      ),
+                    )}
                   </View>
                 )}
               </View>
 
-              <Text style={styles.label}>{t("jobs.priority")}</Text>
+              <Text
+                style={
+                  styles.label
+                }
+              >
+                {t(
+                  "jobs.priority",
+                )}
+              </Text>
 
-              <View style={styles.priorityRow}>
+              <View
+                style={
+                  styles.priorityRow
+                }
+              >
                 {[
-                  t("jobs.priorityLow"),
-                  t("jobs.priorityNormal"),
-                  t("jobs.priorityHigh"),
-                ].map((item) => (
-                  <TouchableOpacity
-                    key={item}
+                  t(
+                    "jobs.priorityLow",
+                  ),
+                  t(
+                    "jobs.priorityNormal",
+                  ),
+                  t(
+                    "jobs.priorityHigh",
+                  ),
+                ].map(
+                  (item) => (
+                    <TouchableOpacity
+                      key={
+                        item
+                      }
+                      style={[
+                        styles.priorityButton,
 
-                    style={[
-                      styles.priorityButton,
-
-                      priority === item && styles.selectedPriority,
-                    ]}
-
-                    onPress={() => setPriority(item)}
-                  >
-                    <Text
-                      style={{
-                        fontWeight: "600",
-
-                        color: priority === item ? "white" : "#374151",
-                      }}
+                        priority ===
+                          item &&
+                          styles.selectedPriority,
+                      ]}
+                      onPress={() =>
+                        setPriority(
+                          item,
+                        )
+                      }
                     >
-                      {item}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                      <Text
+                        style={{
+                          fontWeight:
+                            "600",
+                          color:
+                            priority ===
+                            item
+                              ? "white"
+                              : "#374151",
+                        }}
+                      >
+                        {
+                          item
+                        }
+                      </Text>
+                    </TouchableOpacity>
+                  ),
+                )}
               </View>
 
-              <Text style={styles.label}>
-                {t("jobs.deliveryDate") || "Delivery Date & Time"}
+              <Text
+                style={
+                  styles.label
+                }
+              >
+                {t(
+                  "jobs.deliveryDate",
+                ) ||
+                  "Delivery Date & Time"}
               </Text>
+
               <TouchableOpacity
-                style={styles.input}
+                style={
+                  styles.input
+                }
                 onPress={() => {
                   closeDropdowns()
-                  setShowDatePicker(true)
+
+                  setShowDatePicker(
+                    true,
+                  )
                 }}
               >
-                <Text style={{ color: deliveryDate ? "#111827" : "#9CA3AF" }}>
-                  {deliveryDate ? formatDate(deliveryDate) : "Select Delivery Date & Time"}
+                <Text
+                  style={{
+                    color:
+                      deliveryDate
+                        ? "#111827"
+                        : "#9CA3AF",
+                  }}
+                >
+                  {deliveryDate
+                    ? formatDate(
+                        deliveryDate,
+                      )
+                    : "Select Delivery Date & Time"}
                 </Text>
               </TouchableOpacity>
             </View>
 
             {/* SERVICES */}
 
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="construct-outline" size={20} color="#2563EB" />
+            <View
+              style={
+                styles.sectionCard
+              }
+            >
+              <View
+                style={
+                  styles.sectionHeader
+                }
+              >
+                <Ionicons
+                  name="construct-outline"
+                  size={20}
+                  color="#2563EB"
+                />
 
-                <Text style={styles.sectionHeading}>{t("jobs.services")}</Text>
+                <Text
+                  style={
+                    styles.sectionHeading
+                  }
+                >
+                  {t(
+                    "jobs.services",
+                  )}
+                </Text>
               </View>
 
-              <Text style={styles.label}>{t("jobs.service")}</Text>
+              <Text
+                style={
+                  styles.label
+                }
+              >
+                {t(
+                  "jobs.service",
+                )}
+              </Text>
 
               <View
                 style={[
                   styles.inputWrapper,
-                  { zIndex: 20 }
+                  {
+                    zIndex: 30,
+                    elevation: 10,
+                  },
                 ]}
               >
                 <TextInput
-                  style={styles.input}
-                  value={serviceName}
-                  placeholder={t("jobs.service")}
+                  style={
+                    styles.input
+                  }
+                  value={
+                    serviceName
+                  }
+                  placeholder={t(
+                    "jobs.service",
+                  )}
                   onFocus={() => {
-                    setShowSuggestions(true)
+                    setShowSuggestions(
+                      true,
+                    )
 
-                    setShowWorkerSuggestions(false)
+                    setShowWorkerSuggestions(
+                      false,
+                    )
 
-                    setShowPartSuggestions(false)
+                    setShowPartSuggestions(
+                      false,
+                    )
+
+                    setShowCustomerSuggestions(
+                      false,
+                    )
                   }}
-                  onChangeText={text => {
-                    setServiceName(text)
+                  onChangeText={(
+                    text,
+                  ) => {
+                    setServiceName(
+                      text,
+                    )
 
-                    setShowSuggestions(true)
+                    setShowSuggestions(
+                      true,
+                    )
                   }}
                 />
 
                 {showSuggestions &&
-                  serviceName.trim().length > 0 &&
-                  searchedServices.length > 0 && (
-
+                  serviceName.trim()
+                    .length >
+                    0 &&
+                  searchedServices.length >
+                    0 && (
                     <View
                       style={
                         styles.suggestionContainer
                       }
                     >
-
                       {searchedServices.map(
-                        (service: any) => {
-
+                        (
+                          service: any,
+                        ) => {
                           const serviceId =
-                            service.serviceTypeId ||
-                            service.id ||
-                            service._id
+                            service?.serviceTypeId ||
+                            service?.serviceId ||
+                            service?.id ||
+                            service?._id
 
                           const price =
                             Number(
-                              service.defaultPrice ??
-                              service.price ??
-                              service.estimatedPrice ??
-                              0
+                              service?.defaultPrice ??
+                                service?.price ??
+                                service?.estimatedPrice ??
+                                0,
                             )
 
                           return (
                             <TouchableOpacity
                               key={
                                 serviceId ||
-                                service.name
+                                service?.name
                               }
                               style={
                                 styles.workerSuggestion
                               }
                               onPress={() =>
                                 handleSelectService(
-                                  service
+                                  service,
                                 )
                               }
                             >
-
                               <View
                                 style={{
-                                  flex: 1
+                                  flex: 1,
                                 }}
                               >
-
                                 <Text
                                   style={
                                     styles.cardTitle
                                   }
                                 >
-                                  {service.name}
+                                  {
+                                    service?.name
+                                  }
                                 </Text>
 
-                                {service.category ? (
+                                {service?.category ? (
                                   <Text
                                     style={
                                       styles.cardSubtitle
                                     }
                                   >
-                                    {service.category}
+                                    {
+                                      service.category
+                                    }
                                   </Text>
                                 ) : null}
-
                               </View>
 
                               <Text
@@ -1361,254 +2697,646 @@ export default function EditJobScreen({ route, navigation }: any) {
                                   styles.suggestionPrice
                                 }
                               >
-                                ₹ {price}
+                                ₹{" "}
+                                {
+                                  price
+                                }
                               </Text>
-
                             </TouchableOpacity>
                           )
-                        }
+                        },
                       )}
-
                     </View>
                   )}
               </View>
 
-              <Text style={styles.label}>{t("jobs.estimatePrice")}</Text>
+              <Text
+                style={
+                  styles.label
+                }
+              >
+                {t(
+                  "jobs.estimatePrice",
+                )}
+              </Text>
 
               <TextInput
                 keyboardType="numeric"
-
-                style={styles.input}
-
-                value={servicePrice}
-
-                onChangeText={setServicePrice}
+                style={
+                  styles.input
+                }
+                value={
+                  servicePrice
+                }
+                onChangeText={
+                  setServicePrice
+                }
               />
 
               <TouchableOpacity
-                style={styles.addServiceBtn}
-
-                onPress={addCurrentService}
+                style={
+                  styles.addServiceBtn
+                }
+                onPress={
+                  addCurrentService
+                }
               >
                 <Ionicons
                   name="add-circle-outline"
                   size={18}
                   color="#FFF"
-                  style={{ marginRight: 6 }}
+                  style={{
+                    marginRight: 6,
+                  }}
                 />
 
-                <Text style={styles.addServiceText}>
-                  {t("jobs.addService")}
+                <Text
+                  style={
+                    styles.addServiceText
+                  }
+                >
+                  {t(
+                    "jobs.addService",
+                  )}
                 </Text>
               </TouchableOpacity>
 
-              {selectedServices.map((service, index) => (
-                <View key={index} style={styles.selectedServiceCard}>
-                  <View style={styles.selectedHeader}>
-                    <Text style={styles.cardTitle}>{service.name}</Text>
+              {selectedServices.map(
+                (
+                  service,
+                  index,
+                ) => (
+                  <View
+                    key={
+                      index
+                    }
+                    style={
+                      styles.selectedServiceCard
+                    }
+                  >
+                    <View
+                      style={
+                        styles.selectedHeader
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.cardTitle
+                        }
+                      >
+                        {
+                          service.name
+                        }
+                      </Text>
 
-                    <TouchableOpacity onPress={() => removeService(index)}>
-                      <Ionicons
-                        name="trash-outline"
-                        size={20}
-                        color="#DC2626"
-                      />
-                    </TouchableOpacity>
-                  </View>
+                      <TouchableOpacity
+                        onPress={() =>
+                          removeService(
+                            index,
+                          )
+                        }
+                      >
+                        <Ionicons
+                          name="trash-outline"
+                          size={20}
+                          color="#DC2626"
+                        />
+                      </TouchableOpacity>
+                    </View>
 
-                  <View style={styles.rowAlign}>
-                    <View style={styles.priceColumn}>
-                      <Text style={styles.smallLabel}>{t("jobs.estimatePrice")}:</Text>
-                      <View style={styles.readOnlyBox}>
-                        <Text style={styles.readOnlyText}>
-                          ₹{service.estimatedPrice || 0}
+                    <View
+                      style={
+                        styles.rowAlign
+                      }
+                    >
+                      <View
+                        style={
+                          styles.priceColumn
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.smallLabel
+                          }
+                        >
+                          {t(
+                            "jobs.estimatePrice",
+                          )}
+                          :
                         </Text>
+
+                        <View
+                          style={
+                            styles.readOnlyBox
+                          }
+                        >
+                          <Text
+                            style={
+                              styles.readOnlyText
+                            }
+                          >
+                            ₹
+                            {service.estimatedPrice ||
+                              0}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View
+                        style={
+                          styles.priceColumn
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.smallLabel
+                          }
+                        >
+                          {t(
+                            "jobs.actualPrice",
+                          )}
+                          :
+                        </Text>
+
+                        <TextInput
+                          style={
+                            styles.inlinePriceInput
+                          }
+                          keyboardType="numeric"
+                          value={String(
+                            service.actualPrice ??
+                              "",
+                          )}
+                          onChangeText={(
+                            text,
+                          ) =>
+                            updateActualServicePrice(
+                              index,
+                              text,
+                            )
+                          }
+                        />
                       </View>
                     </View>
-
-                    <View style={styles.priceColumn}>
-                      <Text style={styles.smallLabel}>{t("jobs.actualPrice")}:</Text>
-                      <TextInput
-                        style={styles.inlinePriceInput}
-                        keyboardType="numeric"
-                        value={String(service.actualPrice ?? "")}
-                        onChangeText={(text) =>
-                          updateActualServicePrice(index, text)
-                        }
-                      />
-                    </View>
                   </View>
-                </View>
-              ))}
+                ),
+              )}
             </View>
 
             {/* PARTS */}
 
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="cube-outline" size={20} color="#2563EB" />
+            <View
+              style={
+                styles.sectionCard
+              }
+            >
+              <View
+                style={
+                  styles.sectionHeader
+                }
+              >
+                <Ionicons
+                  name="cube-outline"
+                  size={20}
+                  color="#2563EB"
+                />
 
-                <Text style={styles.sectionHeading}>
-                  {t("jobs.sparePartsAndInventory")}
+                <Text
+                  style={
+                    styles.sectionHeading
+                  }
+                >
+                  {t(
+                    "jobs.sparePartsAndInventory",
+                  )}
                 </Text>
               </View>
 
-              <Text style={styles.label}>{t("jobs.partName")}</Text>
+              <Text
+                style={
+                  styles.label
+                }
+              >
+                {t(
+                  "jobs.partName",
+                )}
+              </Text>
 
-              <View style={[styles.inputWrapper, { zIndex: 30 }]}>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  {
+                    zIndex: 30,
+                    elevation: 10,
+                  },
+                ]}
+              >
                 <TextInput
-                  style={styles.input}
-
-                  value={partName}
-
+                  style={
+                    styles.input
+                  }
+                  value={
+                    partName
+                  }
+                  placeholder={t(
+                    "jobs.partName",
+                  )}
                   onFocus={() => {
-                    setShowPartSuggestions(true)
+                    setShowPartSuggestions(
+                      true,
+                    )
 
-                    setShowWorkerSuggestions(false)
+                    setShowWorkerSuggestions(
+                      false,
+                    )
 
-                    setShowSuggestions(false)
+                    setShowSuggestions(
+                      false,
+                    )
+
+                    setShowCustomerSuggestions(
+                      false,
+                    )
                   }}
+                  onChangeText={(
+                    text,
+                  ) => {
+                    setPartName(
+                      text,
+                    )
 
-                  onChangeText={(text) => {
-                    setPartName(text)
+                    // Once the user starts typing
+                    // again, the previously selected
+                    // inventory item is no longer
+                    // guaranteed to be selected.
+                    setSelectedPartItem(
+                      null,
+                    )
 
-                    setSelectedPartItem(null)
-
-                    setShowPartSuggestions(true)
+                    setShowPartSuggestions(
+                      true,
+                    )
                   }}
                 />
 
-                {showPartSuggestions && searchedParts.length > 0 && (
-                  <View style={styles.suggestionContainer}>
-                    {searchedParts.map((item) => (
-                      <TouchableOpacity
-                        key={
-                          item.inventoryId || item.id || item._id || item.name
-                        }
+                {showPartSuggestions &&
+                  searchedParts.length >
+                    0 && (
+                    <View
+                      style={
+                        styles.suggestionContainer
+                      }
+                    >
+                      {searchedParts.map(
+                        (
+                          item,
+                        ) => {
+                          const stock =
+                            getInventoryStock(
+                              item,
+                            )
 
-                        style={styles.workerSuggestion}
+                          const price =
+                            getInventoryPrice(
+                              item,
+                            )
 
-                        onPress={() => handleSelectInventoryItem(item)}
-                      >
-                        <View>
-                          <Text style={styles.cardTitle}>{item.name}</Text>
+                          return (
+                            <TouchableOpacity
+                              key={
+                                getInventoryId(
+                                  item,
+                                ) ||
+                                item?.name
+                              }
+                              style={
+                                styles.workerSuggestion
+                              }
+                              onPress={() =>
+                                handleSelectInventoryItem(
+                                  item,
+                                )
+                              }
+                            >
+                              <View
+                                style={{
+                                  flex: 1,
+                                }}
+                              >
+                                <Text
+                                  style={
+                                    styles.cardTitle
+                                  }
+                                >
+                                  {
+                                    item?.name
+                                  }
+                                </Text>
 
-                          <Text style={styles.cardSubtitle}>
-                            Stock:{" "}
-                            {item.stock ??
-                              item.quantity ??
-                              item.currentStock ??
-                              0}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
+                                <Text
+                                  style={
+                                    styles.cardSubtitle
+                                  }
+                                >
+                                  Stock:{" "}
+                                  {
+                                    stock
+                                  }
+                                </Text>
+                              </View>
+
+                              <Text
+                                style={
+                                  styles.suggestionPrice
+                                }
+                              >
+                                ₹{" "}
+                                {
+                                  price
+                                }
+                              </Text>
+                            </TouchableOpacity>
+                          )
+                        },
+                      )}
+                    </View>
+                  )}
               </View>
 
-              <View style={styles.row}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>{t("jobs.quantity")}</Text>
+              <View
+                style={
+                  styles.row
+                }
+              >
+                <View
+                  style={{
+                    flex: 1,
+                  }}
+                >
+                  <Text
+                    style={
+                      styles.label
+                    }
+                  >
+                    {t(
+                      "jobs.quantity",
+                    )}
+                  </Text>
 
                   <TextInput
                     keyboardType="numeric"
-
-                    style={styles.input}
-
-                    value={partQty}
-
-                    onChangeText={setPartQty}
+                    style={
+                      styles.input
+                    }
+                    value={
+                      partQty
+                    }
+                    onChangeText={
+                      setPartQty
+                    }
                   />
                 </View>
 
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>{t("jobs.unitPrice")}</Text>
+                <View
+                  style={{
+                    flex: 1,
+                  }}
+                >
+                  <Text
+                    style={
+                      styles.label
+                    }
+                  >
+                    {t(
+                      "jobs.unitPrice",
+                    )}
+                  </Text>
 
                   <TextInput
                     keyboardType="numeric"
-
-                    style={styles.input}
-
-                    value={partPrice}
-
-                    onChangeText={setPartPrice}
+                    style={
+                      styles.input
+                    }
+                    value={
+                      partPrice
+                    }
+                    onChangeText={
+                      setPartPrice
+                    }
                   />
                 </View>
               </View>
 
               <TouchableOpacity
-                style={styles.addServiceBtn}
-
-                onPress={addCurrentPart}
+                style={
+                  styles.addServiceBtn
+                }
+                onPress={
+                  addCurrentPart
+                }
               >
                 <Ionicons
                   name="add-circle-outline"
                   size={18}
                   color="#FFF"
-                  style={{ marginRight: 6 }}
+                  style={{
+                    marginRight: 6,
+                  }}
                 />
 
-                <Text style={styles.addServiceText}>{t("jobs.addPart")}</Text>
+                <Text
+                  style={
+                    styles.addServiceText
+                  }
+                >
+                  {t(
+                    "jobs.addPart",
+                  )}
+                </Text>
               </TouchableOpacity>
 
-              {selectedParts.map((part, index) => (
-                <View key={index} style={styles.selectedServiceCard}>
-                  <View style={styles.selectedHeader}>
-                    <Text style={styles.cardTitle}>{part.name}</Text>
-
-                    <TouchableOpacity onPress={() => removePart(index)}>
-                      <Ionicons
-                        name="trash-outline"
-                        size={20}
-                        color="#DC2626"
-                      />
-                    </TouchableOpacity>
-                  </View>
-
-                  <View style={styles.partEditRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.smallLabel}>{t("jobs.qty")}:</Text>
-                      <TextInput
-                        style={styles.inlinePriceInput}
-                        keyboardType="numeric"
-                        value={String(part.quantity ?? 1)}
-                        onChangeText={(text) =>
-                          updatePartQuantity(index, text)
+              {selectedParts.map(
+                (
+                  part,
+                  index,
+                ) => (
+                  <View
+                    key={
+                      index
+                    }
+                    style={
+                      styles.selectedServiceCard
+                    }
+                  >
+                    <View
+                      style={
+                        styles.selectedHeader
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.cardTitle
                         }
-                      />
+                      >
+                        {
+                          part.name
+                        }
+                      </Text>
+
+                      <TouchableOpacity
+                        onPress={() =>
+                          removePart(
+                            index,
+                          )
+                        }
+                      >
+                        <Ionicons
+                          name="trash-outline"
+                          size={20}
+                          color="#DC2626"
+                        />
+                      </TouchableOpacity>
                     </View>
 
-                    <View style={{ flex: 1.2 }}>
-                      <Text style={styles.smallLabel}>{t("jobs.estimatedPrice")}:</Text>
-                      <View style={styles.readOnlyBox}>
-                        <Text style={styles.readOnlyText}>
-                          ₹{part.estimatedUnitPrice ?? part.unitPrice ?? 0}
+                    <View
+                      style={
+                        styles.partEditRow
+                      }
+                    >
+                      <View
+                        style={{
+                          flex: 1,
+                        }}
+                      >
+                        <Text
+                          style={
+                            styles.smallLabel
+                          }
+                        >
+                          {t(
+                            "jobs.qty",
+                          )}
+                          :
                         </Text>
+
+                        <TextInput
+                          style={
+                            styles.inlinePriceInput
+                          }
+                          keyboardType="numeric"
+                          value={String(
+                            part.quantity ??
+                              1,
+                          )}
+                          onChangeText={(
+                            text,
+                          ) =>
+                            updatePartQuantity(
+                              index,
+                              text,
+                            )
+                          }
+                        />
+                      </View>
+
+                      <View
+                        style={{
+                          flex: 1.2,
+                        }}
+                      >
+                        <Text
+                          style={
+                            styles.smallLabel
+                          }
+                        >
+                          {t(
+                            "jobs.estimatedPrice",
+                          )}
+                          :
+                        </Text>
+
+                        <View
+                          style={
+                            styles.readOnlyBox
+                          }
+                        >
+                          <Text
+                            style={
+                              styles.readOnlyText
+                            }
+                          >
+                            ₹
+                            {part.estimatedUnitPrice ??
+                              part.unitPrice ??
+                              0}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View
+                        style={{
+                          flex: 1.2,
+                        }}
+                      >
+                        <Text
+                          style={
+                            styles.smallLabel
+                          }
+                        >
+                          {t(
+                            "jobs.actualPrice",
+                          )}
+                          :
+                        </Text>
+
+                        <TextInput
+                          style={
+                            styles.inlinePriceInput
+                          }
+                          keyboardType="numeric"
+                          value={String(
+                            part.actualUnitPrice ??
+                              "",
+                          )}
+                          onChangeText={(
+                            text,
+                          ) =>
+                            updateActualPartPrice(
+                              index,
+                              text,
+                            )
+                          }
+                        />
                       </View>
                     </View>
 
-                    <View style={{ flex: 1.2 }}>
-                      <Text style={styles.smallLabel}>{t("jobs.actualPrice")}:</Text>
-                      <TextInput
-                        style={styles.inlinePriceInput}
-                        keyboardType="numeric"
-                        value={String(part.actualUnitPrice ?? "")}
-                        onChangeText={(text) =>
-                          updateActualPartPrice(index, text)
+                    <View
+                      style={
+                        styles.totalRow
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.totalServiceText
                         }
-                      />
+                      >
+                        Total Subtotal:
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.totalServicePrice
+                        }
+                      >
+                        ₹{" "}
+                        {
+                          part.totalPrice
+                        }
+                      </Text>
                     </View>
                   </View>
-
-                  <View style={styles.totalRow}>
-                    <Text style={styles.totalServiceText}>Total Subtotal:</Text>
-                    <Text style={styles.totalServicePrice}>
-                      ₹ {part.totalPrice}
-                    </Text>
-                  </View>
-                </View>
-              ))}
+                ),
+              )}
             </View>
           </>
         )}
@@ -1618,106 +3346,263 @@ export default function EditJobScreen({ route, navigation }: any) {
         {/* BILLING & NOTES */}
         {/* ============================== */}
 
-        {currentStep === 3 && (
+        {currentStep ===
+          3 && (
           <>
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="receipt-outline" size={20} color="#2563EB" />
+            <View
+              style={
+                styles.sectionCard
+              }
+            >
+              <View
+                style={
+                  styles.sectionHeader
+                }
+              >
+                <Ionicons
+                  name="receipt-outline"
+                  size={20}
+                  color="#2563EB"
+                />
 
-                <Text style={styles.sectionHeading}>
-                  {t("jobs.laborAndAdditionalCharges")}
+                <Text
+                  style={
+                    styles.sectionHeading
+                  }
+                >
+                  {t(
+                    "jobs.laborAndAdditionalCharges",
+                  )}
                 </Text>
               </View>
 
-              <View style={styles.row}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>{t("jobs.laborCharge")}</Text>
-
-                  <TextInput
-                    keyboardType="numeric"
-
-                    style={styles.input}
-
-                    value={laborCost}
-
-                    onChangeText={setLaborCost}
-                  />
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>
-                    {discountType === "percentage"
-                      ? t("jobs.discountPercent")
-                      : t("jobs.discountLabel")}
+              <View
+                style={
+                  styles.row
+                }
+              >
+                <View
+                  style={{
+                    flex: 1,
+                  }}
+                >
+                  <Text
+                    style={
+                      styles.label
+                    }
+                  >
+                    {t(
+                      "jobs.laborCharge",
+                    )}
                   </Text>
 
                   <TextInput
                     keyboardType="numeric"
+                    style={
+                      styles.input
+                    }
+                    value={
+                      laborCost
+                    }
+                    onChangeText={
+                      setLaborCost
+                    }
+                  />
+                </View>
 
-                    style={styles.input}
+                <View
+                  style={{
+                    flex: 1,
+                  }}
+                >
+                  <Text
+                    style={
+                      styles.label
+                    }
+                  >
+                    {discountType ===
+                    "percentage"
+                      ? t(
+                          "jobs.discountPercent",
+                        )
+                      : t(
+                          "jobs.discountLabel",
+                        )}
+                  </Text>
 
-                    value={discount}
-
-                    onChangeText={setDiscount}
+                  <TextInput
+                    keyboardType="numeric"
+                    style={
+                      styles.input
+                    }
+                    value={
+                      discount
+                    }
+                    onChangeText={
+                      setDiscount
+                    }
                   />
                 </View>
               </View>
 
               {/* BILL SUMMARY */}
 
-              <View style={styles.totalCard}>
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>
-                    {t("jobs.servicesSubtotal")}
+              <View
+                style={
+                  styles.totalCard
+                }
+              >
+                <View
+                  style={
+                    styles.summaryRow
+                  }
+                >
+                  <Text
+                    style={
+                      styles.summaryLabel
+                    }
+                  >
+                    {t(
+                      "jobs.servicesSubtotal",
+                    )}
                   </Text>
 
-                  <Text style={styles.summaryValue}>
-                    ₹ {servicesSubtotal.toFixed(2)}
+                  <Text
+                    style={
+                      styles.summaryValue
+                    }
+                  >
+                    ₹{" "}
+                    {servicesSubtotal.toFixed(
+                      2,
+                    )}
                   </Text>
                 </View>
 
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>
-                    {t("jobs.partsSubtotal")}
+                <View
+                  style={
+                    styles.summaryRow
+                  }
+                >
+                  <Text
+                    style={
+                      styles.summaryLabel
+                    }
+                  >
+                    {t(
+                      "jobs.partsSubtotal",
+                    )}
                   </Text>
 
-                  <Text style={styles.summaryValue}>
-                    + ₹ {partsSubtotal.toFixed(2)}
+                  <Text
+                    style={
+                      styles.summaryValue
+                    }
+                  >
+                    + ₹{" "}
+                    {partsSubtotal.toFixed(
+                      2,
+                    )}
                   </Text>
                 </View>
 
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>{t("jobs.laborFee")}</Text>
+                <View
+                  style={
+                    styles.summaryRow
+                  }
+                >
+                  <Text
+                    style={
+                      styles.summaryLabel
+                    }
+                  >
+                    {t(
+                      "jobs.laborFee",
+                    )}
+                  </Text>
 
-                  <Text style={styles.summaryValue}>
-                    + ₹ {parsedLabor.toFixed(2)}
+                  <Text
+                    style={
+                      styles.summaryValue
+                    }
+                  >
+                    + ₹{" "}
+                    {parsedLabor.toFixed(
+                      2,
+                    )}
                   </Text>
                 </View>
 
-                {parsedDiscount > 0 && (
-                  <View style={styles.summaryRow}>
-                    <Text style={[styles.summaryLabel, { color: "#DC2626" }]}>
+                {parsedDiscount >
+                  0 && (
+                  <View
+                    style={
+                      styles.summaryRow
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.summaryLabel,
+                        {
+                          color:
+                            "#DC2626",
+                        },
+                      ]}
+                    >
                       Discount
-                      {discountType === "percentage"
+                      {discountType ===
+                      "percentage"
                         ? ` (${parsedDiscount}%)`
                         : ""}
                     </Text>
 
-                    <Text style={[styles.summaryValue, { color: "#DC2626" }]}>
-                      - ₹ {discountAmount.toFixed(2)}
+                    <Text
+                      style={[
+                        styles.summaryValue,
+                        {
+                          color:
+                            "#DC2626",
+                        },
+                      ]}
+                    >
+                      - ₹{" "}
+                      {discountAmount.toFixed(
+                        2,
+                      )}
                     </Text>
                   </View>
                 )}
 
-                <View style={styles.divider} />
+                <View
+                  style={
+                    styles.divider
+                  }
+                />
 
-                <View style={styles.summaryRow}>
-                  <Text style={styles.totalLabel}>
-                    {t("jobs.estimatedBill")}
+                <View
+                  style={
+                    styles.summaryRow
+                  }
+                >
+                  <Text
+                    style={
+                      styles.totalLabel
+                    }
+                  >
+                    {t(
+                      "jobs.estimatedBill",
+                    )}
                   </Text>
 
-                  <Text style={styles.totalAmount}>
-                    ₹ {grandTotal.toFixed(2)}
+                  <Text
+                    style={
+                      styles.totalAmount
+                    }
+                  >
+                    ₹{" "}
+                    {grandTotal.toFixed(
+                      2,
+                    )}
                   </Text>
                 </View>
               </View>
@@ -1725,27 +3610,44 @@ export default function EditJobScreen({ route, navigation }: any) {
 
             {/* NOTES */}
 
-            <View style={styles.sectionCard}>
-              <View style={styles.sectionHeader}>
+            <View
+              style={
+                styles.sectionCard
+              }
+            >
+              <View
+                style={
+                  styles.sectionHeader
+                }
+              >
                 <Ionicons
                   name="document-text-outline"
                   size={20}
                   color="#2563EB"
                 />
 
-                <Text style={styles.sectionHeading}>
-                  {t("jobs.customerComplaint")}
+                <Text
+                  style={
+                    styles.sectionHeading
+                  }
+                >
+                  {t(
+                    "jobs.customerComplaint",
+                  )}
                 </Text>
               </View>
 
               <TextInput
                 multiline
-
-                style={styles.notes}
-
-                value={complaint}
-
-                onChangeText={setComplaint}
+                style={
+                  styles.notes
+                }
+                value={
+                  complaint
+                }
+                onChangeText={
+                  setComplaint
+                }
               />
 
               <Text
@@ -1757,17 +3659,22 @@ export default function EditJobScreen({ route, navigation }: any) {
                   },
                 ]}
               >
-                {t("jobs.inspectionNotes")}
+                {t(
+                  "jobs.inspectionNotes",
+                )}
               </Text>
 
               <TextInput
                 multiline
-
-                style={styles.notes}
-
-                value={inspectionNotes}
-
-                onChangeText={setInspectionNotes}
+                style={
+                  styles.notes
+                }
+                value={
+                  inspectionNotes
+                }
+                onChangeText={
+                  setInspectionNotes
+                }
               />
             </View>
           </>
@@ -1777,67 +3684,116 @@ export default function EditJobScreen({ route, navigation }: any) {
 
         {showDatePicker && (
           <DateTimePicker
-            value={deliveryDate || new Date()}
-
+            value={
+              deliveryDate ||
+              new Date()
+            }
             mode="date"
-
             display="default"
-
-            onChange={onDateChange}
+            onChange={
+              onDateChange
+            }
           />
         )}
 
         {showTimePicker && (
           <DateTimePicker
-            value={deliveryDate || new Date()}
-
+            value={
+              deliveryDate ||
+              new Date()
+            }
             mode="time"
-
             display="default"
-
-            onChange={onTimeChange}
+            onChange={
+              onTimeChange
+            }
           />
         )}
 
-        <View style={{ height: 100 }} />
+        <View
+          style={{
+            height: 100,
+          }}
+        />
       </ScrollView>
 
       {/* ============================== */}
       {/* FOOTER BUTTONS */}
       {/* ============================== */}
 
-      <View style={styles.footerBar}>
-        {currentStep > 1 && (
+      <View
+        style={
+          styles.footerBar
+        }
+      >
+        {currentStep >
+          1 && (
           <TouchableOpacity
-            style={styles.backBtn}
-
-            onPress={handleBack}
+            style={
+              styles.backBtn
+            }
+            onPress={
+              handleBack
+            }
           >
-            <Text style={styles.backBtnText}>{t("jobs.btnBack")}</Text>
+            <Text
+              style={
+                styles.backBtnText
+              }
+            >
+              {t(
+                "jobs.btnBack",
+              )}
+            </Text>
           </TouchableOpacity>
         )}
 
-        {currentStep < 3 ? (
+        {currentStep <
+        3 ? (
           <TouchableOpacity
-            style={styles.nextBtn}
-
-            onPress={handleNext}
+            style={
+              styles.nextBtn
+            }
+            onPress={
+              handleNext
+            }
           >
-            <Text style={styles.nextBtnText}>{t("jobs.btnNext")}</Text>
+            <Text
+              style={
+                styles.nextBtnText
+              }
+            >
+              {t(
+                "jobs.btnNext",
+              )}
+            </Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={styles.saveBtn}
-
-            disabled={saving}
-
-            onPress={updateCurrentJob}
+            style={
+              styles.saveBtn
+            }
+            disabled={
+              saving
+            }
+            onPress={
+              updateCurrentJob
+            }
           >
             {saving ? (
-              <ActivityIndicator color="white" />
+              <ActivityIndicator
+                color="white"
+              />
             ) : (
-              <Text style={styles.saveText}>
-                {t("jobs.updateJob") || "Update Job"}
+              <Text
+                style={
+                  styles.saveText
+                }
+              >
+                {t(
+                  "jobs.updateJob",
+                ) ||
+                  "Update Job"}
               </Text>
             )}
           </TouchableOpacity>
@@ -2031,6 +3987,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     zIndex: 100,
     elevation: 10,
+    overflow: "hidden",
   },
 
   workerSuggestion: {
@@ -2055,8 +4012,10 @@ const styles = StyleSheet.create({
   },
 
   suggestionPrice: {
+    fontSize: 12,
     fontWeight: "700",
     color: "#2563EB",
+    marginLeft: 10,
   },
 
   addServiceBtn: {

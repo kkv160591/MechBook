@@ -128,16 +128,13 @@ async (
   return result.Item
 }
 
-
 /*
 |--------------------------------------------------------------------------
 | FIND CUSTOMER
 |--------------------------------------------------------------------------
 |
-| We use phone as the primary identity because customer names can
-| be duplicated.
+| Phone is the customer lookup key within a garage.
 |
-| IMPORTANT:
 | Ideally later add a DynamoDB GSI:
 |
 |   garageId-phone-index
@@ -158,12 +155,15 @@ async (
       .replace(/\D/g, "")
       .trim()
 
+
   if (!normalizedPhone) {
     return null
   }
 
+
   const result =
     await db.send(
+
       new ScanCommand({
 
         TableName:
@@ -183,9 +183,12 @@ async (
         },
 
       })
+
     )
 
+
   return result.Items?.[0] || null
+
 }
 
 

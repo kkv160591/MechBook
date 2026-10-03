@@ -7,78 +7,38 @@ import {
   TransactWriteItemsCommand,
 } from "@aws-sdk/client-dynamodb"
 
-import {
-  unmarshall,
-  marshall,
-} from "@aws-sdk/util-dynamodb"
-
+import { unmarshall, marshall } from "@aws-sdk/util-dynamodb"
 import { v4 as uuid } from "uuid"
 
 import { db } from "../config/dynamodb"
+import { getOrCreateSubscription } from "./subscription.service"
 
-import {
-  getOrCreateSubscription,
-} from "./subscription.service"
-
-import {
-  findOrCreateCustomer,
-} from "./customer.service"
-
-
-const JOBS_TABLE =
-  process.env.JOBS_TABLE_NAME!
-
+const JOBS_TABLE = process.env.JOBS_TABLE_NAME!
 const CUSTOMERS_TABLE =
-  process.env.CUSTOMERS_TABLE_NAME ||
-  "Customers"
-
+  process.env.CUSTOMERS_TABLE_NAME || "Customers"
 const INVENTORY_TABLE =
-  process.env.INVENTORY_TABLE_NAME ||
-  "Inventory"
-
+  process.env.INVENTORY_TABLE_NAME || "Inventory"
 const SUBSCRIPTIONS_TABLE =
-  process.env.SUBSCRIPTIONS_TABLE_NAME ||
-  "Subscriptions"
+  process.env.SUBSCRIPTIONS_TABLE_NAME || "Subscriptions"
 
-
-/*
-|--------------------------------------------------------------------------
-| JOB LIMIT ERROR
-|--------------------------------------------------------------------------
-*/
+// ============================================================
+// ERRORS
+// ============================================================
 
 export class JobLimitReachedError extends Error {
-
   code = "JOB_LIMIT_REACHED"
 
   constructor() {
-
-    super(
-      "Monthly job limit reached"
-    )
-
-    this.name =
-      "JobLimitReachedError"
-
+    super("Monthly job limit reached")
+    this.name = "JobLimitReachedError"
   }
-
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| INVENTORY STOCK ERROR
-|--------------------------------------------------------------------------
-*/
-
 export class InsufficientStockError extends Error {
-
   code = "INSUFFICIENT_STOCK"
 
   partName: string
-
   available: number
-
   requested: number
 
   constructor(
@@ -86,507 +46,344 @@ export class InsufficientStockError extends Error {
     available: number,
     requested: number
   ) {
-
     super(
       `Insufficient stock for ${partName}. Available: ${available}, requested: ${requested}`
     )
 
-    this.name =
-      "InsufficientStockError"
-
-    this.partName =
-      partName
-
-    this.available =
-      available
-
-    this.requested =
-      requested
-
+    this.name = "InsufficientStockError"
+    this.partName = partName
+    this.available = available
+    this.requested = requested
   }
-
 }
 
+// ============================================================
+// HELPERS
+// ============================================================
 
-/*
-|--------------------------------------------------------------------------
-| NORMALIZE PARTS
-|--------------------------------------------------------------------------
-|
-| If the same inventory part is added twice to a job, combine the
-| quantities before creating DynamoDB inventory updates.
-|
-|--------------------------------------------------------------------------
-*/
+const getInventoryId = (part: any) => {
+  return (
+    part?.inventoryId ||
+    part?.partId ||
+    part?.id ||
+    part?._id ||
+    null
+  )
+}
 
-const normalizeParts =
-(
-  parts: any[]
-) => {
+const getPartUnitPrice = (part: any) => {
+  return Number(
+    part?.actualUnitPrice ??
+      part?.unitPrice ??
+      part?.estimatedUnitPrice ??
+      part?.sellingPrice ??
+      part?.price ??
+      0
+  )
+}
 
-  const map =
-    new Map<string, any>()
+/**
+ * Normalize inventory parts.
+ *
+ * Important:
+ * - Manual parts without inventoryId are ignored, same as the
+ *   existing create-job behavior.
+ * - Duplicate inventory parts are combined.
+ */
+const normalizeParts = (parts: any[]) => {
+  const map = new Map<string, any>()
 
-  for (
-    const part of parts || []
-  ) {
-
-    const inventoryId =
-      part.inventoryId ||
-      part.partId ||
-      part.id ||
-      part._id
-
-    /*
-     * Manual parts do not belong to inventory.
-     */
+  for (const part of Array.isArray(parts) ? parts : []) {
+    const inventoryId = getInventoryId(part)
 
     if (!inventoryId) {
-
       continue
-
     }
 
-    const quantity =
-      Math.max(
-        1,
-        Number(part.quantity) || 1
-      )
+    const quantity = Math.max(
+      1,
+      Number(part.quantity) || 1
+    )
 
-    const existing =
-      map.get(
-        String(inventoryId)
-      )
+    const unitPrice = getPartUnitPrice(part)
+
+    const existing = map.get(String(inventoryId))
 
     if (existing) {
-
-      existing.quantity +=
-        quantity
+      existing.quantity += quantity
 
       existing.totalPrice =
-        existing.quantity *
-        existing.unitPrice
-
+        existing.quantity * existing.actualUnitPrice
     } else {
-
-      map.set(
-        String(inventoryId),
-        {
-          ...part,
-
-          inventoryId,
-
-          partId:
-            inventoryId,
-
-          quantity,
-
-          unitPrice:
-            Number(
-              part.unitPrice || 0
-            ),
-
-          totalPrice:
-            quantity *
-            Number(
-              part.unitPrice || 0
-            ),
-        }
-      )
-
+      map.set(String(inventoryId), {
+        inventoryId,
+        partId: inventoryId,
+        name: part.name || "",
+        quantity,
+        estimatedUnitPrice: Number(
+          part.estimatedUnitPrice ??
+            part.unitPrice ??
+            unitPrice
+        ),
+        actualUnitPrice: unitPrice,
+        unitPrice,
+        totalPrice: quantity * unitPrice,
+      })
     }
-
   }
 
-  return Array.from(
-    map.values()
-  )
-
+  return Array.from(map.values())
 }
 
+const normalizePhone = (phone: any) => {
+  return String(phone || "").trim()
+}
 
-/*
-|--------------------------------------------------------------------------
-| CREATE JOB
-|--------------------------------------------------------------------------
-*/
+// ============================================================
+// CUSTOMER HELPERS
+// ============================================================
 
-export const createJob =
-async (
+export const findCustomerByPhone = async (
+  garageId: string,
+  phone: string
+) => {
+  const normalizedPhone = normalizePhone(phone)
+
+  if (!normalizedPhone) {
+    return null
+  }
+
+  const result = await db.send(
+    new ScanCommand({
+      TableName: CUSTOMERS_TABLE,
+
+      FilterExpression:
+        "garageId = :garageId AND phone = :phone",
+
+      ExpressionAttributeValues: marshall({
+        ":garageId": garageId,
+        ":phone": normalizedPhone,
+      }),
+    })
+  )
+
+  if (!result.Items || result.Items.length === 0) {
+    return null
+  }
+
+  return unmarshall(result.Items[0])
+}
+
+// ============================================================
+// CREATE JOB
+// ============================================================
+
+export const createJob = async (
   garageId: string,
   data: any
 ) => {
+  const totalAmount = Number(data.totalAmount || 0)
 
-  /*
-   * ---------------------------------------------------------------
-   * CUSTOMER
-   * ---------------------------------------------------------------
-   *
-   * If frontend supplied customerId, use it.
-   *
-   * Otherwise find/create customer using phone.
-   */
-
-  let customerId =
-    data.customerId || null
+  // ----------------------------------------------------------
+  // CUSTOMER
+  // ----------------------------------------------------------
 
   let customer: any = null
+  let newCustomer: any = null
 
+  if (data.customerId) {
+    const customerResult = await db.send(
+      new GetItemCommand({
+        TableName: CUSTOMERS_TABLE,
 
-  if (customerId) {
+        Key: marshall({
+          customerId: data.customerId,
+        }),
+      })
+    )
 
-    const customerResponse =
-      await db.send(
-        new GetItemCommand({
-
-          TableName:
-            CUSTOMERS_TABLE,
-
-          Key: {
-
-            customerId: {
-              S: customerId,
-            },
-
-          },
-
-        })
-      )
-
-    if (!customerResponse.Item) {
-
-      throw new Error(
-        "Selected customer was not found"
-      )
-
+    if (!customerResult.Item) {
+      throw new Error("Customer not found")
     }
 
-    customer =
-      unmarshall(
-        customerResponse.Item
-      )
+    customer = unmarshall(customerResult.Item)
 
-
-    /*
-     * Security check:
-     *
-     * Do not allow one garage to attach another garage's
-     * customer to its job.
-     */
-
-    if (
-      customer.garageId !==
-      garageId
-    ) {
-
-      throw new Error(
-        "Invalid customer"
-      )
-
+    if (customer.garageId !== garageId) {
+      throw new Error("Customer does not belong to this garage")
     }
-
   } else {
+    const phone = normalizePhone(data.phone)
 
-    const result =
-      await findOrCreateCustomer(
+    if (!phone) {
+      throw new Error("Customer phone number is required")
+    }
+
+    customer = await findCustomerByPhone(
+      garageId,
+      phone
+    )
+
+    if (!customer) {
+      const customerId = uuid()
+
+      newCustomer = {
+        customerId,
         garageId,
-        {
-          name:
-            data.customerName,
 
-          phone:
-            data.phone,
+        name: data.customerName || "",
+        phone,
 
-          address:
-            data.customerAddress,
-        }
-      )
+        alternatePhone: "",
+        address: data.customerAddress || "",
+        notes: "",
 
-    customer =
-      result.customer
+        totalVehicles: 0,
+        totalJobs: 1,
+        totalSpent: totalAmount,
+        pendingAmount: totalAmount,
 
-    customerId =
-      customer.customerId
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
 
+      customer = newCustomer
+    }
   }
 
+  // ----------------------------------------------------------
+  // PARTS
+  // ----------------------------------------------------------
 
-  /*
-   * ---------------------------------------------------------------
-   * INVENTORY PARTS
-   * ---------------------------------------------------------------
-   */
+  const normalizedParts = normalizeParts(
+    data.parts || []
+  )
 
-  const normalizedParts =
-    normalizeParts(
-      data.parts || []
+  // Validate inventory before transaction
+  for (const part of normalizedParts) {
+    const inventoryResult = await db.send(
+      new GetItemCommand({
+        TableName: INVENTORY_TABLE,
+
+        Key: marshall({
+          partId: part.partId,
+        }),
+      })
     )
 
-
-  /*
-   * ---------------------------------------------------------------
-   * VALIDATE INVENTORY IDS
-   * ---------------------------------------------------------------
-   *
-   * Fetch each inventory item before the transaction so we can
-   * provide useful errors.
-   */
-
-  for (
-    const part of normalizedParts
-  ) {
-
-    const inventoryResponse =
-      await db.send(
-
-        new GetItemCommand({
-
-          TableName:
-            INVENTORY_TABLE,
-
-          Key: {
-
-            partId: {
-              S:
-                String(
-                  part.inventoryId
-                ),
-            },
-
-          },
-
-        })
-
-      )
-
-
-    if (
-      !inventoryResponse.Item
-    ) {
-
+    if (!inventoryResult.Item) {
       throw new Error(
-        `Inventory item not found: ${part.name || part.inventoryId}`
+        `Inventory item not found: ${part.name || part.partId}`
       )
-
     }
 
+    const inventory = unmarshall(
+      inventoryResult.Item
+    )
 
-    const inventoryItem =
-      unmarshall(
-        inventoryResponse.Item
-      )
-
-
-    /*
-     * Make sure inventory belongs to this garage.
-     */
-
-    if (
-      inventoryItem.garageId !==
-      garageId
-    ) {
-
+    if (inventory.garageId !== garageId) {
       throw new Error(
-        `Invalid inventory item: ${part.name || part.inventoryId}`
+        `Inventory item does not belong to this garage`
       )
-
     }
 
+    const availableStock = Number(
+      inventory.stock || 0
+    )
 
-    const available =
-      Number(
-        inventoryItem.stock ?? 0
-      )
-
-    const requested =
-      Number(
-        part.quantity ?? 0
-      )
-
+    const requestedQuantity = Number(
+      part.quantity || 0
+    )
 
     if (
-      requested <= 0
+      requestedQuantity <= 0 ||
+      requestedQuantity > availableStock
     ) {
-
-      throw new Error(
-        `Invalid quantity for ${part.name || part.inventoryId}`
-      )
-
-    }
-
-
-    if (
-      requested >
-      available
-    ) {
-
       throw new InsufficientStockError(
-        part.name ||
-          inventoryItem.name ||
-          "Inventory item",
-
-        available,
-
-        requested
+        part.name || "Unknown part",
+        availableStock,
+        requestedQuantity
       )
-
     }
 
-
-    /*
-     * Keep the current stock available to the rest of the
-     * function if needed.
-     */
-
-    part.availableStock =
-      available
-
+    part.availableStock = availableStock
   }
 
+  // ----------------------------------------------------------
+  // SUBSCRIPTION / JOB LIMIT
+  // ----------------------------------------------------------
 
-  /*
-   * ---------------------------------------------------------------
-   * SUBSCRIPTION
-   * ---------------------------------------------------------------
-   */
+  const subscription =
+    await getOrCreateSubscription(garageId)
 
-  let subscription =
-    await getOrCreateSubscription(
-      garageId
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const jobsUsed = Number(
+      subscription.jobsUsed || 0
     )
 
+    const jobLimit = Number(
+      subscription.jobLimit || 0
+    )
 
-  /*
-   * ---------------------------------------------------------------
-   * RETRY LOOP
-   * ---------------------------------------------------------------
-   */
+    const boosterJobs = Number(
+      subscription.boosterJobs || 0
+    )
 
-  for (
-    let attempt = 0;
-    attempt < 3;
-    attempt++
-  ) {
-
-    const jobsUsed =
-      Number(
-        subscription.jobsUsed ?? 0
-      )
-
-    const jobLimit =
-      Number(
-        subscription.jobLimit ?? 0
-      )
-
-    const boosterJobs =
-      Number(
-        subscription.boosterJobs ?? 0
-      )
-
-
-    const totalAvailable =
+    const unlimited =
+      subscription.unlimited === true ||
       jobLimit === -1
-        ? -1
-        : jobLimit +
-          boosterJobs
 
-
-    /*
-     * -------------------------------------------------------------
-     * CHECK PLAN LIMIT
-     * -------------------------------------------------------------
-     */
+    const totalAvailable = unlimited
+      ? -1
+      : jobLimit + boosterJobs
 
     if (
-      totalAvailable !== -1 &&
-      jobsUsed >=
-        totalAvailable
+      !unlimited &&
+      jobsUsed >= totalAvailable
     ) {
-
       throw new JobLimitReachedError()
-
     }
 
+    const jobId = uuid()
+    const now = new Date().toISOString()
 
-    /*
-     * -------------------------------------------------------------
-     * CREATE JOB
-     * -------------------------------------------------------------
-     */
-
-    const jobId =
-      uuid()
-
-    const now =
-      new Date().toISOString()
-
-
-    const item = {
-
+    const job = {
       jobId,
-
       garageId,
 
-
-      /*
-       * CUSTOMER
-       */
-
-      customerId,
-
+      customerId: customer.customerId,
       customerName:
         data.customerName ||
         customer.name ||
         "",
-
       phone:
-        data.phone ||
+        normalizePhone(data.phone) ||
         customer.phone ||
         "",
-
       customerAddress:
         data.customerAddress ||
         customer.address ||
         "",
 
-
-      /*
-       * VEHICLE
-       */
-
       vehicleNumber:
         data.vehicleNumber || "",
-
       vehicleBrand:
         data.vehicleBrand || "",
-
       vehicleModel:
         data.vehicleModel || "",
-
       vehicleType:
-        data.vehicleType ||
-        "2 Wheeler",
-
+        data.vehicleType || "2 Wheeler",
       odometer:
         data.odometer || "",
 
-
-      /*
-       * JOB
-       */
-
-      status:
-        "pending",
+      status: "pending",
 
       workerId:
         data.workerId || null,
-
       workerName:
         data.workerName || "",
 
       priority:
-        data.priority ||
-        "Normal",
+        data.priority || "Normal",
 
       deliveryDate:
         data.deliveryDate || "",
@@ -594,217 +391,138 @@ async (
       discount:
         Number(data.discount || 0),
 
+      discountType:
+        data.discountType || "amount",
+
       laborCost:
         Number(data.laborCost || 0),
 
-      totalAmount:
-        Number(data.totalAmount || 0),
-
-
-      /*
-       * COMPLAINT
-       */
+      totalAmount,
 
       complaint:
         data.complaint || "",
 
-
-      /*
-       * INSPECTION
-       */
-
       inspectionNotes:
         data.inspectionNotes || "",
 
-
-      /*
-       * SERVICES
-       */
-
       services:
-        data.services || [],
+        Array.isArray(data.services)
+          ? data.services
+          : [],
 
+      parts: normalizedParts.map(
+        (part) => {
+          const { availableStock, ...cleanPart } =
+            part
 
-      /*
-       * PARTS
-       */
+          return cleanPart
+        }
+      ),
 
-      parts:
-        normalizedParts.map(
-          (part) => {
-
-            const {
-              availableStock,
-              ...cleanPart
-            } = part
-
-            return cleanPart
-
-          }
-        ),
-
-
-      createdAt:
-        now,
-
-      updatedAt:
-        now,
-
+      createdAt: now,
+      updatedAt: now,
     }
-
-
-    /*
-     * -------------------------------------------------------------
-     * TRANSACTION ITEMS
-     * -------------------------------------------------------------
-     */
 
     const transactItems: any[] = []
 
+    // --------------------------------------------------------
+    // NEW CUSTOMER
+    // --------------------------------------------------------
 
-    /*
-     * -------------------------------------------------------------
-     * 1. CREATE JOB
-     * -------------------------------------------------------------
-     */
+    if (newCustomer) {
+      transactItems.push({
+        Put: {
+          TableName: CUSTOMERS_TABLE,
+
+          Item: marshall(newCustomer, {
+            removeUndefinedValues: true,
+          }),
+
+          ConditionExpression:
+            "attribute_not_exists(customerId)",
+        },
+      })
+    }
+
+    // --------------------------------------------------------
+    // JOB
+    // --------------------------------------------------------
 
     transactItems.push({
-
       Put: {
+        TableName: JOBS_TABLE,
 
-        TableName:
-          JOBS_TABLE,
-
-        Item:
-          marshall(
-            item,
-            {
-              removeUndefinedValues:
-                true
-            }
-          ),
+        Item: marshall(job, {
+          removeUndefinedValues: true,
+        }),
 
         ConditionExpression:
           "attribute_not_exists(jobId)",
-
       },
-
     })
 
+    // --------------------------------------------------------
+    // EXISTING CUSTOMER
+    // --------------------------------------------------------
 
-    /*
-     * -------------------------------------------------------------
-     * 2. UPDATE CUSTOMER STATS
-     * -------------------------------------------------------------
-     *
-     * Every completed/created job increments totalJobs.
-     *
-     * totalSpent is increased using job total.
-     *
-     * pendingAmount is increased because new jobs start as pending.
-     */
+    if (!newCustomer) {
+      const oldTotalJobs = Number(
+        customer.totalJobs || 0
+      )
 
-    transactItems.push({
+      const oldTotalSpent = Number(
+        customer.totalSpent || 0
+      )
 
-      Update: {
-
-        TableName:
-          CUSTOMERS_TABLE,
-
-        Key: {
-
-          customerId: {
-            S:
-              customerId,
-          },
-
-        },
-
-        UpdateExpression: `
-          SET
-            totalJobs = if_not_exists(totalJobs, :zero) + :one,
-            totalSpent = if_not_exists(totalSpent, :zero) + :totalAmount,
-            pendingAmount = if_not_exists(pendingAmount, :zero) + :totalAmount,
-            updatedAt = :updatedAt
-        `,
-
-        ExpressionAttributeValues: {
-
-          ":zero": {
-            N: "0",
-          },
-
-          ":one": {
-            N: "1",
-          },
-
-          ":totalAmount": {
-            N:
-              Number(
-                data.totalAmount || 0
-              ).toString(),
-          },
-
-          ":garageId": {
-            S:
-              garageId,
-          },
-
-          ":updatedAt": {
-            S:
-              now,
-          },
-
-        },
-
-        ConditionExpression:
-          "attribute_exists(customerId) AND garageId = :garageId",
-
-      },
-
-    })
-
-
-    /*
-     * -------------------------------------------------------------
-     * 3. DECREASE INVENTORY
-     * -------------------------------------------------------------
-     *
-     * IMPORTANT:
-     *
-     * stock = stock - requestedQty
-     *
-     * AND
-     *
-     * stock >= requestedQty
-     *
-     * This prevents negative stock and also protects against
-     * two workers trying to sell the same final stock.
-     */
-
-    for (
-      const part of normalizedParts
-    ) {
+      const oldPendingAmount = Number(
+        customer.pendingAmount || 0
+      )
 
       transactItems.push({
-
         Update: {
+          TableName: CUSTOMERS_TABLE,
 
-          TableName:
-            INVENTORY_TABLE,
+          Key: marshall({
+            customerId:
+              customer.customerId,
+          }),
 
-          Key: {
+          UpdateExpression:
+            "SET totalJobs = :totalJobs, totalSpent = :totalSpent, pendingAmount = :pendingAmount, updatedAt = :updatedAt",
 
-            partId: {
+          ConditionExpression:
+            "attribute_exists(customerId) AND garageId = :garageId",
 
-              S:
-                String(
-                  part.inventoryId
-                ),
+          ExpressionAttributeValues: marshall({
+            ":totalJobs":
+              oldTotalJobs + 1,
 
-            },
+            ":totalSpent":
+              oldTotalSpent + totalAmount,
 
-          },
+            ":pendingAmount":
+              oldPendingAmount + totalAmount,
+
+            ":updatedAt": now,
+
+            ":garageId": garageId,
+          }),
+        },
+      })
+    }
+
+    // --------------------------------------------------------
+    // INVENTORY
+    // --------------------------------------------------------
+
+    for (const part of normalizedParts) {
+      transactItems.push({
+        Update: {
+          TableName: INVENTORY_TABLE,
+
+          Key: marshall({
+            partId: part.partId,
+          }),
 
           UpdateExpression:
             "SET stock = stock - :quantity, updatedAt = :updatedAt",
@@ -812,551 +530,1283 @@ async (
           ConditionExpression:
             "attribute_exists(partId) AND garageId = :garageId AND stock >= :quantity",
 
-          ExpressionAttributeValues: {
+          ExpressionAttributeValues: marshall({
+            ":quantity":
+              Number(part.quantity),
 
-            ":quantity": {
+            ":updatedAt": now,
 
-              N:
-                Number(
-                  part.quantity
-                ).toString(),
-
-            },
-
-            ":garageId": {
-
-              S:
-                garageId,
-
-            },
-
-            ":updatedAt": {
-
-              S:
-                now,
-
-            },
-
-          },
-
+            ":garageId": garageId,
+          }),
         },
-
       })
-
     }
 
+    // --------------------------------------------------------
+    // SUBSCRIPTION
+    // --------------------------------------------------------
 
-    /*
-     * -------------------------------------------------------------
-     * 4. UPDATE SUBSCRIPTION
-     * -------------------------------------------------------------
-     */
+    const subscriptionKey: any = {
+      garageId,
+    }
+
+    if (
+      subscription.subscriptionId
+    ) {
+      subscriptionKey.subscriptionId =
+        subscription.subscriptionId
+    }
 
     transactItems.push({
-
       Update: {
+        TableName: SUBSCRIPTIONS_TABLE,
 
-        TableName:
-          SUBSCRIPTIONS_TABLE,
-
-        Key: {
-
-          garageId: {
-
-            S:
-              garageId,
-
-          },
-
-        },
+        Key: marshall(subscriptionKey),
 
         UpdateExpression:
-          "SET jobsUsed = :newJobsUsed, updatedAt = :updatedAt",
+          "SET jobsUsed = jobsUsed + :one",
 
         ConditionExpression:
-          "jobsUsed = :currentJobsUsed AND jobLimit = :currentJobLimit AND boosterJobs = :currentBoosterJobs",
+          "jobsUsed = :jobsUsed AND (jobLimit = :jobLimit OR attribute_not_exists(jobLimit))",
 
-        ExpressionAttributeValues: {
-
-          ":currentJobsUsed": {
-
-            N:
-              jobsUsed.toString(),
-
-          },
-
-          ":currentJobLimit": {
-
-            N:
-              jobLimit.toString(),
-
-          },
-
-          ":currentBoosterJobs": {
-
-            N:
-              boosterJobs.toString(),
-
-          },
-
-          ":newJobsUsed": {
-
-            N:
-              (
-                jobsUsed + 1
-              ).toString(),
-
-          },
-
-          ":updatedAt": {
-
-            S:
-              now,
-
-          },
-
-        },
-
+        ExpressionAttributeValues:
+          marshall({
+            ":one": 1,
+            ":jobsUsed": jobsUsed,
+            ":jobLimit": jobLimit,
+          }),
       },
-
     })
 
-
-    /*
-     * -------------------------------------------------------------
-     * EXECUTE EVERYTHING ATOMICALLY
-     * -------------------------------------------------------------
-     */
-
     try {
-
       await db.send(
-
         new TransactWriteItemsCommand({
-
-          TransactItems:
-            transactItems,
-
+          TransactItems: transactItems,
         })
-
       )
 
-
-      /*
-       * SUCCESS
-       */
-
-      return item
-
-    }
-
-
-    catch (error: any) {
-
-      /*
-       * -----------------------------------------------------------
-       * TRANSACTION CONFLICT
-       * -----------------------------------------------------------
-       */
-
+      return job
+    } catch (error: any) {
       if (
         error?.name ===
         "TransactionCanceledException"
       ) {
-
-        /*
-         * Re-read subscription because another request may have
-         * consumed a job slot.
-         */
-
-        subscription =
+        const latestSubscription =
           await getOrCreateSubscription(
             garageId
           )
 
+        const latestUsed = Number(
+          latestSubscription.jobsUsed || 0
+        )
 
-        const latestJobsUsed =
-          Number(
-            subscription.jobsUsed ?? 0
-          )
+        const latestLimit = Number(
+          latestSubscription.jobLimit || 0
+        )
 
-        const latestJobLimit =
-          Number(
-            subscription.jobLimit ?? 0
-          )
+        const latestBooster = Number(
+          latestSubscription.boosterJobs || 0
+        )
 
-        const latestBoosterJobs =
-          Number(
-            subscription.boosterJobs ?? 0
-          )
-
-
-        const latestTotalAvailable =
-          latestJobLimit === -1
-            ? -1
-            : latestJobLimit +
-              latestBoosterJobs
-
+        const latestUnlimited =
+          latestSubscription.unlimited === true ||
+          latestLimit === -1
 
         if (
-          latestTotalAvailable !== -1 &&
-          latestJobsUsed >=
-            latestTotalAvailable
+          !latestUnlimited &&
+          latestUsed >=
+            latestLimit + latestBooster
         ) {
-
           throw new JobLimitReachedError()
-
         }
 
-
-        /*
-         * Retry transaction.
-         */
-
-        if (
-          attempt < 2
-        ) {
-
-          continue
-
-        }
-
+        continue
       }
 
-
       throw error
-
     }
-
   }
-
 
   throw new Error(
     "Unable to create job"
   )
-
 }
 
+// ============================================================
+// GET ALL JOBS
+// ============================================================
 
-/*
-|--------------------------------------------------------------------------
-| GET JOBS
-|--------------------------------------------------------------------------
-*/
-
-export const getJobs =
-async (
+export const getJobs = async (
   garageId: string
 ) => {
-
-  const response =
-    await db.send(
-
-      new ScanCommand({
-
-        TableName:
-          JOBS_TABLE,
-
-      })
-
-    )
-
-
-  const jobs =
-    (response.Items || [])
-      .map(
-        item =>
-          unmarshall(item)
-      )
-      .filter(
-        (job: any) =>
-          job.garageId ===
-          garageId
-      )
-      .sort(
-        (a: any, b: any) =>
-          new Date(
-            b.createdAt
-          ).getTime() -
-          new Date(
-            a.createdAt
-          ).getTime()
-      )
-
-
-  return jobs
-
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| GET JOB BY ID
-|--------------------------------------------------------------------------
-*/
-
-export const getJobById =
-async (
-  jobId: string
-) => {
-
-  const response =
-    await db.send(
-
-      new GetItemCommand({
-
-        TableName:
-          JOBS_TABLE,
-
-        Key: {
-
-          jobId: {
-
-            S:
-              jobId,
-
-          },
-
-        },
-
-      })
-
-    )
-
-
-  if (
-    !response.Item
-  ) {
-
-    return null
-
-  }
-
-
-  return unmarshall(
-    response.Item
+  const result = await db.send(
+    new ScanCommand({
+      TableName: JOBS_TABLE,
+    })
   )
 
+  const jobs = (result.Items || [])
+    .map((item) => unmarshall(item))
+    .filter(
+      (job: any) =>
+        job.garageId === garageId
+    )
+
+  jobs.sort(
+    (a: any, b: any) =>
+      new Date(
+        b.createdAt || 0
+      ).getTime() -
+      new Date(
+        a.createdAt || 0
+      ).getTime()
+  )
+
+  return jobs
 }
 
+// ============================================================
+// GET JOB BY ID
+// ============================================================
 
-/*
-|--------------------------------------------------------------------------
-| UPDATE JOB
-|--------------------------------------------------------------------------
-*/
+export const getJobById = async (
+  garageId: string,
+  jobId: string
+) => {
+  const result = await db.send(
+    new GetItemCommand({
+      TableName: JOBS_TABLE,
 
-export const updateJob =
-async (
+      Key: marshall({
+        jobId,
+      }),
+    })
+  )
+
+  if (!result.Item) {
+    return null
+  }
+
+  const job = unmarshall(
+    result.Item
+  )
+
+  if (job.garageId !== garageId) {
+    return null
+  }
+
+  return job
+}
+
+// ============================================================
+// UPDATE JOB
+// ============================================================
+
+export const updateJob = async (
+  garageId: string,
   jobId: string,
   data: any
 ) => {
+  // ----------------------------------------------------------
+  // LOAD EXISTING JOB
+  // ----------------------------------------------------------
 
-  const existing =
-    await getJobById(
-      jobId
-    )
-
+  const existing = await getJobById(
+    garageId,
+    jobId
+  )
 
   if (!existing) {
-
     return null
-
   }
 
+  // ----------------------------------------------------------
+  // OLD / NEW AMOUNT
+  // ----------------------------------------------------------
 
-  const updated = {
+  const oldTotalAmount = Number(
+    existing.totalAmount || 0
+  )
 
+  const newTotalAmount = Number(
+    data.totalAmount ??
+      existing.totalAmount ??
+      0
+  )
+
+  // ----------------------------------------------------------
+  // CUSTOMER RESOLUTION
+  // ----------------------------------------------------------
+
+  let newCustomer: any = null
+
+  const requestedCustomerId =
+    data.customerId || null
+
+  if (requestedCustomerId) {
+    const customerResult =
+      await db.send(
+        new GetItemCommand({
+          TableName: CUSTOMERS_TABLE,
+
+          Key: marshall({
+            customerId:
+              requestedCustomerId,
+          }),
+        })
+      )
+
+    if (!customerResult.Item) {
+      throw new Error(
+        "Customer not found"
+      )
+    }
+
+    newCustomer =
+      unmarshall(
+        customerResult.Item
+      )
+
+    if (
+      newCustomer.garageId !==
+      garageId
+    ) {
+      throw new Error(
+        "Customer does not belong to this garage"
+      )
+    }
+  } else {
+    const phone =
+      normalizePhone(
+        data.phone ||
+          existing.phone
+      )
+
+    if (!phone) {
+      throw new Error(
+        "Customer phone number is required"
+      )
+    }
+
+    newCustomer =
+      await findCustomerByPhone(
+        garageId,
+        phone
+      )
+
+    // If the frontend does not provide a
+    // customerId but the phone belongs to
+    // the existing customer, use that customer.
+    //
+    // Otherwise create a new customer.
+    if (!newCustomer) {
+      newCustomer = {
+        customerId: uuid(),
+        garageId,
+
+        name:
+          data.customerName ||
+          "",
+
+        phone,
+
+        alternatePhone: "",
+        address:
+          data.customerAddress ||
+          "",
+        notes: "",
+
+        totalVehicles: 0,
+        totalJobs: 0,
+        totalSpent: 0,
+        pendingAmount: 0,
+
+        createdAt:
+          new Date().toISOString(),
+
+        updatedAt:
+          new Date().toISOString(),
+      }
+    }
+  }
+
+  const oldCustomerId =
+    existing.customerId || null
+
+  const newCustomerId =
+    newCustomer.customerId
+
+  const customerChanged =
+    String(oldCustomerId || "") !==
+    String(newCustomerId || "")
+
+  // ----------------------------------------------------------
+  // NORMALIZE NEW PARTS
+  // ----------------------------------------------------------
+
+  const normalizedNewParts =
+    normalizeParts(
+      data.parts || []
+    )
+
+  // ----------------------------------------------------------
+  // NORMALIZE OLD PARTS
+  // ----------------------------------------------------------
+
+  const normalizedOldParts =
+    normalizeParts(
+      existing.parts || []
+    )
+
+  const oldPartsMap =
+    new Map<string, any>()
+
+  for (const part of normalizedOldParts) {
+    oldPartsMap.set(
+      String(part.partId),
+      part
+    )
+  }
+
+  const newPartsMap =
+    new Map<string, any>()
+
+  for (const part of normalizedNewParts) {
+    newPartsMap.set(
+      String(part.partId),
+      part
+    )
+  }
+
+  // ----------------------------------------------------------
+  // FIND INVENTORY CHANGES
+  // ----------------------------------------------------------
+
+  const inventoryIds =
+    new Set<string>()
+
+  for (const id of oldPartsMap.keys()) {
+    inventoryIds.add(id)
+  }
+
+  for (const id of newPartsMap.keys()) {
+    inventoryIds.add(id)
+  }
+
+  const inventoryChanges: any[] = []
+
+  for (const inventoryId of inventoryIds) {
+    const oldQuantity =
+      Number(
+        oldPartsMap.get(
+          inventoryId
+        )?.quantity || 0
+      )
+
+    const newQuantity =
+      Number(
+        newPartsMap.get(
+          inventoryId
+        )?.quantity || 0
+      )
+
+    const difference =
+      newQuantity - oldQuantity
+
+    if (difference !== 0) {
+      inventoryChanges.push({
+        inventoryId,
+        oldQuantity,
+        newQuantity,
+        difference,
+
+        partName:
+          newPartsMap.get(
+            inventoryId
+          )?.name ||
+          oldPartsMap.get(
+            inventoryId
+          )?.name ||
+          inventoryId,
+      })
+    }
+  }
+
+  // ----------------------------------------------------------
+  // LOAD INVENTORY + VALIDATE STOCK
+  // ----------------------------------------------------------
+
+  for (const change of inventoryChanges) {
+    const inventoryResult =
+      await db.send(
+        new GetItemCommand({
+          TableName: INVENTORY_TABLE,
+
+          Key: marshall({
+            partId:
+              change.inventoryId,
+          }),
+        })
+      )
+
+    if (!inventoryResult.Item) {
+      throw new Error(
+        `Inventory item not found: ${change.partName}`
+      )
+    }
+
+    const inventory =
+      unmarshall(
+        inventoryResult.Item
+      )
+
+    if (
+      inventory.garageId !==
+      garageId
+    ) {
+      throw new Error(
+        `Inventory item does not belong to this garage: ${change.partName}`
+      )
+    }
+
+    const availableStock =
+      Number(
+        inventory.stock || 0
+      )
+
+    // Positive difference means the job
+    // needs additional stock.
+    if (
+      change.difference > 0 &&
+      availableStock <
+        change.difference
+    ) {
+      throw new InsufficientStockError(
+        change.partName,
+        availableStock,
+        change.difference
+      )
+    }
+  }
+
+  // ----------------------------------------------------------
+  // PREPARE UPDATED JOB
+  // ----------------------------------------------------------
+
+  const now =
+    new Date().toISOString()
+
+  const updatedJob = {
     ...existing,
 
     ...data,
 
-    updatedAt:
-      new Date().toISOString(),
+    jobId,
+    garageId,
 
+    customerId:
+      newCustomerId,
+
+    customerName:
+      data.customerName ??
+      newCustomer.name ??
+      existing.customerName ??
+      "",
+
+    phone:
+      normalizePhone(
+        data.phone ??
+          newCustomer.phone ??
+          existing.phone
+      ),
+
+    customerAddress:
+      data.customerAddress ??
+      newCustomer.address ??
+      existing.customerAddress ??
+      "",
+
+    totalAmount:
+      newTotalAmount,
+
+    services:
+      Array.isArray(data.services)
+        ? data.services
+        : existing.services || [],
+
+    parts:
+      normalizedNewParts,
+
+    updatedAt: now,
   }
 
+  // Never allow frontend data to change ownership.
+  updatedJob.garageId =
+    existing.garageId
 
-  await db.send(
+  // ----------------------------------------------------------
+  // BUILD TRANSACTION
+  // ----------------------------------------------------------
 
-    new PutItemCommand({
+  const transactItems: any[] = []
 
-      TableName:
-        JOBS_TABLE,
+  // ----------------------------------------------------------
+  // JOB
+  // ----------------------------------------------------------
 
-      Item:
-        marshall(
-          updated,
-          {
-            removeUndefinedValues:
-              true
-          }
-        ),
+  transactItems.push({
+    Put: {
+      TableName: JOBS_TABLE,
 
+      Item: marshall(updatedJob, {
+        removeUndefinedValues: true,
+      }),
+
+      ConditionExpression:
+        "attribute_exists(jobId) AND garageId = :garageId",
+
+      ExpressionAttributeValues:
+        marshall({
+          ":garageId": garageId,
+        }),
+    },
+  })
+
+  // ----------------------------------------------------------
+  // CUSTOMER CHANGED
+  // ----------------------------------------------------------
+
+  if (customerChanged) {
+    // --------------------------------------------------------
+    // OLD CUSTOMER
+    // --------------------------------------------------------
+
+    if (oldCustomerId) {
+      const oldCustomerResult =
+        await db.send(
+          new GetItemCommand({
+            TableName: CUSTOMERS_TABLE,
+
+            Key: marshall({
+              customerId:
+                oldCustomerId,
+            }),
+          })
+        )
+
+      if (!oldCustomerResult.Item) {
+        throw new Error(
+          "Original customer not found"
+        )
+      }
+
+      const oldCustomer =
+        unmarshall(
+          oldCustomerResult.Item
+        )
+
+      if (
+        oldCustomer.garageId !==
+        garageId
+      ) {
+        throw new Error(
+          "Original customer does not belong to this garage"
+        )
+      }
+
+      const oldTotalJobs =
+        Number(
+          oldCustomer.totalJobs || 0
+        )
+
+      const oldTotalSpent =
+        Number(
+          oldCustomer.totalSpent || 0
+        )
+
+      const oldPending =
+        Number(
+          oldCustomer.pendingAmount || 0
+        )
+
+      transactItems.push({
+        Update: {
+          TableName:
+            CUSTOMERS_TABLE,
+
+          Key: marshall({
+            customerId:
+              oldCustomerId,
+          }),
+
+          UpdateExpression:
+            "SET totalJobs = :totalJobs, totalSpent = :totalSpent, pendingAmount = :pendingAmount, updatedAt = :updatedAt",
+
+          ConditionExpression:
+            "attribute_exists(customerId) AND garageId = :garageId AND totalJobs = :oldTotalJobs AND totalSpent = :oldTotalSpent AND pendingAmount = :oldPending",
+
+          ExpressionAttributeValues:
+            marshall({
+              ":totalJobs":
+                Math.max(
+                  0,
+                  oldTotalJobs - 1
+                ),
+
+              ":totalSpent":
+                Math.max(
+                  0,
+                  oldTotalSpent -
+                    oldTotalAmount
+                ),
+
+              ":pendingAmount":
+                Math.max(
+                  0,
+                  oldPending -
+                    oldTotalAmount
+                ),
+
+              ":updatedAt":
+                now,
+
+              ":garageId":
+                garageId,
+
+              ":oldTotalJobs":
+                oldTotalJobs,
+
+              ":oldTotalSpent":
+                oldTotalSpent,
+
+              ":oldPending":
+                oldPending,
+            }),
+        },
+      })
+    }
+
+    // --------------------------------------------------------
+    // NEW CUSTOMER
+    // --------------------------------------------------------
+
+    const newCustomerExists =
+      await db.send(
+        new GetItemCommand({
+          TableName:
+            CUSTOMERS_TABLE,
+
+          Key: marshall({
+            customerId:
+              newCustomerId,
+          }),
+        })
+      )
+
+    if (!newCustomerExists.Item) {
+      const customerToCreate = {
+        ...newCustomer,
+
+        garageId,
+
+        totalJobs: 1,
+        totalSpent:
+          newTotalAmount,
+        pendingAmount:
+          newTotalAmount,
+
+        updatedAt: now,
+      }
+
+      transactItems.push({
+        Put: {
+          TableName:
+            CUSTOMERS_TABLE,
+
+          Item: marshall(
+            customerToCreate,
+            {
+              removeUndefinedValues:
+                true,
+            }
+          ),
+
+          ConditionExpression:
+            "attribute_not_exists(customerId)",
+        },
+      })
+    } else {
+      const existingNewCustomer =
+        unmarshall(
+          newCustomerExists.Item
+        )
+
+      if (
+        existingNewCustomer.garageId !==
+        garageId
+      ) {
+        throw new Error(
+          "New customer does not belong to this garage"
+        )
+      }
+
+      const oldTotalJobs =
+        Number(
+          existingNewCustomer.totalJobs ||
+            0
+        )
+
+      const oldTotalSpent =
+        Number(
+          existingNewCustomer.totalSpent ||
+            0
+        )
+
+      const oldPending =
+        Number(
+          existingNewCustomer.pendingAmount ||
+            0
+        )
+
+      transactItems.push({
+        Update: {
+          TableName:
+            CUSTOMERS_TABLE,
+
+          Key: marshall({
+            customerId:
+              newCustomerId,
+          }),
+
+          UpdateExpression:
+            "SET totalJobs = :totalJobs, totalSpent = :totalSpent, pendingAmount = :pendingAmount, updatedAt = :updatedAt",
+
+          ConditionExpression:
+            "attribute_exists(customerId) AND garageId = :garageId AND totalJobs = :oldTotalJobs AND totalSpent = :oldTotalSpent AND pendingAmount = :oldPending",
+
+          ExpressionAttributeValues:
+            marshall({
+              ":totalJobs":
+                oldTotalJobs + 1,
+
+              ":totalSpent":
+                oldTotalSpent +
+                newTotalAmount,
+
+              ":pendingAmount":
+                oldPending +
+                newTotalAmount,
+
+              ":updatedAt":
+                now,
+
+              ":garageId":
+                garageId,
+
+              ":oldTotalJobs":
+                oldTotalJobs,
+
+              ":oldTotalSpent":
+                oldTotalSpent,
+
+              ":oldPending":
+                oldPending,
+            }),
+        },
+      })
+    }
+  } else {
+    // --------------------------------------------------------
+    // SAME CUSTOMER
+    // --------------------------------------------------------
+
+    if (!newCustomerId) {
+      throw new Error(
+        "Customer ID is missing"
+      )
+    }
+
+    const oldTotalJobs =
+      Number(
+        newCustomer.totalJobs || 0
+      )
+
+    const oldTotalSpent =
+      Number(
+        newCustomer.totalSpent || 0
+      )
+
+    const oldPending =
+      Number(
+        newCustomer.pendingAmount || 0
+      )
+
+    const amountDifference =
+      newTotalAmount -
+      oldTotalAmount
+
+    transactItems.push({
+      Update: {
+        TableName:
+          CUSTOMERS_TABLE,
+
+        Key: marshall({
+          customerId:
+            newCustomerId,
+        }),
+
+        UpdateExpression:
+          "SET totalSpent = :totalSpent, pendingAmount = :pendingAmount, updatedAt = :updatedAt",
+
+        ConditionExpression:
+          "attribute_exists(customerId) AND garageId = :garageId AND totalJobs = :oldTotalJobs AND totalSpent = :oldTotalSpent AND pendingAmount = :oldPending",
+
+        ExpressionAttributeValues:
+          marshall({
+            ":totalSpent":
+              Math.max(
+                0,
+                oldTotalSpent +
+                  amountDifference
+              ),
+
+            ":pendingAmount":
+              Math.max(
+                0,
+                oldPending +
+                  amountDifference
+              ),
+
+            ":updatedAt":
+              now,
+
+            ":garageId":
+              garageId,
+
+            ":oldTotalJobs":
+              oldTotalJobs,
+
+            ":oldTotalSpent":
+              oldTotalSpent,
+
+            ":oldPending":
+              oldPending,
+          }),
+      },
     })
+  }
 
-  )
+  // ----------------------------------------------------------
+  // INVENTORY CHANGES
+  // ----------------------------------------------------------
 
+  for (const change of inventoryChanges) {
+    if (change.difference > 0) {
+      // Job quantity increased.
+      // Remove additional stock.
 
-  return updated
+      transactItems.push({
+        Update: {
+          TableName:
+            INVENTORY_TABLE,
 
+          Key: marshall({
+            partId:
+              change.inventoryId,
+          }),
+
+          UpdateExpression:
+            "SET stock = stock - :quantity, updatedAt = :updatedAt",
+
+          ConditionExpression:
+            "attribute_exists(partId) AND garageId = :garageId AND stock >= :quantity",
+
+          ExpressionAttributeValues:
+            marshall({
+              ":quantity":
+                change.difference,
+
+              ":updatedAt":
+                now,
+
+              ":garageId":
+                garageId,
+            }),
+        },
+      })
+    } else {
+      // Job quantity decreased.
+      // Return stock to inventory.
+
+      transactItems.push({
+        Update: {
+          TableName:
+            INVENTORY_TABLE,
+
+          Key: marshall({
+            partId:
+              change.inventoryId,
+          }),
+
+          UpdateExpression:
+            "SET stock = stock + :quantity, updatedAt = :updatedAt",
+
+          ConditionExpression:
+            "attribute_exists(partId) AND garageId = :garageId",
+
+          ExpressionAttributeValues:
+            marshall({
+              ":quantity":
+                Math.abs(
+                  change.difference
+                ),
+
+              ":updatedAt":
+                now,
+
+              ":garageId":
+                garageId,
+            }),
+        },
+      })
+    }
+  }
+
+  // ----------------------------------------------------------
+  // EXECUTE EVERYTHING ATOMICALLY
+  // ----------------------------------------------------------
+
+  try {
+    await db.send(
+      new TransactWriteItemsCommand({
+        TransactItems: transactItems,
+      })
+    )
+
+    return updatedJob
+  } catch (error: any) {
+    if (
+      error?.name ===
+      "TransactionCanceledException"
+    ) {
+      throw error
+    }
+
+    throw error
+  }
 }
 
+// ============================================================
+// ASSIGN WORKER
+// ============================================================
 
-/*
-|--------------------------------------------------------------------------
-| ASSIGN WORKER
-|--------------------------------------------------------------------------
-*/
-
-export const assignWorker =
-async (
+export const assignWorker = async (
+  garageId: string,
   jobId: string,
   workerId: string
 ) => {
+  const existing =
+    await getJobById(
+      garageId,
+      jobId
+    )
+
+  if (!existing) {
+    throw new Error(
+      "Job not found"
+    )
+  }
+
+  const now =
+    new Date().toISOString()
 
   await db.send(
-
     new UpdateItemCommand({
+      TableName: JOBS_TABLE,
 
-      TableName:
-        JOBS_TABLE,
-
-      Key: {
-
-        jobId: {
-
-          S:
-            jobId,
-
-        },
-
-      },
+      Key: marshall({
+        jobId,
+      }),
 
       UpdateExpression:
         "SET workerId = :workerId, updatedAt = :updatedAt",
 
-      ExpressionAttributeValues: {
+      ConditionExpression:
+        "attribute_exists(jobId) AND garageId = :garageId",
 
-        ":workerId": {
+      ExpressionAttributeValues:
+        marshall({
+          ":workerId":
+            workerId || null,
 
-          S:
-            workerId,
+          ":updatedAt":
+            now,
 
-        },
-
-        ":updatedAt": {
-
-          S:
-            new Date().toISOString(),
-
-        },
-
-      },
-
+          ":garageId":
+            garageId,
+        }),
     })
-
   )
-
 }
 
+// ============================================================
+// UPDATE STATUS
+// ============================================================
 
-/*
-|--------------------------------------------------------------------------
-| UPDATE JOB STATUS
-|--------------------------------------------------------------------------
-*/
-
-export const updateJobStatus =
-async (
+export const updateJobStatus = async (
+  garageId: string,
   jobId: string,
   status: string
 ) => {
+  const existing =
+    await getJobById(
+      garageId,
+      jobId
+    )
+
+  if (!existing) {
+    throw new Error(
+      "Job not found"
+    )
+  }
+
+  const now =
+    new Date().toISOString()
 
   await db.send(
-
     new UpdateItemCommand({
+      TableName: JOBS_TABLE,
 
-      TableName:
-        JOBS_TABLE,
-
-      Key: {
-
-        jobId: {
-
-          S:
-            jobId,
-
-        },
-
-      },
+      Key: marshall({
+        jobId,
+      }),
 
       UpdateExpression:
         "SET #status = :status, updatedAt = :updatedAt",
 
+      ConditionExpression:
+        "attribute_exists(jobId) AND garageId = :garageId",
+
       ExpressionAttributeNames: {
-
-        "#status":
-          "status",
-
+        "#status": "status",
       },
 
-      ExpressionAttributeValues: {
-
-        ":status": {
-
-          S:
-            status,
-
-        },
-
-        ":updatedAt": {
-
-          S:
-            new Date().toISOString(),
-
-        },
-
-      },
-
+      ExpressionAttributeValues:
+        marshall({
+          ":status": status,
+          ":updatedAt": now,
+          ":garageId": garageId,
+        }),
     })
-
   )
-
 }
 
+// ============================================================
+// DELETE JOB
+// ============================================================
 
-/*
-|--------------------------------------------------------------------------
-| DELETE JOB
-|--------------------------------------------------------------------------
-*/
-
-export const deleteJob =
-async (
+export const deleteJob = async (
+  garageId: string,
   jobId: string
 ) => {
+  const existing =
+    await getJobById(
+      garageId,
+      jobId
+    )
+
+  if (!existing) {
+    return false
+  }
+
+  /*
+   * Important:
+   *
+   * Deleting a job should also return its
+   * inventory and reverse customer statistics.
+   *
+   * This implementation keeps delete atomic too.
+   */
+
+  const oldTotalAmount =
+    Number(
+      existing.totalAmount || 0
+    )
+
+  const oldCustomerId =
+    existing.customerId || null
+
+  const oldParts =
+    normalizeParts(
+      existing.parts || []
+    )
+
+  const now =
+    new Date().toISOString()
+
+  const transactItems: any[] = []
+
+  // ----------------------------------------------------------
+  // DELETE JOB
+  // ----------------------------------------------------------
+
+  transactItems.push({
+    Delete: {
+      TableName: JOBS_TABLE,
+
+      Key: marshall({
+        jobId,
+      }),
+
+      ConditionExpression:
+        "attribute_exists(jobId) AND garageId = :garageId",
+
+      ExpressionAttributeValues:
+        marshall({
+          ":garageId": garageId,
+        }),
+    },
+  })
+
+  // ----------------------------------------------------------
+  // RETURN INVENTORY
+  // ----------------------------------------------------------
+
+  for (const part of oldParts) {
+    transactItems.push({
+      Update: {
+        TableName:
+          INVENTORY_TABLE,
+
+        Key: marshall({
+          partId:
+            part.partId,
+        }),
+
+        UpdateExpression:
+          "SET stock = stock + :quantity, updatedAt = :updatedAt",
+
+        ConditionExpression:
+          "attribute_exists(partId) AND garageId = :garageId",
+
+        ExpressionAttributeValues:
+          marshall({
+            ":quantity":
+              Number(part.quantity),
+
+            ":updatedAt":
+              now,
+
+            ":garageId":
+              garageId,
+          }),
+      },
+    })
+  }
+
+  // ----------------------------------------------------------
+  // REVERSE CUSTOMER STATS
+  // ----------------------------------------------------------
+
+  if (oldCustomerId) {
+    const customerResult =
+      await db.send(
+        new GetItemCommand({
+          TableName:
+            CUSTOMERS_TABLE,
+
+          Key: marshall({
+            customerId:
+              oldCustomerId,
+          }),
+        })
+      )
+
+    if (customerResult.Item) {
+      const customer =
+        unmarshall(
+          customerResult.Item
+        )
+
+      if (
+        customer.garageId !==
+        garageId
+      ) {
+        throw new Error(
+          "Customer does not belong to this garage"
+        )
+      }
+
+      const totalJobs =
+        Number(
+          customer.totalJobs || 0
+        )
+
+      const totalSpent =
+        Number(
+          customer.totalSpent || 0
+        )
+
+      const pendingAmount =
+        Number(
+          customer.pendingAmount || 0
+        )
+
+      transactItems.push({
+        Update: {
+          TableName:
+            CUSTOMERS_TABLE,
+
+          Key: marshall({
+            customerId:
+              oldCustomerId,
+          }),
+
+          UpdateExpression:
+            "SET totalJobs = :totalJobs, totalSpent = :totalSpent, pendingAmount = :pendingAmount, updatedAt = :updatedAt",
+
+          ConditionExpression:
+            "attribute_exists(customerId) AND garageId = :garageId",
+
+          ExpressionAttributeValues:
+            marshall({
+              ":totalJobs":
+                Math.max(
+                  0,
+                  totalJobs - 1
+                ),
+
+              ":totalSpent":
+                Math.max(
+                  0,
+                  totalSpent -
+                    oldTotalAmount
+                ),
+
+              ":pendingAmount":
+                Math.max(
+                  0,
+                  pendingAmount -
+                    oldTotalAmount
+                ),
+
+              ":updatedAt":
+                now,
+
+              ":garageId":
+                garageId,
+            }),
+        },
+      })
+    }
+  }
 
   await db.send(
-
-    new DeleteItemCommand({
-
-      TableName:
-        JOBS_TABLE,
-
-      Key: {
-
-        jobId: {
-
-          S:
-            jobId,
-
-        },
-
-      },
-
+    new TransactWriteItemsCommand({
+      TransactItems:
+        transactItems,
     })
-
   )
 
+  return true
 }

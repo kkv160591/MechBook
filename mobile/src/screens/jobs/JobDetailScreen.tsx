@@ -9,6 +9,11 @@ import {
   Platform
 } from "react-native"
 
+import {
+  printJobSheet,
+  shareJobSheet
+} from "../../services/jobSheetService"
+
 import { getWorkers } from "../../services/workerService"
 import { useCallback, useState } from "react"
 import { useFocusEffect } from "@react-navigation/native"
@@ -115,6 +120,42 @@ export default function JobDetailScreen({ route, navigation }: any) {
         }
       ]
     )
+  }
+
+  const handlePrintJobSheet = async () => {
+    try {
+      await printJobSheet(job, assignedWorker)
+    } catch (err) {
+      console.log("PRINT JOB SHEET ERROR:", err)
+
+      if (Platform.OS === "web") {
+        window.alert("Unable to print job sheet.")
+      } else {
+        Alert.alert(
+          t("jobs.errorTitle"),
+          "Unable to print job sheet."
+        )
+      }
+    }
+  }
+
+  const handleShareJobSheet = async () => {
+    try {
+      await shareJobSheet(job, assignedWorker)
+    } catch (err) {
+      console.log("SHARE JOB SHEET ERROR:", err)
+
+      if (Platform.OS === "web") {
+        window.alert(
+          "Job sheet sharing is not available on this browser."
+        )
+      } else {
+        Alert.alert(
+          t("jobs.errorTitle"),
+          "Unable to share job sheet."
+        )
+      }
+    }
   }
 
   if (loading || !job) {
@@ -441,23 +482,82 @@ export default function JobDetailScreen({ route, navigation }: any) {
       </View>
 
       {/* ACTION BUTTONS */}
+
       <TouchableOpacity
         style={styles.primaryButton}
-        onPress={() => navigation.navigate("EditJobScreen", { job })}
+        onPress={() =>
+          navigation.navigate("EditJobScreen", { job })
+        }
       >
-        <Ionicons name="create-outline" size={20} color="white" />
-        <Text style={styles.buttonText}>{t("jobs.editJob")}</Text>
+        <Ionicons
+          name="create-outline"
+          size={20}
+          color="white"
+        />
+
+        <Text style={styles.buttonText}>
+          {t("jobs.editJob")}
+        </Text>
       </TouchableOpacity>
+
+
+      {/* JOB SHEET */}
+
+      <View style={styles.jobSheetActions}>
+
+        <TouchableOpacity
+          style={styles.jobSheetButton}
+          onPress={handlePrintJobSheet}
+        >
+          <Ionicons
+            name="print-outline"
+            size={20}
+            color="#2563EB"
+          />
+
+          <Text style={styles.jobSheetButtonText}>
+            Print Job Sheet
+          </Text>
+        </TouchableOpacity>
+
+
+        <TouchableOpacity
+          style={styles.jobSheetButton}
+          onPress={handleShareJobSheet}
+        >
+          <Ionicons
+            name="share-social-outline"
+            size={20}
+            color="#2563EB"
+          />
+
+          <Text style={styles.jobSheetButtonText}>
+            Share Job Sheet
+          </Text>
+        </TouchableOpacity>
+
+      </View>
+
+
+      {/* INVOICE */}
 
       <TouchableOpacity
         style={[
           styles.invoiceButton,
-          job.status !== "completed" && styles.disabledButton
+          job.status !== "completed" &&
+            styles.disabledButton
         ]}
         disabled={job.status !== "completed"}
-        onPress={() => navigation.navigate("Invoice", { jobId })}
+        onPress={() =>
+          navigation.navigate("Invoice", { jobId })
+        }
       >
-        <Ionicons name="document-text-outline" size={20} color="white" />
+        <Ionicons
+          name="document-text-outline"
+          size={20}
+          color="white"
+        />
+
         <Text style={styles.buttonText}>
           {job.status === "completed"
             ? t("jobs.generateInvoice")
@@ -465,13 +565,27 @@ export default function JobDetailScreen({ route, navigation }: any) {
         </Text>
       </TouchableOpacity>
 
+
       {job.status !== "completed" && (
-        <Text style={styles.invoiceHint}>{t("jobs.invoiceHint")}</Text>
+        <Text style={styles.invoiceHint}>
+          {t("jobs.invoiceHint")}
+        </Text>
       )}
 
-      <TouchableOpacity style={styles.deleteButton} onPress={deleteCurrentJob}>
-        <Ionicons name="trash-outline" size={20} color="white" />
-        <Text style={styles.buttonText}>{t("jobs.deleteJob")}</Text>
+
+      <TouchableOpacity
+        style={styles.deleteButton}
+        onPress={deleteCurrentJob}
+      >
+        <Ionicons
+          name="trash-outline"
+          size={20}
+          color="white"
+        />
+
+        <Text style={styles.buttonText}>
+          {t("jobs.deleteJob")}
+        </Text>
       </TouchableOpacity>
 
       <View style={{ height: 40 }} />
@@ -749,5 +863,29 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "800",
     color: "#10B981"
-  }
+  },
+  jobSheetActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 14
+  },
+
+  jobSheetButton: {
+    flex: 1,
+    height: 55,
+    borderRadius: 16,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center"
+  },
+
+  jobSheetButtonText: {
+    color: "#2563EB",
+    fontWeight: "700",
+    fontSize: 14,
+    marginLeft: 7
+  },
 })
