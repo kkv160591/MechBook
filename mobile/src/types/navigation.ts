@@ -27,6 +27,7 @@ export type RootStackParamList = {
     customer: any
   }
   AddCustomer: undefined
+  EditCustomer: undefined
   Inventory: undefined
   Settings: undefined
   GarageProfile: undefined

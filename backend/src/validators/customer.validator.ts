@@ -1,37 +1,149 @@
-import { Request, Response, NextFunction } from "express"
-import { body, validationResult } from "express-validator"
+import {
+  Request,
+  Response,
+  NextFunction
+} from "express"
 
-export const validateRequest = (req: Request, res: Response, next: NextFunction) => {
-  const errors = validationResult(req)
+import {
+  body,
+  validationResult
+} from "express-validator"
+
+
+/*
+|--------------------------------------------------------------------------
+| VALIDATION RESULT
+|--------------------------------------------------------------------------
+*/
+
+export const validateRequest = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+
+  const errors =
+    validationResult(req)
+
+
   if (!errors.isEmpty()) {
+
     return res.status(400).json({
+
       success: false,
-      message: errors.array()[0].msg,
-      errors: errors.array()
+
+      message:
+        errors.array()[0].msg,
+
+      errors:
+        errors.array()
+
     })
+
   }
+
+
   next()
 }
 
+
+/*
+|--------------------------------------------------------------------------
+| CREATE CUSTOMER
+|--------------------------------------------------------------------------
+*/
+
 export const createCustomerValidationRules = [
+
   body("name")
     .trim()
     .notEmpty()
-    .withMessage("Customer name is required"),
+    .withMessage(
+      "Customer name is required"
+    ),
 
   body("phone")
     .trim()
     .notEmpty()
-    .withMessage("Phone number is required")
+    .withMessage(
+      "Phone number is required"
+    )
     .matches(/^[0-9]{10}$/)
-    .withMessage("Phone number must be a valid 10-digit number"),
+    .withMessage(
+      "Phone number must be a valid 10-digit number"
+    ),
 
   body("alternatePhone")
-    .optional({ checkFalsy: true })
+    .optional({
+      checkFalsy: true
+    })
     .trim()
     .matches(/^[0-9]{10}$/)
-    .withMessage("Alternate phone number must be a valid 10-digit number"),
+    .withMessage(
+      "Alternate phone number must be a valid 10-digit number"
+    ),
 
-  body("address").optional().trim(),
-  body("notes").optional().trim(),
+  body("address")
+    .optional()
+    .trim(),
+
+  body("notes")
+    .optional()
+    .trim(),
+
+  validateRequest
+
+]
+
+
+/*
+|--------------------------------------------------------------------------
+| UPDATE CUSTOMER
+|--------------------------------------------------------------------------
+|
+| Same fields as create.
+|
+|--------------------------------------------------------------------------
+*/
+
+export const updateCustomerValidationRules = [
+
+  body("name")
+    .trim()
+    .notEmpty()
+    .withMessage(
+      "Customer name is required"
+    ),
+
+  body("phone")
+    .trim()
+    .notEmpty()
+    .withMessage(
+      "Phone number is required"
+    )
+    .matches(/^[0-9]{10}$/)
+    .withMessage(
+      "Phone number must be a valid 10-digit number"
+    ),
+
+  body("alternatePhone")
+    .optional({
+      checkFalsy: true
+    })
+    .trim()
+    .matches(/^[0-9]{10}$/)
+    .withMessage(
+      "Alternate phone number must be a valid 10-digit number"
+    ),
+
+  body("address")
+    .optional()
+    .trim(),
+
+  body("notes")
+    .optional()
+    .trim(),
+
+  validateRequest
+
 ]

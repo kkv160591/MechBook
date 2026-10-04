@@ -6,255 +6,218 @@ import {
 } from "react-native"
 
 import {
-  Ionicons,
-  MaterialIcons
+  Ionicons
 } from "@expo/vector-icons"
 
 type Props = {
   customer: any
   onPress?: () => void
+  onMenuPress?: () => void
 }
 
 export default function CustomerCard({
   customer,
-  onPress
+  onPress,
+  onMenuPress
 }: Props) {
 
-  return (
+  const firstLetter =
+    customer?.name
+      ?.trim()
+      ?.charAt(0)
+      ?.toUpperCase() || "C"
 
+  const pendingAmount =
+    Number(customer?.pendingAmount || 0)
+
+  const totalSpent =
+    Number(customer?.totalSpent || 0)
+
+  const totalJobs =
+    Number(customer?.totalJobs || 0)
+
+  return (
     <TouchableOpacity
       style={styles.card}
-      activeOpacity={0.9}
+      activeOpacity={0.75}
       onPress={onPress}
     >
-
-      {/* TOP */}
-
-      <View style={styles.topRow}>
-
-        <View style={styles.avatar}>
-
-          <Text style={styles.avatarText}>
-            {customer.name?.charAt(0)}
-          </Text>
-
-        </View>
-
-        <View style={{ flex: 1 }}>
-
-          <Text style={styles.name}>
-            {customer.name}
-          </Text>
-
-          <Text style={styles.phone}>
-            {customer.phone}
-          </Text>
-
-        </View>
-
-        <TouchableOpacity style={styles.callBtn}>
-
-          <Ionicons
-            name="call"
-            size={18}
-            color="#2563EB"
-          />
-
-        </TouchableOpacity>
-
+      {/* AVATAR */}
+      <View style={styles.avatar}>
+        <Text style={styles.avatarText}>
+          {firstLetter}
+        </Text>
       </View>
 
-      {/* STATS */}
+      {/* CUSTOMER INFO */}
+      <View style={styles.customerInfo}>
+        <Text
+          style={styles.name}
+          numberOfLines={1}
+        >
+          {customer?.name || "Unnamed"}
+        </Text>
 
-      <View style={styles.statsRow}>
-
-        <View style={styles.statBox}>
-
-          <Text style={styles.statValue}>
-            {customer.totalVehicles}
-          </Text>
-
-          <Text style={styles.statLabel}>
-            Vehicles
-          </Text>
-
-        </View>
-
-        <View style={styles.statBox}>
-
-          <Text style={styles.statValue}>
-            {customer.totalJobs}
-          </Text>
-
-          <Text style={styles.statLabel}>
-            Visits
-          </Text>
-
-        </View>
-
-        <View style={styles.statBox}>
-
-          <Text
-            style={[
-              styles.statValue,
-              { color: "#16A34A" }
-            ]}
-          >
-            ₹{customer.totalSpent}
-          </Text>
-
-          <Text style={styles.statLabel}>
-            Spent
-          </Text>
-
-        </View>
-
+        <Text
+          style={styles.phone}
+          numberOfLines={1}
+        >
+          {customer?.phone || "-"}
+        </Text>
       </View>
 
-      {/* FOOTER */}
+      {/* JOB COUNT */}
+      <View style={styles.jobs}>
+        <Text style={styles.jobsValue}>
+          {totalJobs}
+        </Text>
 
-      <View style={styles.footer}>
+        <Text style={styles.jobsLabel}>
+          visits
+        </Text>
+      </View>
 
-        <View style={styles.footerLeft}>
-
-          <MaterialIcons
-            name="schedule"
-            size={16}
-            color="#6B7280"
-          />
-
-          <Text style={styles.footerText}>
-            Last Visit {customer.lastVisit}
-          </Text>
-
-        </View>
-
-        {customer.pendingAmount > 0 && (
-
-          <View style={styles.pendingBadge}>
-
-            <Text style={styles.pendingText}>
-              Due ₹{customer.pendingAmount}
+      {/* AMOUNT */}
+      <View style={styles.amountContainer}>
+        {pendingAmount > 0 ? (
+          <>
+            <Text style={styles.pendingAmount}>
+              ₹{pendingAmount.toLocaleString("en-IN")}
             </Text>
 
-          </View>
+            <Text style={styles.pendingLabel}>
+              due
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.paidAmount}>
+              ₹{totalSpent.toLocaleString("en-IN")}
+            </Text>
 
+            <Text style={styles.paidLabel}>
+              paid
+            </Text>
+          </>
         )}
-
       </View>
 
+      {/* THREE DOT MENU */}
+      <TouchableOpacity
+        style={styles.menuButton}
+        activeOpacity={0.7}
+        onPress={(event) => {
+          event.stopPropagation()
+          onMenuPress?.()
+        }}
+      >
+        <Ionicons
+          name="ellipsis-vertical"
+          size={20}
+          color="#64748B"
+        />
+      </TouchableOpacity>
     </TouchableOpacity>
-
   )
-
 }
 
 const styles = StyleSheet.create({
 
   card: {
-    backgroundColor: "white",
-    borderRadius: 22,
-    padding: 18,
-    marginBottom: 16
-  },
-
-  topRow: {
+    minHeight: 62,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
     flexDirection: "row",
-    alignItems: "center"
+    alignItems: "center",
+    paddingHorizontal: 4
   },
 
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: "#DBEAFE",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 14
-  },
-
-  avatarText: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#2563EB"
-  },
-
-  name: {
-    fontSize: 17,
-    fontWeight: "bold",
-    color: "#111827"
-  },
-
-  phone: {
-    marginTop: 5,
-    color: "#6B7280"
-  },
-
-  callBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: "#EFF6FF",
     alignItems: "center",
     justifyContent: "center"
   },
 
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 20
+  avatarText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#2563EB"
   },
 
-  statBox: {
+  customerInfo: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 16,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginHorizontal: 4
+    minWidth: 0,
+    marginLeft: 10
   },
 
-  statValue: {
-    fontSize: 16,
-    fontWeight: "bold",
+  name: {
+    fontSize: 14,
+    fontWeight: "700",
     color: "#111827"
   },
 
-  statLabel: {
-    marginTop: 5,
-    color: "#6B7280",
-    fontSize: 12
+  phone: {
+    fontSize: 10,
+    color: "#64748B",
+    marginTop: 2
   },
 
-  footer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 18
-  },
-
-  footerLeft: {
-    flexDirection: "row",
+  jobs: {
+    width: 42,
     alignItems: "center"
   },
 
-  footerText: {
-    marginLeft: 6,
-    color: "#6B7280",
-    fontSize: 12
+  jobsValue: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#374151"
   },
 
-  pendingBadge: {
-    backgroundColor: "#FEE2E2",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20
+  jobsLabel: {
+    fontSize: 9,
+    color: "#94A3B8",
+    marginTop: 1
   },
 
-  pendingText: {
+  amountContainer: {
+    width: 76,
+    alignItems: "flex-end",
+    marginRight: 3
+  },
+
+  pendingAmount: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#DC2626"
+  },
+
+  pendingLabel: {
+    fontSize: 9,
     color: "#DC2626",
-    fontWeight: "bold",
-    fontSize: 12
+    marginTop: 1
+  },
+
+  paidAmount: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#16A34A"
+  },
+
+  paidLabel: {
+    fontSize: 9,
+    color: "#16A34A",
+    marginTop: 1
+  },
+
+  menuButton: {
+    width: 34,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center"
   }
 
 })

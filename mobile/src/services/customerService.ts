@@ -1,79 +1,144 @@
 import axios from "axios"
-import AsyncStorage from "@react-native-async-storage/async-storage"
+
+import AsyncStorage from
+  "@react-native-async-storage/async-storage"
 
 const API_URL =
   `${process.env.EXPO_PUBLIC_API_URL}/api`
 
-export const getCustomers =
-  async () => {
 
-    const token =
-      await AsyncStorage.getItem(
-        "token"
-      )
+const getAuthHeaders = async () => {
 
-    const response =
-      await axios.get(
-        `${API_URL}/customers`,
-        {
-          headers: {
-            Authorization:
-              `Bearer ${token}`
-          }
-        }
-      )
+  const token =
+    await AsyncStorage.getItem(
+      "token"
+    )
 
-    return response.data
+  return {
+
+    Authorization:
+      `Bearer ${token}`
 
   }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| GET CUSTOMERS
+|--------------------------------------------------------------------------
+*/
+
+export const getCustomers =
+async () => {
+
+  const response =
+    await axios.get(
+      `${API_URL}/customers`,
+      {
+        headers:
+          await getAuthHeaders()
+      }
+    )
+
+  return response.data
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| GET CUSTOMER
+|--------------------------------------------------------------------------
+*/
 
 export const getCustomer =
-  async (
-    customerId: string
-  ) => {
+async (
+  customerId: string
+) => {
 
-    const token =
-      await AsyncStorage.getItem(
-        "token"
-      )
+  const response =
+    await axios.get(
+      `${API_URL}/customers/${customerId}`,
+      {
+        headers:
+          await getAuthHeaders()
+      }
+    )
 
-    const response =
-      await axios.get(
-        `${API_URL}/customers/${customerId}`,
-        {
-          headers: {
-            Authorization:
-              `Bearer ${token}`
-          }
-        }
-      )
+  return response.data
+}
 
-    return response.data
 
-  }
+/*
+|--------------------------------------------------------------------------
+| CREATE CUSTOMER
+|--------------------------------------------------------------------------
+*/
 
 export const createCustomer =
-  async (
-    customerData: any
-  ) => {
+async (
+  customerData: any
+) => {
 
-    const token =
-      await AsyncStorage.getItem(
-        "token"
-      )
+  const response =
+    await axios.post(
+      `${API_URL}/customers`,
+      customerData,
+      {
+        headers:
+          await getAuthHeaders()
+      }
+    )
 
-    const response =
-      await axios.post(
-        `${API_URL}/customers`,
-        customerData,
-        {
-          headers: {
-            Authorization:
-              `Bearer ${token}`
-          }
-        }
-      )
+  return response.data
+}
 
-    return response.data
 
-  }
+/*
+|--------------------------------------------------------------------------
+| UPDATE CUSTOMER
+|--------------------------------------------------------------------------
+*/
+
+export const updateCustomer =
+async (
+  customerId: string,
+  customerData: any
+) => {
+
+  const response =
+    await axios.put(
+      `${API_URL}/customers/${customerId}`,
+      customerData,
+      {
+        headers:
+          await getAuthHeaders()
+      }
+    )
+
+  return response.data
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| DELETE CUSTOMER
+|--------------------------------------------------------------------------
+*/
+
+export const deleteCustomer =
+async (
+  customerId: string
+) => {
+
+  const response =
+    await axios.delete(
+      `${API_URL}/customers/${customerId}`,
+      {
+        headers:
+          await getAuthHeaders()
+      }
+    )
+
+  return response.data
+}

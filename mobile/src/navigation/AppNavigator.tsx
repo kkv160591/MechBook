@@ -19,6 +19,7 @@ import InvoiceScreen from "../screens/invoices/InvoiceScreen"
 
 import CustomerDetailScreen from "../screens/customers/CustomerDetailScreen"
 import AddCustomerScreen from "../screens/customers/AddCustomerScreen"
+// import EditCustomerScreen from "../screens/customers/EditCustomerScreen"
 
 import InventoryScreen from "../screens/inventory/InventoryScreen"
 import PartDetailsScreen from "../screens/inventory/PartDetailsScreen"
@@ -43,6 +44,7 @@ import LanguageScreen from "../screens/settings/LanguageScreen"
 import { RootStackParamList } from "../types/navigation"
 
 import { useAuth } from "../context/AuthContext"
+import EditCustomerScreen from "../screens/customers/EditCustomerScreen"
 
 const Stack =
   createNativeStackNavigator<RootStackParamList>()
@@ -163,6 +165,11 @@ export default function AppNavigator() {
       <Stack.Screen
         name="AddCustomer"
         component={AddCustomerScreen}
+      />
+
+      <Stack.Screen
+        name="EditCustomer"
+        component={EditCustomerScreen}
       />
 
       <Stack.Screen

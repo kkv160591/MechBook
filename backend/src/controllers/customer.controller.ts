@@ -4,14 +4,18 @@ import {
 } from "express"
 
 import {
-
   createCustomer,
-
   getCustomers,
-
-  getCustomerById
-
+  getCustomerById,
+  updateCustomer,
+  deleteCustomer
 } from "../services/customer.service"
+
+/*
+|--------------------------------------------------------------------------
+| CREATE CUSTOMER
+|--------------------------------------------------------------------------
+*/
 
 export const addCustomer =
   async (
@@ -30,7 +34,7 @@ export const addCustomer =
           req.body
         )
 
-      res.status(201).json({
+      return res.status(201).json({
 
         success: true,
 
@@ -40,17 +44,32 @@ export const addCustomer =
 
     } catch (error: any) {
 
-      res.status(500).json({
+      console.error(
+        "Create customer error:",
+        error
+      )
+
+      const statusCode =
+        error.statusCode || 500
+
+      return res.status(statusCode).json({
 
         success: false,
 
-        message: error.message
+        message:
+          error.message ||
+          "Failed to create customer"
 
       })
-
     }
-
   }
+
+
+/*
+|--------------------------------------------------------------------------
+| LIST CUSTOMERS
+|--------------------------------------------------------------------------
+*/
 
 export const listCustomers =
   async (
@@ -68,7 +87,7 @@ export const listCustomers =
           garageId
         )
 
-      res.json({
+      return res.json({
 
         success: true,
 
@@ -78,17 +97,29 @@ export const listCustomers =
 
     } catch (error: any) {
 
-      res.status(500).json({
+      console.error(
+        "Get customers error:",
+        error
+      )
+
+      return res.status(500).json({
 
         success: false,
 
-        message: error.message
+        message:
+          error.message ||
+          "Failed to get customers"
 
       })
-
     }
-
   }
+
+
+/*
+|--------------------------------------------------------------------------
+| GET CUSTOMER BY ID
+|--------------------------------------------------------------------------
+*/
 
 export const customerDetail =
   async (
@@ -98,12 +129,28 @@ export const customerDetail =
 
     try {
 
+      const garageId =
+        (req as any).user.garageId
+
       const customer =
         await getCustomerById(
+          garageId,
           req.params.customerId as string
         )
 
-      res.json({
+      if (!customer) {
+
+        return res.status(404).json({
+
+          success: false,
+
+          message:
+            "Customer not found"
+
+        })
+      }
+
+      return res.json({
 
         success: true,
 
@@ -113,14 +160,131 @@ export const customerDetail =
 
     } catch (error: any) {
 
-      res.status(500).json({
+      console.error(
+        "Get customer error:",
+        error
+      )
+
+      return res.status(500).json({
 
         success: false,
 
-        message: error.message
+        message:
+          error.message ||
+          "Failed to get customer"
+
+      })
+    }
+  }
+
+
+/*
+|--------------------------------------------------------------------------
+| UPDATE CUSTOMER
+|--------------------------------------------------------------------------
+*/
+
+export const editCustomer =
+  async (
+    req: Request,
+    res: Response
+  ) => {
+
+    try {
+
+      const garageId =
+        (req as any).user.garageId
+
+      const customer =
+        await updateCustomer(
+          garageId,
+          req.params.customerId as string,
+          req.body
+        )
+
+      return res.json({
+
+        success: true,
+
+        message:
+          "Customer updated successfully",
+
+        customer
 
       })
 
-    }
+    } catch (error: any) {
 
+      console.error(
+        "Update customer error:",
+        error
+      )
+
+      const statusCode =
+        error.statusCode || 500
+
+      return res.status(statusCode).json({
+
+        success: false,
+
+        message:
+          error.message ||
+          "Failed to update customer"
+
+      })
+    }
+  }
+
+
+/*
+|--------------------------------------------------------------------------
+| DELETE CUSTOMER
+|--------------------------------------------------------------------------
+*/
+
+export const removeCustomer =
+  async (
+    req: Request,
+    res: Response
+  ) => {
+
+    try {
+
+      const garageId =
+        (req as any).user.garageId
+
+      await deleteCustomer(
+        garageId,
+        req.params.customerId as string
+      )
+
+      return res.json({
+
+        success: true,
+
+        message:
+          "Customer deleted successfully"
+
+      })
+
+    } catch (error: any) {
+
+      console.error(
+        "Delete customer error:",
+        error
+      )
+
+      const statusCode =
+        error.statusCode || 500
+
+      return res.status(statusCode).json({
+
+        success: false,
+
+        message:
+          error.message ||
+          "Failed to delete customer"
+
+      })
+    }
   }
