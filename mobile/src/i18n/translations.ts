@@ -18,6 +18,63 @@ export const translations = {
       processing: "Processing...",
     },
 
+    // notification
+    notifications: {
+      title: "Notification Settings",
+      subtitle: "Configure service reminders and notification preferences",
+
+      generalTitle: "General",
+      enableNotifications: "Enable Notifications",
+      enableNotificationsSub:
+        "Allow service reminder notifications for this garage",
+
+      customerTitle: "Customer Reminders",
+      customerEnabled: "Customer Service Reminders",
+      customerEnabledSub:
+        "Send reminders to customers when their vehicle service is due",
+
+      ownerTitle: "Garage Owner Reminders",
+      ownerEnabled: "Garage Owner Service Reminders",
+      ownerEnabledSub:
+        "Notify the garage owner about upcoming customer service reminders",
+
+      daysBeforeDue: "Days Before Service Due",
+      kmBeforeDue: "Kilometres Before Service Due",
+
+      vehicleRulesTitle: "Vehicle Service Rules",
+      vehicleRulesSubtitle:
+        "Define the default service interval for each vehicle type",
+
+      serviceIntervalMonths: "Service Interval",
+      serviceIntervalKm: "Service Interval",
+
+      days: "days",
+      months: "months",
+
+      vehicleTypes: {
+        car: "Car",
+        bike: "Bike",
+        suv: "SUV",
+        commercial: "Commercial"
+      },
+
+      saveBtn: "Save Notification Settings",
+
+      successMsg:
+        "Notification settings saved successfully",
+
+      errorMsg:
+        "Failed to save notification settings",
+
+      validation: {
+        nonNegative:
+          "Enter a valid non-negative number",
+
+        positiveNumber:
+          "Enter a valid positive number"
+      }
+    },
+
     // bottom tab navigation
     navigation: {
       dashboard: "Dashboard",
@@ -715,6 +772,63 @@ export const translations = {
       refreshing: "रिफ्रेश हो रहा है...",
       continue: "जारी रखें",
       processing: "प्रक्रिया जारी है...",
+    },
+
+    // notification
+    notifications: {
+      title: "नोटिफिकेशन सेटिंग्स",
+      subtitle: "सर्विस रिमाइंडर और नोटिफिकेशन प्राथमिकताएं सेट करें",
+
+      generalTitle: "सामान्य",
+      enableNotifications: "नोटिफिकेशन सक्षम करें",
+      enableNotificationsSub:
+        "इस गैराज के लिए सर्विस रिमाइंडर नोटिफिकेशन की अनुमति दें",
+
+      customerTitle: "ग्राहक रिमाइंडर",
+      customerEnabled: "ग्राहक सर्विस रिमाइंडर",
+      customerEnabledSub:
+        "वाहन की सर्विस होने पर ग्राहक को रिमाइंडर भेजें",
+
+      ownerTitle: "गैराज मालिक रिमाइंडर",
+      ownerEnabled: "गैराज मालिक सर्विस रिमाइंडर",
+      ownerEnabledSub:
+        "आने वाली ग्राहक सर्विस के बारे में गैराज मालिक को सूचित करें",
+
+      daysBeforeDue: "सर्विस से पहले दिन",
+      kmBeforeDue: "सर्विस से पहले किलोमीटर",
+
+      vehicleRulesTitle: "वाहन सर्विस नियम",
+      vehicleRulesSubtitle:
+        "प्रत्येक वाहन प्रकार के लिए डिफ़ॉल्ट सर्विस अंतराल निर्धारित करें",
+
+      serviceIntervalMonths: "सर्विस अंतराल",
+      serviceIntervalKm: "सर्विस अंतराल",
+
+      days: "दिन",
+      months: "महीने",
+
+      vehicleTypes: {
+        car: "कार",
+        bike: "बाइक",
+        suv: "एसयूवी",
+        commercial: "कमर्शियल"
+      },
+
+      saveBtn: "नोटिफिकेशन सेटिंग्स सहेजें",
+
+      successMsg:
+        "नोटिफिकेशन सेटिंग्स सफलतापूर्वक सहेजी गईं",
+
+      errorMsg:
+        "नोटिफिकेशन सेटिंग्स सहेजने में विफल",
+
+      validation: {
+        nonNegative:
+          "मान्य शून्य या उससे अधिक संख्या दर्ज करें",
+
+        positiveNumber:
+          "मान्य सकारात्मक संख्या दर्ज करें"
+      }
     },
 
     // bottom tab navigation

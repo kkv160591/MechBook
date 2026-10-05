@@ -55,6 +55,16 @@ export default function SettingsScreen() {
             "Manage available services",
           icon: "build",
           screen: "ServiceTypes"
+        },
+        {
+          title:
+            t("settings.items.notifications.title") ||
+            "Notifications & Reminders",
+          subtitle:
+            t("settings.items.notifications.subtitle") ||
+            "Service reminders and notification preferences",
+          icon: "notifications",
+          screen: "NotificationSettings"
         }
       ]
     },

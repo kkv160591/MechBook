@@ -98,3 +98,13 @@ async () => {
   return response.data
 
 }
+
+export const getNotificationSettings = async () => {
+  const response = await api.get("/api/settings/notifications")
+  return response.data
+}
+
+export const updateNotificationSettings = async (data: any) => {
+  const response = await api.put("/api/settings/notifications", data)
+  return response.data
+}

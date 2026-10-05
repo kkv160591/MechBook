@@ -461,3 +461,134 @@ export const getPlan = async (
     })
   }
 }
+
+/*
+ * ---------------------------------------------------------
+ * NOTIFICATIONS / SERVICE REMINDERS
+ * ---------------------------------------------------------
+ */
+
+export const getNotifications = async (
+  req: Request,
+  res: Response
+) => {
+
+  try {
+
+    const garageId =
+      getGarageId(req)
+
+
+    if (!garageId) {
+
+      return res.status(401).json({
+
+        success: false,
+
+        message:
+          "Garage identity missing"
+
+      })
+
+    }
+
+
+    const setting =
+      await settingsService.getNotificationSettings(
+        garageId
+      )
+
+
+    return res.json({
+
+      success: true,
+
+      setting
+
+    })
+
+  } catch (error) {
+
+    console.error(
+      "Get notification settings error:",
+      error
+    )
+
+
+    return res.status(500).json({
+
+      success: false,
+
+      message:
+        "Failed to get notification settings"
+
+    })
+
+  }
+
+}
+
+
+export const updateNotifications = async (
+  req: Request,
+  res: Response
+) => {
+
+  try {
+
+    const garageId =
+      getGarageId(req)
+
+
+    if (!garageId) {
+
+      return res.status(401).json({
+
+        success: false,
+
+        message:
+          "Garage identity missing"
+
+      })
+
+    }
+
+
+    const setting =
+      await settingsService.saveNotificationSettings(
+        garageId,
+        req.body
+      )
+
+
+    return res.json({
+
+      success: true,
+
+      message:
+        "Notification settings updated",
+
+      setting
+
+    })
+
+  } catch (error) {
+
+    console.error(
+      "Update notification settings error:",
+      error
+    )
+
+
+    return res.status(500).json({
+
+      success: false,
+
+      message:
+        "Failed to update notification settings"
+
+    })
+
+  }
+
+}

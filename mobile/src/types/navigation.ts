@@ -35,6 +35,7 @@ export type RootStackParamList = {
   ServiceTypes: undefined
   GSTConfig: undefined
   InvoiceSettings: undefined
+  NotificationSettings: undefined
   Backup: undefined
   PlanUsage: undefined
   Language: undefined

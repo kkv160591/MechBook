@@ -291,3 +291,414 @@ export const validateBackupMiddleware = (
 
   next()
 }
+
+// ==========================================
+// NOTIFICATION / SERVICE REMINDER SETTINGS
+// ==========================================
+
+export const validateNotificationSettings = (
+  body: any
+) => {
+
+  const errors: Record<string, string> = {}
+
+  if (
+    !body ||
+    typeof body !== "object" ||
+    Array.isArray(body)
+  ) {
+    return {
+      valid: false,
+      errors: {
+        body:
+          "Invalid notification settings payload"
+      }
+    }
+  }
+
+
+  /*
+   * ------------------------------------------
+   * GLOBAL ENABLED
+   * ------------------------------------------
+   */
+
+  if (
+    body.enabled !== undefined &&
+    typeof body.enabled !== "boolean"
+  ) {
+    errors.enabled =
+      "Notification enabled must be true or false"
+  }
+
+
+  /*
+   * ------------------------------------------
+   * CUSTOMER SETTINGS
+   * ------------------------------------------
+   */
+
+  if (
+    body.customer !== undefined &&
+    (
+      typeof body.customer !== "object" ||
+      Array.isArray(body.customer)
+    )
+  ) {
+    errors.customer =
+      "Customer notification settings must be an object"
+  }
+
+
+  /*
+   * ------------------------------------------
+   * GARAGE OWNER SETTINGS
+   * ------------------------------------------
+   */
+
+  if (
+    body.garageOwner !== undefined &&
+    (
+      typeof body.garageOwner !== "object" ||
+      Array.isArray(body.garageOwner)
+    )
+  ) {
+    errors.garageOwner =
+      "Garage owner notification settings must be an object"
+  }
+
+
+  /*
+   * ------------------------------------------
+   * VALIDATE REMINDER VALUES
+   * ------------------------------------------
+   */
+
+  const validateReminderObject = (
+    value: any,
+    fieldName: string
+  ) => {
+
+    if (!value) {
+      return
+    }
+
+    if (
+      value.enabled !== undefined &&
+      typeof value.enabled !== "boolean"
+    ) {
+      errors[`${fieldName}.enabled`] =
+        `${fieldName}.enabled must be true or false`
+    }
+
+
+    if (
+      value.daysBeforeDue !== undefined
+    ) {
+
+      const days =
+        Number(value.daysBeforeDue)
+
+      if (
+        !Number.isInteger(days) ||
+        days < 0 ||
+        days > 365
+      ) {
+        errors[`${fieldName}.daysBeforeDue`] =
+          `${fieldName}.daysBeforeDue must be between 0 and 365`
+      }
+    }
+
+
+    if (
+      value.kmBeforeDue !== undefined
+    ) {
+
+      const km =
+        Number(value.kmBeforeDue)
+
+      if (
+        !Number.isInteger(km) ||
+        km < 0 ||
+        km > 100000
+      ) {
+        errors[`${fieldName}.kmBeforeDue`] =
+          `${fieldName}.kmBeforeDue must be between 0 and 100000`
+      }
+    }
+  }
+
+
+  validateReminderObject(
+    body.customer,
+    "customer"
+  )
+
+  validateReminderObject(
+    body.garageOwner,
+    "garageOwner"
+  )
+
+
+  /*
+   * ------------------------------------------
+   * VEHICLE RULES
+   * ------------------------------------------
+   */
+
+  if (
+    body.vehicleRules !== undefined
+  ) {
+
+    if (!Array.isArray(body.vehicleRules)) {
+
+      errors.vehicleRules =
+        "Vehicle rules must be an array"
+
+    } else {
+
+      body.vehicleRules.forEach(
+        (rule: any, index: number) => {
+
+          if (
+            !rule ||
+            typeof rule !== "object" ||
+            Array.isArray(rule)
+          ) {
+
+            errors[`vehicleRules.${index}`] =
+              "Vehicle rule must be an object"
+
+            return
+          }
+
+
+          /*
+           * Vehicle type
+           */
+
+          const vehicleType =
+            String(
+              rule.vehicleType || ""
+            )
+              .trim()
+              .toUpperCase()
+
+          if (!vehicleType) {
+
+            errors[
+              `vehicleRules.${index}.vehicleType`
+            ] =
+              "Vehicle type is required"
+
+          } else if (
+            vehicleType.length > 30
+          ) {
+
+            errors[
+              `vehicleRules.${index}.vehicleType`
+            ] =
+              "Vehicle type must not exceed 30 characters"
+
+          }
+
+
+          /*
+           * Months
+           */
+
+          const months =
+            Number(
+              rule.serviceIntervalMonths
+            )
+
+          if (
+            !Number.isInteger(months) ||
+            months < 1 ||
+            months > 120
+          ) {
+
+            errors[
+              `vehicleRules.${index}.serviceIntervalMonths`
+            ] =
+              "Service interval must be between 1 and 120 months"
+
+          }
+
+
+          /*
+           * KM
+           */
+
+          const km =
+            Number(
+              rule.serviceIntervalKm
+            )
+
+          if (
+            !Number.isInteger(km) ||
+            km < 1 ||
+            km > 1000000
+          ) {
+
+            errors[
+              `vehicleRules.${index}.serviceIntervalKm`
+            ] =
+              "Service interval KM must be between 1 and 1000000"
+
+          }
+
+        }
+      )
+    }
+  }
+
+
+  /*
+   * ------------------------------------------
+   * RETURN VALIDATED DATA
+   * ------------------------------------------
+   */
+
+  if (
+    Object.keys(errors).length > 0
+  ) {
+
+    return {
+      valid: false,
+      errors
+    }
+
+  }
+
+
+  /*
+   * Normalize data
+   */
+
+  const customer =
+    body.customer || {}
+
+  const garageOwner =
+    body.garageOwner || {}
+
+
+  const vehicleRules =
+    Array.isArray(body.vehicleRules)
+      ? body.vehicleRules.map(
+          (rule: any) => ({
+            vehicleType:
+              String(
+                rule.vehicleType || ""
+              )
+                .trim()
+                .toUpperCase(),
+
+            serviceIntervalMonths:
+              Number(
+                rule.serviceIntervalMonths
+              ),
+
+            serviceIntervalKm:
+              Number(
+                rule.serviceIntervalKm
+              )
+          })
+        )
+      : []
+
+
+  return {
+
+    valid: true,
+
+    errors: {},
+
+    data: {
+
+      enabled:
+        body.enabled !== undefined
+          ? Boolean(body.enabled)
+          : true,
+
+      customer: {
+
+        enabled:
+          customer.enabled !== undefined
+            ? Boolean(customer.enabled)
+            : true,
+
+        daysBeforeDue:
+          customer.daysBeforeDue !== undefined
+            ? Number(customer.daysBeforeDue)
+            : 30,
+
+        kmBeforeDue:
+          customer.kmBeforeDue !== undefined
+            ? Number(customer.kmBeforeDue)
+            : 500
+      },
+
+      garageOwner: {
+
+        enabled:
+          garageOwner.enabled !== undefined
+            ? Boolean(garageOwner.enabled)
+            : true,
+
+        daysBeforeDue:
+          garageOwner.daysBeforeDue !== undefined
+            ? Number(garageOwner.daysBeforeDue)
+            : 30,
+
+        kmBeforeDue:
+          garageOwner.kmBeforeDue !== undefined
+            ? Number(garageOwner.kmBeforeDue)
+            : 500
+      },
+
+      vehicleRules
+
+    }
+  }
+}
+
+
+export const validateNotificationMiddleware = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+
+  const result =
+    validateNotificationSettings(
+      req.body
+    )
+
+
+  if (!result.valid) {
+
+    return res.status(400).json({
+
+      success: false,
+
+      message:
+        "Notification settings validation failed",
+
+      errors:
+        result.errors
+
+    })
+
+  }
+
+
+  if (result.data) {
+
+    req.body = result.data
+
+  }
+
+
+  next()
+}

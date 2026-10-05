@@ -5,6 +5,7 @@ import {
   validateInvoiceMiddleware,
   validateLanguageMiddleware,
   validateBackupMiddleware,
+  validateNotificationMiddleware
 } from "../middleware/settings.validator"
 
 import { verifyToken } from "../middleware/auth.middleware"
@@ -30,5 +31,19 @@ router.post("/backup/run", verifyToken, settingsController.runBackup)
 
 // Subscription / Plan
 router.get("/plan", verifyToken, settingsController.getPlan)
+
+// Notification / Service Reminder Settings
+router.get(
+  "/notifications",
+  verifyToken,
+  settingsController.getNotifications
+)
+
+router.put(
+  "/notifications",
+  verifyToken,
+  validateNotificationMiddleware,
+  settingsController.updateNotifications
+)
 
 export default router

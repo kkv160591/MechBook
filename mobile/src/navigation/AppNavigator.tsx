@@ -37,6 +37,7 @@ import AddServiceTypeScreen from "../screens/settings/AddServiceTypeScreen"
 import EditServiceTypeScreen from "../screens/settings/EditServiceTypeScreen"
 import GSTConfigScreen from "../screens/settings/GSTConfigScreen"
 import InvoiceSettingsScreen from "../screens/settings/InvoiceSettingsScreen"
+import NotificationSettingsScreen from "../screens/settings/NotificationSettingsScreen"
 import BackupScreen from "../screens/settings/BackupScreen"
 import PlanUsageScreen from "../screens/settings/PlanUsageScreen"
 import LanguageScreen from "../screens/settings/LanguageScreen"
@@ -247,6 +248,11 @@ export default function AppNavigator() {
       <Stack.Screen
         name="InvoiceSettings"
         component={InvoiceSettingsScreen}
+      />
+
+      <Stack.Screen
+        name="NotificationSettings"
+        component={NotificationSettingsScreen}
       />
 
       <Stack.Screen

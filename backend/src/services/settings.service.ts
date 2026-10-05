@@ -359,3 +359,172 @@ export const runBackup =
       lastBackup
     }
   }
+
+  /*
+ * ---------------------------------------------------------
+ * NOTIFICATION / SERVICE REMINDER SETTINGS
+ * ---------------------------------------------------------
+ */
+
+const DEFAULT_NOTIFICATION_SETTINGS = {
+
+  enabled: true,
+
+  customer: {
+
+    enabled: true,
+
+    daysBeforeDue: 30,
+
+    kmBeforeDue: 500
+
+  },
+
+  garageOwner: {
+
+    enabled: true,
+
+    daysBeforeDue: 30,
+
+    kmBeforeDue: 500
+
+  },
+
+  vehicleRules: [
+
+    {
+      vehicleType: "CAR",
+      serviceIntervalMonths: 12,
+      serviceIntervalKm: 10000
+    },
+
+    {
+      vehicleType: "BIKE",
+      serviceIntervalMonths: 6,
+      serviceIntervalKm: 5000
+    },
+
+    {
+      vehicleType: "SUV",
+      serviceIntervalMonths: 12,
+      serviceIntervalKm: 10000
+    },
+
+    {
+      vehicleType: "COMMERCIAL",
+      serviceIntervalMonths: 6,
+      serviceIntervalKm: 5000
+    }
+
+  ]
+
+}
+
+
+export const getNotificationSettings =
+  async (
+    garageId: string
+  ) => {
+
+    const existing =
+      await getSetting(
+        garageId,
+        "NOTIFICATIONS"
+      )
+
+
+    if (!existing) {
+
+      return {
+
+        garageId,
+
+        settingType:
+          "NOTIFICATIONS",
+
+        ...DEFAULT_NOTIFICATION_SETTINGS
+
+      }
+
+    }
+
+
+    return existing
+
+  }
+
+
+export const saveNotificationSettings =
+  async (
+    garageId: string,
+    data: any
+  ) => {
+
+    const existing =
+      await getSetting(
+        garageId,
+        "NOTIFICATIONS"
+      )
+
+
+    const setting = {
+
+      garageId,
+
+      settingType:
+        "NOTIFICATIONS",
+
+      enabled:
+        data.enabled !== undefined
+          ? data.enabled
+          : existing?.enabled ?? true,
+
+
+      customer: {
+
+        ...(existing?.customer || {}),
+
+        ...(data.customer || {})
+
+      },
+
+
+      garageOwner: {
+
+        ...(existing?.garageOwner || {}),
+
+        ...(data.garageOwner || {})
+
+      },
+
+
+      vehicleRules:
+        Array.isArray(data.vehicleRules)
+          ? data.vehicleRules
+          : existing?.vehicleRules ||
+            DEFAULT_NOTIFICATION_SETTINGS.vehicleRules
+
+    }
+
+
+    await db.send(
+
+      new PutItemCommand({
+
+        TableName: TABLE,
+
+        Item: marshall(
+          setting,
+          {
+            removeUndefinedValues: true
+          }
+        )
+
+      })
+
+    )
+
+
+    return setting
+
+  }
