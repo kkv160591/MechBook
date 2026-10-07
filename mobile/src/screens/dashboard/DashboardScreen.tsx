@@ -21,6 +21,7 @@ import {
   PlanUsageResponse,
 } from "../../services/subscriptionService"
 import { useTranslation } from "../../context/LanguageContext"
+import { getNotificationUnreadCount } from "../../services/notificationService"
 
 interface GarageProfile {
   garageName?: string
@@ -95,6 +96,7 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [planUsage, setPlanUsage] = useState<PlanUsageResponse | null>(null)
   const [planUsageLoading, setPlanUsageLoading] = useState(true)
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
 
   // ==================================
   // HELPER: JOB TOTAL CALCULATOR
@@ -118,6 +120,29 @@ export default function DashboardScreen() {
     const calculatedTotal = servicesTotal + labor - discount
     return calculatedTotal > 0 ? calculatedTotal : 0
   }
+
+  const loadNotificationCount = useCallback(async () => {
+    if (!isOwner) {
+      setUnreadNotificationCount(0)
+      return
+    }
+
+    try {
+      const response = await getNotificationUnreadCount()
+
+      const count = Number(
+        response?.unreadCount ??
+        response?.count ??
+        0
+      )
+
+      setUnreadNotificationCount(
+        Number.isFinite(count) ? Math.max(count, 0) : 0
+      )
+    } catch (error) {
+      console.log("Error loading notification count:", error)
+    }
+  }, [isOwner])
 
   // ==================================
   // LOAD ALL DATA
@@ -176,7 +201,8 @@ export default function DashboardScreen() {
   useFocusEffect(
     useCallback(() => {
       void loadAllData()
-    }, [loadAllData])
+      void loadNotificationCount()
+    }, [loadAllData, loadNotificationCount])
   )
 
   const onRefresh = useCallback(async () => {
@@ -297,6 +323,31 @@ export default function DashboardScreen() {
           </View>
 
           {isOwner && (
+          <View style={styles.headerActions}>
+            {/* Notifications */}
+            <TouchableOpacity
+              style={styles.notificationButton}
+              onPress={() => navigation.navigate("Notifications")}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="notifications-outline"
+                size={25}
+                color="#1D4ED8"
+              />
+
+              {unreadNotificationCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {unreadNotificationCount > 99
+                      ? "99+"
+                      : unreadNotificationCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* Plan */}
             <TouchableOpacity
               style={styles.planHeaderContainer}
               onPress={() => navigation.navigate("PlanUsage")}
@@ -312,25 +363,43 @@ export default function DashboardScreen() {
                 ]}
               >
                 {planUsageLoading ? (
-                  <ActivityIndicator size="small" color={planRingColor} />
+                  <ActivityIndicator
+                    size="small"
+                    color={planRingColor}
+                  />
                 ) : isUnlimited ? (
-                  <Text style={[styles.planRingNumber, { color: planRingColor }]}>
+                  <Text
+                    style={[
+                      styles.planRingNumber,
+                      { color: planRingColor },
+                    ]}
+                  >
                     ∞
                   </Text>
                 ) : (
-                  <Text style={[styles.planRingNumber, { color: planRingColor }]}>
+                  <Text
+                    style={[
+                      styles.planRingNumber,
+                      { color: planRingColor },
+                    ]}
+                  >
                     {usagePercentage}%
                   </Text>
                 )}
               </View>
+
               <Text
-                style={[styles.planNameHeader, { color: planRingColor }]}
+                style={[
+                  styles.planNameHeader,
+                  { color: planRingColor },
+                ]}
                 numberOfLines={1}
               >
                 {actualPlanName}
               </Text>
             </TouchableOpacity>
-          )}
+          </View>
+        )}
         </View>
 
         {/* WORKER DASHBOARD METRICS */}
@@ -829,4 +898,43 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 10, fontWeight: "700", color: "#FFFFFF" },
   servicesText: { fontSize: 12, color: "#6B7280" },
   bottomSpacer: { height: 100 },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+
+  notificationButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
+  },
+
+  notificationBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#DC2626",
+    borderWidth: 2,
+    borderColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 3,
+  },
+
+  notificationBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "800",
+    lineHeight: 12,
+  },
 })

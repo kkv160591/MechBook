@@ -313,15 +313,18 @@ export const updateJobStatus = async (
       })
     }
 
-    await JobService.updateJobStatus(
-      garageId,
-      req.params.jobId,
-      req.body.status
-    )
+    const job =
+      await JobService.updateJobStatus(
+        garageId,
+        req.params.jobId,
+        req.body.status
+      )
 
     return res.json({
       message:
         "Status updated successfully",
+
+      job,
     })
   } catch (error: any) {
     console.error(

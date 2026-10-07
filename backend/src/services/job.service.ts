@@ -7,6 +7,10 @@ import {
   TransactWriteItemsCommand,
 } from "@aws-sdk/client-dynamodb"
 
+import {
+  handleJobCompleted,
+} from "./notification.service"
+
 import { unmarshall, marshall } from "@aws-sdk/util-dynamodb"
 import { v4 as uuid } from "uuid"
 
@@ -1570,8 +1574,37 @@ export const updateJobStatus = async (
     )
   }
 
+  const oldStatus =
+    String(
+      existing.status || ""
+    ).toLowerCase()
+
+  const newStatus =
+    String(
+      status || ""
+    ).toLowerCase()
+
   const now =
     new Date().toISOString()
+
+  const updatedJob = {
+    ...existing,
+
+    status,
+
+    updatedAt: now,
+
+    // Keep a separate completion timestamp.
+    // This will be useful for service reminders,
+    // invoices and reports later.
+    ...(newStatus === "completed"
+      ? {
+          completedAt:
+            existing.completedAt ||
+            now,
+        }
+      : {}),
+  }
 
   await db.send(
     new UpdateItemCommand({
@@ -1582,7 +1615,12 @@ export const updateJobStatus = async (
       }),
 
       UpdateExpression:
-        "SET #status = :status, updatedAt = :updatedAt",
+        "SET #status = :status, updatedAt = :updatedAt" +
+        (
+          newStatus === "completed"
+            ? ", completedAt = :completedAt"
+            : ""
+        ),
 
       ConditionExpression:
         "attribute_exists(jobId) AND garageId = :garageId",
@@ -1593,12 +1631,54 @@ export const updateJobStatus = async (
 
       ExpressionAttributeValues:
         marshall({
-          ":status": status,
-          ":updatedAt": now,
-          ":garageId": garageId,
+          ":status":
+            status,
+
+          ":updatedAt":
+            now,
+
+          ":garageId":
+            garageId,
+
+          ...(newStatus === "completed"
+            ? {
+                ":completedAt":
+                  existing.completedAt ||
+                  now,
+              }
+            : {}),
         }),
-    })
+      })
   )
+
+  // ----------------------------------------------------------
+  // CREATE NOTIFICATIONS ONLY WHEN THE JOB ACTUALLY BECOMES
+  // COMPLETED
+  // ----------------------------------------------------------
+
+  if (
+    oldStatus !== "completed" &&
+    newStatus === "completed"
+  ) {
+    const completedJob = {
+      ...updatedJob,
+
+      status,
+    }
+
+    // Import at the top of this file:
+    //
+    // import {
+    //   handleJobCompleted
+    // } from "./notification.service"
+
+    await handleJobCompleted(
+      garageId,
+      completedJob
+    )
+  }
+
+  return updatedJob
 }
 
 // ============================================================

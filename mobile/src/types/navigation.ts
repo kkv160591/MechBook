@@ -45,6 +45,7 @@ export type RootStackParamList = {
   AddWorker: undefined
   AddServiceType: undefined
   EditServiceType: undefined
+  Notifications: undefined
   Register: undefined
   ForgotPin: undefined
   VerifyPinOtp: undefined

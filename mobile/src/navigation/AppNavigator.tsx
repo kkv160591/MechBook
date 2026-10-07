@@ -41,6 +41,7 @@ import NotificationSettingsScreen from "../screens/settings/NotificationSettings
 import BackupScreen from "../screens/settings/BackupScreen"
 import PlanUsageScreen from "../screens/settings/PlanUsageScreen"
 import LanguageScreen from "../screens/settings/LanguageScreen"
+import NotificationScreen from "../screens/notifications/NotificationScreen"
 
 import { RootStackParamList } from "../types/navigation"
 
@@ -238,6 +239,14 @@ export default function AppNavigator() {
       <Stack.Screen
         name="EditServiceType"
         component={EditServiceTypeScreen}
+      />
+
+      <Stack.Screen
+        name="Notifications"
+        component={NotificationScreen}
+        options={{
+          headerShown: false,
+        }}
       />
 
       <Stack.Screen

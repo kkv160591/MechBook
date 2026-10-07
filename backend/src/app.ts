@@ -28,6 +28,9 @@ import jobRoutes
 import subscriptionRoutes
   from "./routes/subscription.routes"
 
+import notificationRoutes 
+  from "./routes/notification.routes"
+
 const app = express()
 
 app.use(cors())
@@ -113,6 +116,11 @@ app.use(
 app.use(
   "/api/subscription",
   subscriptionRoutes
+)
+
+app.use(
+  "/api/notifications",
+  notificationRoutes
 )
 
 export default app
