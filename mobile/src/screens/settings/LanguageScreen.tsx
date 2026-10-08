@@ -13,39 +13,39 @@ import { supportedLanguages } from "../../data/supportedLanguages"
 
 import { Feather, Ionicons } from "@expo/vector-icons"
 
-import {
-  getLanguageSettings,
-  updateLanguageSettings
-} from "../../services/settingsService"
+import { updateLanguageSettings } from "../../services/settingsService"
+import { useTranslation, LanguageKey } from "../../context/LanguageContext"
 
 export default function LanguageScreen() {
   const navigation = useNavigation()
-  const [selectedLanguage, setSelectedLanguage] = useState("en")
+  const { language, changeLanguage, t } = useTranslation()
+  const [selectedLanguage, setSelectedLanguage] = useState<string>(language)
 
   useEffect(() => {
-    loadLanguage()
-  }, [])
-
-  const loadLanguage = async () => {
-    try {
-      const data = await getLanguageSettings()
-      if (data?.language) {
-        setSelectedLanguage(data.language)
-      }
-    } catch {}
-  }
+    setSelectedLanguage(language)
+  }, [language])
 
   const saveLanguage = async (code: string) => {
     try {
+      // 1. Immediately update local Context & AsyncStorage so UI reflects changes instantly
+      await changeLanguage(code as LanguageKey)
+      setSelectedLanguage(code)
+
+      // 2. Persist setting to remote backend
       await updateLanguageSettings({
         language: code
       })
 
-      setSelectedLanguage(code)
-
-      Alert.alert("Success", "Language updated")
-    } catch {
-      Alert.alert("Error", "Failed to update language")
+      Alert.alert(
+        t("common.successTitle") || "Success",
+        t("settings.languageUpdated") || "Language updated"
+      )
+    } catch (error) {
+      console.log("Error updating language settings:", error)
+      Alert.alert(
+        t("common.errorTitle") || "Error",
+        t("settings.failedToUpdate") || "Failed to update language"
+      )
     }
   }
 
@@ -60,9 +60,11 @@ export default function LanguageScreen() {
         <Feather name="arrow-left" size={24} color="#111827" />
       </TouchableOpacity>
       <View style={styles.headerTextContainer}>
-        <Text style={styles.heading}>Choose Language</Text>
+        <Text style={styles.heading}>
+          {t("settings.chooseLanguage") || "Choose Language"}
+        </Text>
         <Text style={styles.subHeading}>
-          Select your preferred app language
+          {t("settings.selectLanguageSub") || "Select your preferred app language"}
         </Text>
       </View>
     </View>

@@ -24,7 +24,8 @@ import { useTranslation } from "../../context/LanguageContext"
 import {
   getJobById,
   updateJob,
-  deleteJob
+  deleteJob,
+  updateJobStatus
 } from "../../services/jobService"
 
 export default function JobDetailScreen({ route, navigation }: any) {
@@ -64,7 +65,7 @@ export default function JobDetailScreen({ route, navigation }: any) {
 
   const updateStatus = async (status: string) => {
     try {
-      await updateJob(jobId, { status })
+      await updateJobStatus(jobId, status)
       setJob({
         ...job,
         status

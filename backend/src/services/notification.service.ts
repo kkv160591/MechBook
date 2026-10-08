@@ -696,6 +696,7 @@ export const handleJobCompleted =
     garageId: string,
     job: any
   ) => {
+    console.log("job =>", job);
     try {
       // Immediate owner in-app notification
       await createJobCompletedNotification(

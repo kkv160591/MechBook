@@ -258,9 +258,9 @@ export default function GarageProfileScreen() {
           <Feather name="arrow-left" size={24} color="#111827" />
         </TouchableOpacity>
         <View style={styles.headerTextContainer}>
-          <Text style={styles.heading}>Garage Profile</Text>
+          <Text style={styles.heading}>{t("garageProfile.title")}</Text>
           <Text style={styles.subHeading}>
-            Update your garage information and preferences.
+            {t("garageProfile.subtitle")}
           </Text>
         </View>
       </View>
@@ -571,7 +571,7 @@ export default function GarageProfileScreen() {
         {loading ? (
           <ActivityIndicator color="white" />
         ) : (
-          <Text style={styles.buttonText}>Save Changes</Text>
+          <Text style={styles.buttonText}>{t("garageProfile.saveBtn")}</Text>
         )}
       </TouchableOpacity>
 

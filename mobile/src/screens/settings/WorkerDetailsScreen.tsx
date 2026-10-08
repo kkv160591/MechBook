@@ -163,7 +163,7 @@ export default function WorkerDetailsScreen({ route, navigation }: any) {
         <TouchableOpacity
           style={styles.primaryBtn}
           activeOpacity={0.8}
-          onPress={() => navigation.navigate("EditWorker", { worker })}
+          onPress={() => navigation.navigate("AddWorker", { worker })}
         >
           <MaterialIcons name="edit" size={20} color="white" />
           <Text style={styles.btnText}>

@@ -1656,6 +1656,9 @@ export const updateJobStatus = async (
   // COMPLETED
   // ----------------------------------------------------------
 
+  console.log("oldStatus =>", oldStatus);
+  console.log("newStatus =>", newStatus);
+
   if (
     oldStatus !== "completed" &&
     newStatus === "completed"
@@ -1665,12 +1668,6 @@ export const updateJobStatus = async (
 
       status,
     }
-
-    // Import at the top of this file:
-    //
-    // import {
-    //   handleJobCompleted
-    // } from "./notification.service"
 
     await handleJobCompleted(
       garageId,
