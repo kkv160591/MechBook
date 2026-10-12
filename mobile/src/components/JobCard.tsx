@@ -1,120 +1,164 @@
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native"
+import React from "react"
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+} from "react-native"
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons"
 import { useNavigation } from "@react-navigation/native"
 import { useTranslation } from "../context/LanguageContext"
 
 export default function JobCard({ job }: any) {
-  const { t } = useTranslation()
   const navigation = useNavigation<any>()
+  const { t } = useTranslation()
 
-  const services = Array.isArray(job.services) ? job.services : []
-
-  const totalPrice = services.reduce((sum: number, s: any) => {
-    const price =
-      s.actualPrice !== null &&
-      s.actualPrice !== undefined &&
-      s.actualPrice !== ""
-        ? Number(s.actualPrice)
-        : Number(s.price ?? s.estimatedPrice ?? 0)
-
-    const quantity = Number(s.quantity || 1)
-    return sum + price * quantity
-  }, 0)
-
-  const getStatusColor = () => {
-    switch (job.status) {
-      case "completed":
-        return "#16A34A"
-      case "progress":
-        return "#F59E0B"
-      case "pending":
-        return "#DC2626"
-      default:
-        return "#2563EB"
-    }
+  const statusConfig: Record<
+    string,
+    { label: string; color: string; background: string }
+  > = {
+    pending: {
+      label: t("jobs.pending"),
+      color: "#DC2626",
+      background: "#FEF2F2",
+    },
+    progress: {
+      label: t("jobs.inProgress"),
+      color: "#B45309",
+      background: "#FFFBEB",
+    },
+    waiting_parts: {
+      label: t("jobs.waitingParts"),
+      color: "#7C3AED",
+      background: "#F5F3FF",
+    },
+    ready: {
+      label: t("jobs.ready"),
+      color: "#0284C7",
+      background: "#F0F9FF",
+    },
+    completed: {
+      label: t("jobs.completed"),
+      color: "#15803D",
+      background: "#F0FDF4",
+    },
+    delivered: {
+      label: t("jobs.delivered"),
+      color: "#475569",
+      background: "#F1F5F9",
+    },
   }
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case "pending":
-        return t("jobs.pending")
-      case "progress":
-        return t("jobs.inProgress")
-      case "waiting_parts":
-        return t("jobs.waitingParts")
-      case "ready":
-        return t("jobs.ready")
-      case "completed":
-        return t("jobs.completed")
-      case "delivered":
-        return t("jobs.delivered")
-      default:
-        return status.toUpperCase()
-    }
+  const status = statusConfig[job.status] ?? {
+    label: String(job.status ?? "pending").replace(/_/g, " "),
+    color: "#475569",
+    background: "#F1F5F9",
   }
+
+  const amount = Number(job.totalAmount ?? 0)
+  const formattedAmount = `₹${amount.toLocaleString("en-IN", {
+    maximumFractionDigits: 2,
+  })}`
+
+  const vehicleType = String(job.vehicleType ?? "").toLowerCase()
+  const isTwoWheeler =
+    vehicleType.includes("2 wheeler") ||
+    vehicleType.includes("two wheeler") ||
+    vehicleType.includes("two-wheeler") ||
+    vehicleType.includes("two-wheeler") ||
+    vehicleType.includes("दोपहिया") ||
+    vehicleType.includes("ಬೈಕ್")
+
+  const vehicleIcon = isTwoWheeler ? "motorbike" : "car"
+
+  const workerName = job.workerName?.trim() || "Unassigned"
+
+  const formatDeliveryDate = (value: any): string | null => {
+    if (!value || !String(value).trim()) return null
+
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return null
+
+    return date.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+    })
+  }
+
+  const deliveryDate = formatDeliveryDate(job.deliveryDate)
 
   return (
     <TouchableOpacity
       style={styles.card}
-      activeOpacity={0.8}
+      activeOpacity={0.75}
       onPress={() =>
         navigation.navigate("JobDetail", {
-          jobId: job.jobId
+          jobId: job.jobId,
         })
       }
     >
-      {/* TOP */}
+      {/* ROW 1: Vehicle number and amount */}
       <View style={styles.topRow}>
-        <View style={styles.vehicleBox}>
-          <View style={styles.vehicleIcon}>
-            <MaterialCommunityIcons
-              name={
-                job.vehicleType === "2 Wheeler"
-                  ? "motorbike"
-                  : "car"
-              }
-              size={22}
-              color="#2563EB"
-            />
-          </View>
-
-          <View>
-            <Text style={styles.vehicle}>{job.vehicleNumber}</Text>
-            <Text style={styles.model}>{job.vehicleModel}</Text>
-          </View>
-        </View>
-
-        <Text style={styles.price}>₹{totalPrice}</Text>
-      </View>
-
-      {/* CUSTOMER */}
-      <View style={styles.infoRow}>
-        <Ionicons name="person-outline" size={16} color="#6B7280" />
-        <Text style={styles.infoText}>{job.customerName}</Text>
-      </View>
-
-      <View style={styles.infoRow}>
-        <Ionicons name="call-outline" size={16} color="#6B7280" />
-        <Text style={styles.infoText}>{job.phone}</Text>
-      </View>
-
-      {/* FOOTER */}
-      <View style={styles.footer}>
-        <View style={styles.serviceBadge}>
-          <Text style={styles.serviceText}>
-            {services.length}{" "}
-            {services.length === 1 ? t("jobs.service") : t("jobs.services")}
+        <View style={styles.vehicleSection}>
+          <MaterialCommunityIcons
+            name={vehicleIcon}
+            size={17}
+            color="#2563EB"
+          />
+          <Text style={styles.vehicleNumber} numberOfLines={1}>
+            {job.vehicleNumber || job.jobId || "Job"}
           </Text>
         </View>
+
+        <Text
+          style={styles.amount}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+        >
+          {formattedAmount}
+        </Text>
+      </View>
+
+      {/* ROW 2: Customer, worker, date and status */}
+      <View style={styles.bottomRow}>
+        <View style={styles.customerSection}>
+          <Ionicons name="person-outline" size={12} color="#64748B" />
+          <Text style={styles.customerName} numberOfLines={1}>
+            {job.customerName || "Unknown"}
+          </Text>
+        </View>
+
+        <View style={styles.workerSection}>
+          <MaterialCommunityIcons
+            name="account-hard-hat-outline"
+            size={13}
+            color="#64748B"
+          />
+          <Text style={styles.workerName} numberOfLines={1}>
+            {workerName}
+          </Text>
+        </View>
+
+        {deliveryDate ? (
+          <View style={styles.dateSection}>
+            <Ionicons name="calendar-outline" size={12} color="#64748B" />
+            <Text style={styles.deliveryDate} numberOfLines={1}>
+              {deliveryDate}
+            </Text>
+          </View>
+        ) : null}
 
         <View
           style={[
             styles.statusBadge,
-            { backgroundColor: `${getStatusColor()}15` }
+            { backgroundColor: status.background },
           ]}
         >
-          <Text style={[styles.statusText, { color: getStatusColor() }]}>
-            {getStatusLabel(job.status)}
+          <Text
+            style={[styles.statusText, { color: status.color }]}
+            numberOfLines={1}
+          >
+            {status.label}
           </Text>
         </View>
       </View>
@@ -124,76 +168,110 @@ export default function JobCard({ job }: any) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "white",
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 14
+    backgroundColor: "#FFFFFF",
+    borderRadius: 9,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#E9EEF5",
   },
+
   topRow: {
+    height: 23,
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center"
   },
-  vehicleBox: {
+
+  vehicleSection: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: "row",
-    alignItems: "center"
+    alignItems: "center",
+    gap: 6,
+    marginRight: 8,
   },
-  vehicleIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
-    backgroundColor: "#EFF6FF",
+
+  vehicleNumber: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+
+  amount: {
+    maxWidth: "42%",
+    flexShrink: 1,
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#15803D",
+    textAlign: "right",
+    fontVariant: ["tabular-nums"],
+  },
+
+  bottomRow: {
+    height: 21,
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 3,
+    gap: 5,
+  },
+
+  customerSection: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+
+  customerName: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 10,
+    color: "#475569",
+  },
+
+  workerSection: {
+    width: 76,
+    flexShrink: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+
+  workerName: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 10,
+    color: "#64748B",
+  },
+
+  dateSection: {
+    flexShrink: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+
+  deliveryDate: {
+    fontSize: 9,
+    color: "#64748B",
+  },
+
+  statusBadge: {
+    flexShrink: 0,
+    maxWidth: 84,
+    paddingHorizontal: 5,
+    paddingVertical: 3,
+    borderRadius: 5,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12
   },
-  vehicle: {
-    fontSize: 17,
-    fontWeight: "bold",
-    color: "#111827"
-  },
-  model: {
-    color: "#6B7280",
-    marginTop: 3
-  },
-  price: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#16A34A"
-  },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 14
-  },
-  infoText: {
-    marginLeft: 8,
-    color: "#374151"
-  },
-  footer: {
-    marginTop: 18,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center"
-  },
-  serviceBadge: {
-    backgroundColor: "#F3F4F6",
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10
-  },
-  serviceText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#374151"
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10
-  },
+
   statusText: {
-    fontSize: 12,
-    fontWeight: "bold"
-  }
+    fontSize: 9,
+    fontWeight: "700",
+  },
 })

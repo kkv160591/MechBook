@@ -56,6 +56,8 @@ interface Job {
   totalAmount?: number
   total?: number
   assignedWorkerId?: string | number
+  workerName?: string
+  deliveryDate?: string
   assignedWorker?: { id?: string | number }
   vehicle?: { number?: string; model?: string }
   customer?: string | { name?: string }
@@ -503,12 +505,18 @@ export default function DashboardScreen() {
           {isOwner && (
             <TouchableOpacity
               style={styles.actionBtn}
-              onPress={() => navigation.navigate("Invoice")}
+              onPress={() => {
+                // TODO: Connect to the Reports screen when the module is ready.
+              }}
               activeOpacity={0.7}
             >
-              <MaterialIcons name="receipt" size={26} color="#2563EB" />
+              <MaterialIcons
+                name="assessment"
+                size={26}
+                color="#2563EB"
+              />
               <Text style={styles.actionText}>
-                {t("dashboard.actions.invoices") || "Invoices"}
+                Reports
               </Text>
             </TouchableOpacity>
           )}
@@ -617,77 +625,69 @@ export default function DashboardScreen() {
             const total = getJobTotal(item)
             const keyId = item.jobId || item.id
 
+            const customerName =
+              typeof item.customer === "string"
+                ? item.customer
+                : item.customerName || item.customer?.name || "Customer"
+
+            const vehicleNumber =
+              item.vehicleNumber || item.vehicle?.number || "Vehicle"
+
             return (
               <TouchableOpacity
                 key={keyId}
                 style={styles.jobCard}
                 onPress={() =>
-                  navigation.navigate("JobDetail", { jobId: keyId, job: item, editAllowed: true })
+                  navigation.navigate("JobDetail", {
+                    jobId: keyId,
+                    job: item,
+                    editAllowed: true,
+                  })
                 }
                 activeOpacity={0.7}
               >
-                <View style={styles.jobTop}>
-                  <View style={styles.flex1}>
-                    <View style={styles.vehicleRow}>
-                      <View style={styles.vehicleIcon}>
-                        <Ionicons
-                          name={
-                            item.vehicleType?.includes("2")
-                              ? "bicycle"
-                              : "car-sport"
-                          }
-                          size={16}
-                          color="#2563EB"
-                        />
-                      </View>
-                      <View style={styles.flex1}>
-                        <Text style={styles.vehicle} numberOfLines={1}>
-                          {item.vehicleNumber ||
-                            item.vehicle?.number ||
-                            t("dashboard.jobCard.defaultVehicle") ||
-                            "Vehicle"}
-                        </Text>
-                        <Text style={styles.vehicleModel} numberOfLines={1}>
-                          {item.vehicleModel || item.vehicleBrand
-                            ? `${item.vehicleBrand ?? ""} ${item.vehicleModel ?? ""}`.trim()
-                            : item.vehicle?.model ||
-                              t("dashboard.jobCard.defaultDetails") ||
-                              "Vehicle details"}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={styles.customer} numberOfLines={1}>
-                      {typeof item.customer === "string"
-                        ? item.customer
-                        : item.customerName ||
-                          item.customer?.name ||
-                          t("dashboard.jobCard.defaultCustomer") ||
-                          "Customer"}
+                {/* ROW 1: Vehicle number + amount */}
+                <View style={styles.jobTopRow}>
+                  <View style={styles.vehicleDetails}>
+                    <Ionicons
+                      name={
+                        item.vehicleType?.includes("2") ||
+                        item.vehicleType?.toLowerCase().includes("two")
+                          ? "bicycle"
+                          : "car-sport"
+                      }
+                      size={15}
+                      color="#2563EB"
+                    />
+
+                    <Text style={styles.vehicle} numberOfLines={1}>
+                      {vehicleNumber}
                     </Text>
                   </View>
+
                   {isOwner && (
-                    <Text style={styles.amount}>
+                    <Text style={styles.amount} numberOfLines={1}>
                       ₹{Number(total).toLocaleString("en-IN")}
                     </Text>
                   )}
                 </View>
 
-                <View style={styles.jobBottom}>
+                {/* ROW 2: Customer + status */}
+                <View style={styles.jobBottomRow}>
+                  <Text style={styles.customer} numberOfLines={1}>
+                    {customerName}
+                  </Text>
+
                   <View
                     style={[
                       styles.statusBadge,
                       { backgroundColor: getStatusColor(item.status) },
                     ]}
                   >
-                    <Text style={styles.statusText}>
+                    <Text style={styles.statusText} numberOfLines={1}>
                       {getStatusText(item.status)}
                     </Text>
                   </View>
-                  <Text style={styles.servicesText}>
-                    {Array.isArray(item.services)
-                      ? `${item.services.length} ${t("dashboard.jobCard.servicesCount") || "services"}`
-                      : t("dashboard.jobCard.singleService") || "Service"}
-                  </Text>
                 </View>
               </TouchableOpacity>
             )
@@ -867,11 +867,18 @@ const styles = StyleSheet.create({
   emptyButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "600" },
   jobCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
+    borderRadius: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderWidth: 1,
     borderColor: "#E5E7EB",
+  },
+
+  jobTopRow: {
+    height: 23,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   jobTop: {
     flexDirection: "row",
@@ -880,11 +887,73 @@ const styles = StyleSheet.create({
   },
   flex1: { flex: 1 },
   vehicleRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
-  vehicleIcon: { marginRight: 8 },
-  vehicle: { fontSize: 14, fontWeight: "700", color: "#111827" },
-  vehicleModel: { fontSize: 12, color: "#6B7280" },
-  customer: { fontSize: 12, color: "#4B5563", marginTop: 2 },
-  amount: { fontSize: 15, fontWeight: "700", color: "#111827", marginLeft: 8 },
+  vehicleIcon: { 
+    width: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 5, 
+  },
+  vehicleDetails: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  vehicle: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  vehicleModel: { 
+    fontSize: 10,
+    color: "#6B7280",
+    marginTop: 1, 
+  },
+  customer: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 11,
+    color: "#4B5563",
+  },
+  workerText: {
+    fontSize: 10,
+    color: "#6B7280",
+    marginTop: 1,
+  },
+  deliveryDate: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    flexShrink: 0,
+  },
+
+  deliveryDateText: {
+    fontSize: 10,
+    color: "#6B7280",
+  },
+  amount: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#111827",
+    marginLeft: 8,
+  },
+
+  jobBottomRow: {
+    height: 22,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 2,
+    gap: 8,
+  },
+  jobPeople: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
+  },
   jobBottom: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -894,8 +963,20 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#F3F4F6",
   },
-  statusBadge: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 },
-  statusText: { fontSize: 10, fontWeight: "700", color: "#FFFFFF" },
+  statusBadge: {
+    maxWidth: 100,
+    flexShrink: 0,
+    paddingVertical: 3,
+    paddingHorizontal: 6,
+    borderRadius: 5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statusText: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
   servicesText: { fontSize: 12, color: "#6B7280" },
   bottomSpacer: { height: 100 },
   headerActions: {
