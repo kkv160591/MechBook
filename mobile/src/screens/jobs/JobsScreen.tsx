@@ -1,8 +1,9 @@
 import React, {
   useCallback,
+  useEffect,
   useMemo,
   useState,
-} from "react"
+} from "react";
 
 import {
   View,
@@ -15,14 +16,15 @@ import {
   RefreshControl,
   Modal,
   ActivityIndicator,
-} from "react-native"
+  Pressable,
+} from "react-native";
 
-import { Ionicons } from "@expo/vector-icons"
-import { useFocusEffect } from "@react-navigation/native"
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 
-import { getJobs } from "../../services/jobService"
-
-import JobCard from "../../components/JobCard"
+import { getJobs } from "../../services/jobService";
+import JobCard from "../../components/JobCard";
+import { useTranslation } from "../../context/LanguageContext";
 
 type JobFilter =
   | "all"
@@ -32,156 +34,82 @@ type JobFilter =
   | "ready"
   | "completed"
   | "delivered"
-  | "overdue"
+  | "overdue";
 
 type JobSort =
   | "newest"
   | "oldest"
   | "customerAsc"
   | "deliveryDate"
-  | "highestAmount"
+  | "highestAmount";
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 20;
 
 const normalizeStatus = (status: string = "") => {
-  const value = status.toLowerCase().trim().replace(/[\s-]+/g, "_")
-
-  if (value === "in_progress" || value === "inprogress") {
-    return "progress"
-  }
-
-  return value
-}
+  const value = status.toLowerCase().trim().replace(/[\s-]+/g, "_");
+  if (value === "in_progress" || value === "inprogress") return "progress";
+  return value;
+};
 
 const isJobOverdue = (job: any) => {
-  if (!job.deliveryDate) return false
+  if (!job.deliveryDate) return false;
+  const status = normalizeStatus(job.status);
+  if (status === "completed" || status === "delivered") return false;
 
-  const status = normalizeStatus(job.status)
+  const deliveryDate = new Date(job.deliveryDate);
+  if (Number.isNaN(deliveryDate.getTime())) return false;
 
-  if (status === "completed" || status === "delivered") {
-    return false
-  }
-
-  const deliveryDate = new Date(job.deliveryDate)
-  if (Number.isNaN(deliveryDate.getTime())) return false
-
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  deliveryDate.setHours(0, 0, 0, 0)
-
-  return deliveryDate < today
-}
-
-const formatAmount = (value: any) => {
-  const amount = Number(value || 0)
-
-  return `₹${amount.toLocaleString("en-IN", {
-    maximumFractionDigits: 2,
-  })}`
-}
-
-const formatDate = (value: any) => {
-  if (!value) return "No delivery date"
-
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return "No delivery date"
-  }
-
-  return date.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-  })
-}
-
-const getStatusLabel = (status: string = "") => {
-  const normalized = normalizeStatus(status)
-
-  const labels: Record<string, string> = {
-    pending: "Pending",
-    progress: "In Progress",
-    waiting_parts: "Waiting Parts",
-    ready: "Ready",
-    completed: "Completed",
-    delivered: "Delivered",
-  }
-
-  return labels[normalized] || status || "Unknown"
-}
-
-const getStatusColors = (status: string = "") => {
-  const normalized = normalizeStatus(status)
-
-  const colors: Record<string, { bg: string; text: string }> = {
-    pending: { bg: "#FEF3C7", text: "#92400E" },
-    progress: { bg: "#DBEAFE", text: "#1D4ED8" },
-    waiting_parts: { bg: "#F3E8FF", text: "#7E22CE" },
-    ready: { bg: "#D1FAE5", text: "#047857" },
-    completed: { bg: "#DCFCE7", text: "#166534" },
-    delivered: { bg: "#E2E8F0", text: "#475569" },
-  }
-
-  return colors[normalized] || {
-    bg: "#F1F5F9",
-    text: "#475569",
-  }
-}
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  deliveryDate.setHours(0, 0, 0, 0);
+  return deliveryDate < today;
+};
 
 export default function JobsScreen({ navigation }: any) {
-  const [jobs, setJobs] = useState<any[]>([])
-  const [search, setSearch] = useState("")
-  const [filter, setFilter] = useState<JobFilter>("all")
-  const [sort, setSort] = useState<JobSort>("newest")
+  const { t } = useTranslation();
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<JobFilter>("all");
+  const [sort, setSort] = useState<JobSort>("newest");
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [filterVisible, setFilterVisible] = useState(false);
+  const [sortVisible, setSortVisible] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [filterVisible, setFilterVisible] = useState(false)
-  const [sortVisible, setSortVisible] = useState(false)
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
-
-  const loadJobs = useCallback(async () => {
+  const loadJobs = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
     try {
-      const response = await getJobs()
-
+      const response = await getJobs();
       const list = Array.isArray(response?.jobs)
         ? response.jobs
         : Array.isArray(response?.data)
           ? response.data
-          : []
-
-      setJobs(list)
+          : [];
+      setJobs(list);
     } catch (error: any) {
-      console.log(
-        "Jobs load error:",
-        error?.response?.data || error?.message || error
-      )
-
-      Alert.alert(
-        "Error",
-        "Unable to load jobs. Please try again."
-      )
+      console.log("Jobs load error:", error?.response?.data || error?.message || error);
+      Alert.alert(t("jobs.errorTitle"), t("jobs.unableToLoadJobs"));
     } finally {
-      setLoading(false)
-      setRefreshing(false)
+      setLoading(false);
+      setRefreshing(false);
     }
-  }, [])
+  }, [t]);
 
   useFocusEffect(
     useCallback(() => {
-      setLoading(true)
-      void loadJobs()
+      setLoading(true);
+      void loadJobs();
     }, [loadJobs])
-  )
+  );
 
   const displayedJobs = useMemo(() => {
-    let result = [...jobs]
-    const query = search.trim().toLowerCase()
+    let result = [...jobs];
+    const query = search.trim().toLowerCase();
 
-    // Search by customer, phone, vehicle, or job ID.
     if (query) {
-      result = result.filter((job) => {
-        const searchableValues = [
+      result = result.filter((job) =>
+        [
           job.customerName,
           job.phone,
           job.vehicleNumber,
@@ -189,770 +117,311 @@ export default function JobsScreen({ navigation }: any) {
           job.jobNumber,
           job.vehicleBrand,
           job.vehicleModel,
-        ]
-
-        return searchableValues.some((value) =>
-          String(value ?? "").toLowerCase().includes(query)
-        )
-      })
+        ].some((value) => String(value ?? "").toLowerCase().includes(query))
+      );
     }
 
-    // Filter by status.
     if (filter === "overdue") {
-      result = result.filter(isJobOverdue)
+      result = result.filter(isJobOverdue);
     } else if (filter !== "all") {
-      result = result.filter(
-        (job) => normalizeStatus(job.status) === filter
-      )
+      result = result.filter((job) => normalizeStatus(job.status) === filter);
     }
 
-    // Sort the filtered results.
     result.sort((a, b) => {
-      const aCreated = new Date(
-        a.createdAt || a.updatedAt || 0
-      ).getTime()
-
-      const bCreated = new Date(
-        b.createdAt || b.updatedAt || 0
-      ).getTime()
-
+      const aCreated = new Date(a.createdAt || a.updatedAt || 0).getTime();
+      const bCreated = new Date(b.createdAt || b.updatedAt || 0).getTime();
       switch (sort) {
         case "oldest":
-          return aCreated - bCreated
-
+          return aCreated - bCreated;
         case "customerAsc":
-          return String(a.customerName || "").localeCompare(
-            String(b.customerName || "")
-          )
-
+          return String(a.customerName || "").localeCompare(String(b.customerName || ""));
         case "deliveryDate": {
-          const aDate = a.deliveryDate
-            ? new Date(a.deliveryDate).getTime()
-            : Number.MAX_SAFE_INTEGER
-
-          const bDate = b.deliveryDate
-            ? new Date(b.deliveryDate).getTime()
-            : Number.MAX_SAFE_INTEGER
-
-          return aDate - bDate
+          const aDate = a.deliveryDate ? new Date(a.deliveryDate).getTime() : Number.MAX_SAFE_INTEGER;
+          const bDate = b.deliveryDate ? new Date(b.deliveryDate).getTime() : Number.MAX_SAFE_INTEGER;
+          return aDate - bDate;
         }
-
         case "highestAmount":
-          return Number(b.totalAmount || 0) -
-            Number(a.totalAmount || 0)
-
+          return Number(b.totalAmount || 0) - Number(a.totalAmount || 0);
         case "newest":
         default:
-          return bCreated - aCreated
+          return bCreated - aCreated;
       }
-    })
+    });
+    return result;
+  }, [jobs, search, filter, sort]);
 
-    return result
-  }, [jobs, search, filter, sort])
-
-  // Reset the visible page when search/filter/sort changes.
-  React.useEffect(() => {
-    setVisibleCount(PAGE_SIZE)
-  }, [search, filter, sort])
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [search, filter, sort]);
 
   const visibleJobs = useMemo(
     () => displayedJobs.slice(0, visibleCount),
     [displayedJobs, visibleCount]
-  )
+  );
 
-  const handleRefresh = async () => {
-    setRefreshing(true)
-    await loadJobs()
-  }
-
-  const getFilterLabel = () => {
-    const labels: Record<JobFilter, string> = {
-      all: "All Jobs",
-      pending: "Pending",
-      progress: "In Progress",
-      waiting_parts: "Waiting Parts",
-      ready: "Ready",
-      completed: "Completed",
-      delivered: "Delivered",
-      overdue: "Overdue",
-    }
-
-    return labels[filter]
-  }
-
-  const getSortLabel = () => {
-    const labels: Record<JobSort, string> = {
-      newest: "Newest First",
-      oldest: "Oldest First",
-      customerAsc: "Customer A–Z",
-      deliveryDate: "Delivery Date",
-      highestAmount: "Highest Amount",
-    }
-
-    return labels[sort]
-  }
+  const handleRefresh = useCallback(() => {
+    void loadJobs(true);
+  }, [loadJobs]);
 
   const filterOptions: { key: JobFilter; label: string }[] = [
-    { key: "all", label: "All Jobs" },
-    { key: "pending", label: "Pending" },
-    { key: "progress", label: "In Progress" },
-    { key: "waiting_parts", label: "Waiting for Parts" },
-    { key: "ready", label: "Ready" },
-    { key: "completed", label: "Completed" },
-    { key: "delivered", label: "Delivered" },
-    { key: "overdue", label: "Overdue" },
-  ]
+    { key: "all", label: t("jobs.all") },
+    { key: "pending", label: t("jobs.pending") },
+    { key: "progress", label: t("jobs.inProgress") },
+    { key: "waiting_parts", label: t("jobs.waitingParts") },
+    { key: "ready", label: t("jobs.ready") },
+    { key: "completed", label: t("jobs.completed") },
+    { key: "delivered", label: t("jobs.delivered") },
+    { key: "overdue", label: t("jobs.overdue") },
+  ];
 
   const sortOptions: { key: JobSort; label: string }[] = [
-    { key: "newest", label: "Newest First" },
-    { key: "oldest", label: "Oldest First" },
-    { key: "customerAsc", label: "Customer Name A–Z" },
-    { key: "deliveryDate", label: "Earliest Delivery Date" },
-    { key: "highestAmount", label: "Highest Job Amount" },
-  ]
+    { key: "newest", label: t("jobs.newestFirst") },
+    { key: "oldest", label: t("jobs.oldestFirst") },
+    { key: "customerAsc", label: t("jobs.customerNameAZ") },
+    { key: "deliveryDate", label: t("jobs.earliestDeliveryDate") },
+    { key: "highestAmount", label: t("jobs.highestJobAmount") },
+  ];
 
-  const renderJob = ({ item }: { item: any }) => {
-    const statusColors = getStatusColors(item.status)
-    const overdue = isJobOverdue(item)
+  const selectedFilterLabel = filterOptions.find((item) => item.key === filter)?.label || t("jobs.all");
+  const selectedSortLabel = sortOptions.find((item) => item.key === sort)?.label || t("jobs.newestFirst");
 
-    return (
-      <TouchableOpacity
-        style={styles.jobRow}
-        activeOpacity={0.75}
-        onPress={() => {
-          // Connect this to your existing job-detail screen if needed.
-          navigation.navigate("JobDetails", {
-            jobId: item.jobId,
-            job: item,
-          })
-        }}
-      >
-        <View style={styles.jobIcon}>
-          <Ionicons
-            name="construct-outline"
-            size={18}
-            color="#2563EB"
-          />
-        </View>
+  const renderOption = (label: string, selected: boolean, onPress: () => void) => (
+    <TouchableOpacity key={label} style={styles.option} activeOpacity={0.7} onPress={onPress}>
+      <Text style={[styles.optionText, selected && styles.selectedOptionText]}>{label}</Text>
+      {selected && <Ionicons name="checkmark-circle" size={20} color="#2563EB" />}
+    </TouchableOpacity>
+  );
 
-        <View style={styles.jobMain}>
-          <View style={styles.jobTitleLine}>
-            <Text
-              style={styles.customerName}
-              numberOfLines={1}
-            >
-              {item.customerName || "Unknown Customer"}
-            </Text>
-
-            <View
-              style={[
-                styles.statusBadge,
-                { backgroundColor: statusColors.bg },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.statusText,
-                  { color: statusColors.text },
-                ]}
-                numberOfLines={1}
-              >
-                {getStatusLabel(item.status)}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.jobDetailsLine}>
-            <Text
-              style={styles.jobReference}
-              numberOfLines={1}
-            >
-              {item.vehicleNumber ||
-                item.jobNumber ||
-                (item.jobId
-                  ? `Job ${item.jobId.slice(0, 8)}`
-                  : "Job")}
-            </Text>
-
-            <Text style={styles.dot}>•</Text>
-
-            <Text
-              style={[
-                styles.deliveryDate,
-                overdue && styles.overdueText,
-              ]}
-              numberOfLines={1}
-            >
-              {overdue
-                ? `Overdue · ${formatDate(item.deliveryDate)}`
-                : formatDate(item.deliveryDate)}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.amountContainer}>
-          <Text style={styles.amount} numberOfLines={1}>
-            {formatAmount(item.totalAmount)}
-          </Text>
-
-          <Ionicons
-            name="chevron-forward"
-            size={15}
-            color="#94A3B8"
-          />
-        </View>
-      </TouchableOpacity>
-    )
-  }
-
-  if (loading) {
+  if (loading && jobs.length === 0) {
     return (
       <View style={styles.loader}>
         <ActivityIndicator size="large" color="#2563EB" />
+        <Text style={styles.loadingText}>{t("jobs.pleaseWait")}</Text>
       </View>
-    )
+    );
   }
 
   return (
     <View style={styles.container}>
-      {/* HEADER */}
+      {/* Header matches Inventory: no back button and icon-only add action. */}
       <View style={styles.header}>
         <View style={styles.headerText}>
-          <Text style={styles.title}>Jobs</Text>
+          <Text style={styles.title}>{t("jobs.title")}</Text>
           <Text style={styles.subtitle}>
-            {displayedJobs.length}{" "}
-            {displayedJobs.length === 1 ? "job" : "jobs"}
+            {displayedJobs.length} {displayedJobs.length === 1 ? t("jobs.jobSingular") : t("jobs.jobPlural")}
           </Text>
         </View>
-
         <TouchableOpacity
           style={styles.addButton}
           activeOpacity={0.8}
           onPress={() => navigation.navigate("CreateJob")}
+          accessibilityRole="button"
+          accessibilityLabel={t("jobs.createJob")}
         >
           <Ionicons name="add" size={23} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
-      {/* SEARCH */}
-      <View style={styles.searchBox}>
-        <Ionicons name="search" size={18} color="#94A3B8" />
+      {/* Search, Filter and Sort share one compact row, like Inventory. */}
+      <View style={styles.searchControlsRow}>
+        <View style={styles.searchBox}>
+          <Ionicons name="search" size={18} color="#94A3B8" />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder={t("jobs.searchPlaceholder")}
+            placeholderTextColor="#94A3B8"
+            style={styles.searchInput}
+            autoCapitalize="none"
+            returnKeyType="search"
+          />
+          {search.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearch("")}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t("jobs.clearSearch")}
+            >
+              <Ionicons name="close-circle" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+          )}
+        </View>
 
-        <TextInput
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search customer, phone, vehicle or job"
-          placeholderTextColor="#94A3B8"
-          style={styles.searchInput}
-          autoCapitalize="none"
-          returnKeyType="search"
-        />
-
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch("")}>
-            <Ionicons
-              name="close-circle"
-              size={18}
-              color="#94A3B8"
-            />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* FILTER / SORT */}
-      <View style={styles.controls}>
         <TouchableOpacity
-          style={styles.controlButton}
+          style={[styles.compactControlButton, filter !== "all" && styles.activeControlButton]}
+          activeOpacity={0.7}
           onPress={() => setFilterVisible(true)}
+          accessibilityRole="button"
+          accessibilityLabel={`${t("jobs.filterLabel")}: ${selectedFilterLabel}`}
         >
-          <Ionicons
-            name="filter-outline"
-            size={15}
-            color="#475569"
-          />
-          <Text style={styles.controlText}>{getFilterLabel()}</Text>
-          <Ionicons
-            name="chevron-down"
-            size={14}
-            color="#64748B"
-          />
+          <Ionicons name="filter-outline" size={17} color={filter !== "all" ? "#2563EB" : "#475569"} />
+          {filter !== "all" && <View style={styles.activeControlDot} />}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.controlButton}
+          style={[styles.compactControlButton, sort !== "newest" && styles.activeControlButton]}
+          activeOpacity={0.7}
           onPress={() => setSortVisible(true)}
+          accessibilityRole="button"
+          accessibilityLabel={`${t("jobs.sortLabel")}: ${selectedSortLabel}`}
         >
-          <Ionicons
-            name="swap-vertical-outline"
-            size={15}
-            color="#475569"
-          />
-          <Text style={styles.controlText}>{getSortLabel()}</Text>
-          <Ionicons
-            name="chevron-down"
-            size={14}
-            color="#64748B"
-          />
+          <Ionicons name="swap-vertical-outline" size={18} color={sort !== "newest" ? "#2563EB" : "#475569"} />
+          {sort !== "newest" && <View style={styles.activeControlDot} />}
         </TouchableOpacity>
       </View>
 
-      {/* SINGLE-LINE JOB LIST */}
       <FlatList
         data={visibleJobs}
-        keyExtractor={(item, index) =>
-          String(item.jobId || item.jobNumber || index)
-        }
+        keyExtractor={(item, index) => String(item.jobId || item.jobNumber || index)}
         renderItem={({ item }) => <JobCard job={item} />}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, visibleJobs.length === 0 && styles.emptyList]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={["#2563EB"]}
-            tintColor="#2563EB"
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={["#2563EB"]} tintColor="#2563EB" />
         }
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        onEndReached={() => {
+          if (visibleCount < displayedJobs.length) {
+            setVisibleCount((count) => Math.min(count + PAGE_SIZE, displayedJobs.length));
+          }
+        }}
+        onEndReachedThreshold={0.3}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Ionicons
-              name="clipboard-outline"
-              size={42}
-              color="#CBD5E1"
-            />
-            <Text style={styles.emptyTitle}>No jobs found</Text>
-            <Text style={styles.emptyText}>
-              Try changing your search or filter.
-            </Text>
+            <Ionicons name="clipboard-outline" size={42} color="#CBD5E1" />
+            <Text style={styles.emptyTitle}>{t("jobs.noMatchingJobs")}</Text>
+            <Text style={styles.emptyText}>{t("jobs.tryChangingSearchOrFilter")}</Text>
+            {(search.trim() || filter !== "all") && (
+              <TouchableOpacity
+                style={styles.clearFiltersButton}
+                onPress={() => { setSearch(""); setFilter("all"); }}
+              >
+                <Text style={styles.clearFiltersText}>{t("jobs.clearSearchAndFilters")}</Text>
+              </TouchableOpacity>
+            )}
           </View>
         }
         ListFooterComponent={
           visibleCount < displayedJobs.length ? (
             <TouchableOpacity
               style={styles.loadMoreButton}
-              onPress={() =>
-                setVisibleCount((count) =>
-                  Math.min(count + PAGE_SIZE, displayedJobs.length)
-                )
-              }
+              activeOpacity={0.7}
+              onPress={() => setVisibleCount((count) => Math.min(count + PAGE_SIZE, displayedJobs.length))}
             >
-              <Text style={styles.loadMoreText}>
-                Load More ({displayedJobs.length - visibleCount} remaining)
-              </Text>
-              <Ionicons
-                name="chevron-down"
-                size={15}
-                color="#2563EB"
-              />
+              <Text style={styles.loadMoreText}>{t("jobs.loadMore")} ({displayedJobs.length - visibleCount})</Text>
+              <Ionicons name="chevron-down" size={15} color="#2563EB" />
             </TouchableOpacity>
           ) : null
         }
       />
 
-      {/* FILTER MODAL */}
-      <Modal
-        visible={filterVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setFilterVisible(false)}
-      >
-        <View style={styles.bottomOverlay}>
-          <View style={styles.bottomSheet}>
+      {/* Filter bottom sheet */}
+      <Modal visible={filterVisible} transparent animationType="slide" onRequestClose={() => setFilterVisible(false)}>
+        <Pressable style={styles.bottomOverlay} onPress={() => setFilterVisible(false)}>
+          <Pressable style={styles.bottomSheet} onPress={() => {}}>
+            <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Filter Jobs</Text>
-              <TouchableOpacity
-                onPress={() => setFilterVisible(false)}
-              >
-                <Ionicons
-                  name="close"
-                  size={23}
-                  color="#64748B"
-                />
+              <Text style={styles.sheetTitle}>{t("jobs.filterJobs")}</Text>
+              <TouchableOpacity onPress={() => setFilterVisible(false)} hitSlop={8}>
+                <Ionicons name="close" size={23} color="#64748B" />
               </TouchableOpacity>
             </View>
-
-            {filterOptions.map((option) => (
-              <TouchableOpacity
-                key={option.key}
-                style={styles.option}
-                onPress={() => {
-                  setFilter(option.key)
-                  setFilterVisible(false)
-                }}
-              >
-                <Text style={styles.optionText}>
-                  {option.label}
-                </Text>
-
-                {filter === option.key && (
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color="#2563EB"
-                  />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+            {filterOptions.map((option) => renderOption(option.label, filter === option.key, () => {
+              setFilter(option.key);
+              setFilterVisible(false);
+            }))}
+            <TouchableOpacity style={styles.sheetCloseButton} onPress={() => setFilterVisible(false)}>
+              <Text style={styles.sheetCloseText}>{t("jobs.done")}</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
       </Modal>
 
-      {/* SORT MODAL */}
-      <Modal
-        visible={sortVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setSortVisible(false)}
-      >
-        <View style={styles.bottomOverlay}>
-          <View style={styles.bottomSheet}>
+      {/* Sort bottom sheet */}
+      <Modal visible={sortVisible} transparent animationType="slide" onRequestClose={() => setSortVisible(false)}>
+        <Pressable style={styles.bottomOverlay} onPress={() => setSortVisible(false)}>
+          <Pressable style={styles.bottomSheet} onPress={() => {}}>
+            <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Sort Jobs</Text>
-              <TouchableOpacity
-                onPress={() => setSortVisible(false)}
-              >
-                <Ionicons
-                  name="close"
-                  size={23}
-                  color="#64748B"
-                />
+              <Text style={styles.sheetTitle}>{t("jobs.sortJobs")}</Text>
+              <TouchableOpacity onPress={() => setSortVisible(false)} hitSlop={8}>
+                <Ionicons name="close" size={23} color="#64748B" />
               </TouchableOpacity>
             </View>
-
-            {sortOptions.map((option) => (
-              <TouchableOpacity
-                key={option.key}
-                style={styles.option}
-                onPress={() => {
-                  setSort(option.key)
-                  setSortVisible(false)
-                }}
-              >
-                <Text style={styles.optionText}>
-                  {option.label}
-                </Text>
-
-                {sort === option.key && (
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color="#2563EB"
-                  />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+            {sortOptions.map((option) => renderOption(option.label, sort === option.key, () => {
+              setSort(option.key);
+              setSortVisible(false);
+            }))}
+            <TouchableOpacity style={styles.sheetCloseButton} onPress={() => setSortVisible(false)}>
+              <Text style={styles.sheetCloseText}>{t("jobs.done")}</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
       </Modal>
     </View>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F8FAFC",
-    paddingHorizontal: 12,
-  },
-
+  container: { flex: 1, backgroundColor: "#F8FAFC", paddingHorizontal: 12 },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingTop: 12,
-    paddingBottom: 10,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingTop: 12, paddingBottom: 10, gap: 8,
   },
-
-  headerText: {
-    flex: 1,
-  },
-
-  title: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#111827",
-  },
-
-  subtitle: {
-    marginTop: 2,
-    fontSize: 11,
-    color: "#64748B",
-  },
-
+  headerText: { flex: 1, minWidth: 0 },
+  title: { fontSize: 22, fontWeight: "800", color: "#111827" },
+  subtitle: { marginTop: 2, fontSize: 11, color: "#64748B" },
   addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "#2563EB",
-    alignItems: "center",
-    justifyContent: "center",
+    width: 40, height: 40, borderRadius: 12, backgroundColor: "#2563EB",
+    alignItems: "center", justifyContent: "center",
   },
-
+  searchControlsRow: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 12 },
   searchBox: {
-    height: 42,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 11,
+    flex: 1, minWidth: 0, height: 40, backgroundColor: "#FFFFFF", borderRadius: 10,
+    borderWidth: 1, borderColor: "#E2E8F0", flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 10, gap: 7,
   },
-
-  searchInput: {
-    flex: 1,
-    marginLeft: 7,
-    fontSize: 12,
-    color: "#111827",
-    paddingVertical: 0,
+  searchInput: { flex: 1, minWidth: 0, fontSize: 12, color: "#111827", paddingVertical: 0 },
+  compactControlButton: {
+    width: 40, height: 40, borderRadius: 10, borderWidth: 1, borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", position: "relative",
   },
-
-  controls: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginVertical: 9,
+  activeControlButton: { borderColor: "#BFDBFE", backgroundColor: "#EFF6FF" },
+  activeControlDot: {
+    position: "absolute", top: 7, right: 7, width: 6, height: 6,
+    borderRadius: 3, backgroundColor: "#2563EB",
   },
-
-  controlButton: {
-    minHeight: 34,
-    borderRadius: 9,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    paddingHorizontal: 9,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-
-  controlText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#475569",
-  },
-
-  list: {
-    paddingTop: 2,
-    paddingBottom: 12,
-  },
-
-  jobRow: {
-    minHeight: 66,
-    backgroundColor: "#FFFFFF",
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 9,
-    paddingVertical: 9,
-    borderRadius: 11,
-    gap: 8,
-  },
-
-  jobIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: "#EFF6FF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  jobMain: {
-    flex: 1,
-    minWidth: 0,
-    justifyContent: "center",
-  },
-
-  jobTitleLine: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-
-  customerName: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#111827",
-  },
-
-  statusBadge: {
-    maxWidth: 94,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-
-  statusText: {
-    fontSize: 9,
-    fontWeight: "800",
-  },
-
-  jobDetailsLine: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 5,
-    gap: 5,
-  },
-
-  jobReference: {
-    flexShrink: 1,
-    fontSize: 10,
-    color: "#64748B",
-  },
-
-  dot: {
-    fontSize: 10,
-    color: "#CBD5E1",
-  },
-
-  deliveryDate: {
-    flexShrink: 1,
-    fontSize: 10,
-    color: "#64748B",
-  },
-
-  overdueText: {
-    color: "#DC2626",
-    fontWeight: "700",
-  },
-
-  amountContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 2,
-    maxWidth: 95,
-  },
-
-  amount: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#0F172A",
-    flexShrink: 1,
-  },
-
-  separator: {
-    height: 0,
-  },
-
-  emptyContainer: {
-    flexGrow: 1,
-    justifyContent: "center",
-  },
-
-  empty: {
-    alignItems: "center",
-    paddingBottom: 80,
-    paddingHorizontal: 20,
-  },
-
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#334155",
-    marginTop: 10,
-  },
-
-  emptyText: {
-    fontSize: 11,
-    color: "#94A3B8",
-    marginTop: 5,
-    textAlign: "center",
-  },
-
-  clearButton: {
-    marginTop: 15,
-    backgroundColor: "#EFF6FF",
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 9,
-  },
-
-  clearButtonText: {
-    color: "#2563EB",
-    fontWeight: "700",
-    fontSize: 12,
-  },
-
+  list: { paddingTop: 2, paddingBottom: 12 },
+  emptyList: { flexGrow: 1 },
+  separator: { height: 8 },
+  empty: { alignItems: "center", paddingTop: 40, paddingBottom: 80, paddingHorizontal: 20 },
+  emptyTitle: { fontSize: 16, fontWeight: "700", color: "#334155", marginTop: 10, textAlign: "center" },
+  emptyText: { fontSize: 11, color: "#94A3B8", marginTop: 5, textAlign: "center" },
+  clearFiltersButton: { marginTop: 12, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: "#EFF6FF" },
+  clearFiltersText: { color: "#2563EB", fontSize: 12, fontWeight: "700" },
   loadMoreButton: {
-    minHeight: 43,
-    marginTop: 12,
-    marginBottom: 10,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#DBEAFE",
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 7,
+    minHeight: 43, marginTop: 12, marginBottom: 10, backgroundColor: "#FFFFFF",
+    borderWidth: 1, borderColor: "#DBEAFE", borderRadius: 10, alignItems: "center",
+    justifyContent: "center", flexDirection: "row", gap: 7,
   },
-
-  loadMoreText: {
-    color: "#2563EB",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-
-  listFooter: {
-    alignItems: "center",
-    paddingVertical: 15,
-  },
-
-  footerText: {
-    color: "#94A3B8",
-    fontSize: 10,
-  },
-
-  loader: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#F8FAFC",
-  },
-
-  bottomOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.3)",
-    justifyContent: "flex-end",
-  },
-
+  loadMoreText: { color: "#2563EB", fontSize: 12, fontWeight: "700" },
+  loader: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#F8FAFC" },
+  loadingText: { marginTop: 10, color: "#64748B", fontSize: 12 },
+  bottomOverlay: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.35)", justifyContent: "flex-end" },
   bottomSheet: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 30,
+    backgroundColor: "#FFFFFF", borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingHorizontal: 18, paddingTop: 10, paddingBottom: 26,
   },
-
-  sheetHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-
-  sheetTitle: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#111827",
-  },
-
+  sheetHandle: { width: 38, height: 4, borderRadius: 2, backgroundColor: "#CBD5E1", alignSelf: "center", marginBottom: 16 },
+  sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
+  sheetTitle: { flex: 1, fontSize: 16, fontWeight: "800", color: "#111827" },
   option: {
-    minHeight: 46,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    minHeight: 46, flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#E2E8F0",
   },
-
-  optionText: {
-    fontSize: 13,
-    color: "#334155",
-    fontWeight: "600",
-  },
-})
+  optionText: { flex: 1, fontSize: 13, fontWeight: "600", color: "#475569" },
+  selectedOptionText: { color: "#2563EB", fontWeight: "800" },
+  sheetCloseButton: { alignItems: "center", justifyContent: "center", backgroundColor: "#F1F5F9", borderRadius: 10, paddingVertical: 12, marginTop: 14 },
+  sheetCloseText: { color: "#334155", fontSize: 13, fontWeight: "700" },
+});

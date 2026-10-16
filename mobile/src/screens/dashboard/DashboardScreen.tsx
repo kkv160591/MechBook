@@ -516,7 +516,7 @@ export default function DashboardScreen() {
                 color="#2563EB"
               />
               <Text style={styles.actionText}>
-                Reports
+                {t("dashboard.actions.reports") || "Reports"}
               </Text>
             </TouchableOpacity>
           )}

@@ -1,3 +1,4 @@
+
 import {
   View,
   Text,
@@ -9,95 +10,96 @@ import {
   TextInput,
   Modal,
   Pressable,
-} from "react-native"
-import { MaterialIcons, Ionicons, Feather } from "@expo/vector-icons"
-import { useState, useCallback, useMemo } from "react"
-import { useFocusEffect } from "@react-navigation/native"
-import { getWorkers } from "../../services/workerService"
-import { useTranslation } from "../../context/LanguageContext"
+} from "react-native";
+import { MaterialIcons, Ionicons, Feather } from "@expo/vector-icons";
+import { useState, useCallback, useMemo } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import { getWorkers } from "../../services/workerService";
+import { useTranslation } from "../../context/LanguageContext";
 
 interface Worker {
-  workerId: string
-  garageId: string
-  name: string
-  role: string
-  phone: string
-  active: boolean
-  createdAt: string
-  userId?: string
+  workerId: string;
+  garageId: string;
+  name: string;
+  role: string;
+  phone: string;
+  active: boolean;
+  createdAt: string;
+  userId?: string;
 }
 
-type WorkerFilter = "all" | "active" | "inactive"
-type WorkerSort = "newest" | "oldest" | "name" | "role"
+type WorkerFilter = "all" | "active" | "inactive";
+type WorkerSort = "newest" | "oldest" | "name" | "role";
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 20;
 
 export default function WorkersScreen({ navigation }: any) {
-  const { t } = useTranslation()
+  const { t } = useTranslation();
 
-  const [workers, setWorkers] = useState<Worker[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [search, setSearch] = useState("")
-  const [filter, setFilter] = useState<WorkerFilter>("all")
-  const [sort, setSort] = useState<WorkerSort>("newest")
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
-  const [filterModalVisible, setFilterModalVisible] = useState(false)
-  const [sortModalVisible, setSortModalVisible] = useState(false)
+  const [workers, setWorkers] = useState<Worker[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<WorkerFilter>("all");
+  const [sort, setSort] = useState<WorkerSort>("newest");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [sortModalVisible, setSortModalVisible] = useState(false);
 
   const loadWorkers = useCallback(async () => {
     try {
-      const response = await getWorkers()
+      const response = await getWorkers();
 
       if (response?.success && Array.isArray(response.workers)) {
-        setWorkers(response.workers)
+        setWorkers(response.workers);
       } else if (Array.isArray(response)) {
-        setWorkers(response)
+        setWorkers(response);
       } else {
-        setWorkers([])
+        setWorkers([]);
       }
 
-      setVisibleCount(PAGE_SIZE)
+      setVisibleCount(PAGE_SIZE);
     } catch (error) {
-      console.error("Failed to load workers:", error)
+      console.error("Failed to load workers:", error);
+
       Alert.alert(
-        t("common.errorTitle") || "Error",
-        t("workers.addError") || "Failed to fetch workers list"
-      )
+        t("common.errorTitle"),
+        t("workers.addError")
+      );
     } finally {
-      setLoading(false)
-      setRefreshing(false)
+      setLoading(false);
+      setRefreshing(false);
     }
-  }, [t])
+  }, [t]);
 
   useFocusEffect(
     useCallback(() => {
-      loadWorkers()
+      loadWorkers();
     }, [loadWorkers])
-  )
+  );
 
   const handleRefresh = useCallback(() => {
-    setRefreshing(true)
-    loadWorkers()
-  }, [loadWorkers])
+    setRefreshing(true);
+    loadWorkers();
+  }, [loadWorkers]);
 
   const filteredWorkers = useMemo(() => {
-    const query = search.trim().toLowerCase()
+    const query = search.trim().toLowerCase();
 
     const result = workers.filter((worker) => {
       const matchesSearch =
         !query ||
         (worker.name || "").toLowerCase().includes(query) ||
         (worker.role || "").toLowerCase().includes(query) ||
-        (worker.phone || "").toLowerCase().includes(query)
+        (worker.phone || "").toLowerCase().includes(query);
 
       const matchesFilter =
         filter === "all" ||
         (filter === "active" && worker.active === true) ||
-        (filter === "inactive" && worker.active === false)
+        (filter === "inactive" && worker.active === false);
 
-      return matchesSearch && matchesFilter
-    })
+      return matchesSearch && matchesFilter;
+    });
 
     result.sort((a, b) => {
       switch (sort) {
@@ -105,55 +107,31 @@ export default function WorkersScreen({ navigation }: any) {
           return (
             new Date(a.createdAt || 0).getTime() -
             new Date(b.createdAt || 0).getTime()
-          )
+          );
 
         case "name":
-          return (a.name || "").localeCompare(b.name || "")
+          return (a.name || "").localeCompare(b.name || "");
 
         case "role":
-          return (a.role || "").localeCompare(b.role || "")
+          return (a.role || "").localeCompare(b.role || "");
 
         case "newest":
         default:
           return (
             new Date(b.createdAt || 0).getTime() -
             new Date(a.createdAt || 0).getTime()
-          )
+          );
       }
-    })
+    });
 
-    return result
-  }, [workers, search, filter, sort])
+    return result;
+  }, [workers, search, filter, sort]);
 
-  const visibleWorkers = filteredWorkers.slice(0, visibleCount)
-
-  const getFilterLabel = () => {
-    switch (filter) {
-      case "active":
-        return "Active"
-      case "inactive":
-        return "Inactive"
-      default:
-        return "All Workers"
-    }
-  }
-
-  const getSortLabel = () => {
-    switch (sort) {
-      case "oldest":
-        return "Oldest First"
-      case "name":
-        return "Name A–Z"
-      case "role":
-        return "Role A–Z"
-      default:
-        return "Recently Added"
-    }
-  }
+  const visibleWorkers = filteredWorkers.slice(0, visibleCount);
 
   const renderWorkerCard = ({ item }: { item: Worker }) => {
     const workerId =
-      item.workerId || (item as any)._id || (item as any).id
+      item.workerId || (item as any)._id || (item as any).id;
 
     return (
       <TouchableOpacity
@@ -161,9 +139,12 @@ export default function WorkersScreen({ navigation }: any) {
         activeOpacity={0.75}
         onPress={() => {
           if (workerId) {
-            navigation.navigate("WorkerDetails", { workerId })
+            navigation.navigate("WorkerDetails", { workerId });
           } else {
-            console.warn("Worker item is missing a valid identifier:", item)
+            console.warn(
+              "Worker item is missing a valid identifier:",
+              item
+            );
           }
         }}
       >
@@ -172,40 +153,42 @@ export default function WorkersScreen({ navigation }: any) {
         </View>
 
         <View style={styles.workerMain}>
-          {/* Row 1: Worker name and status */}
           <View style={styles.workerTopLine}>
             <Text style={styles.workerName} numberOfLines={1}>
-              {item.name || "Unnamed Worker"}
+              {item.name || t("workers.unnamedWorker")}
             </Text>
 
             <View
               style={[
                 styles.statusBadge,
-                item.active ? styles.activeBadge : styles.inactiveBadge,
+                item.active
+                  ? styles.activeBadge
+                  : styles.inactiveBadge,
               ]}
             >
               <Text
                 style={[
                   styles.statusText,
-                  item.active ? styles.activeText : styles.inactiveText,
+                  item.active
+                    ? styles.activeText
+                    : styles.inactiveText,
                 ]}
                 numberOfLines={1}
               >
                 {item.active
-                  ? t("workers.active") || "ACTIVE"
-                  : t("workers.inactive") || "INACTIVE"}
+                  ? t("common.active").toUpperCase()
+                  : t("common.inactive").toUpperCase()}
               </Text>
             </View>
           </View>
 
-          {/* Row 2: Role and phone */}
           <View style={styles.workerBottomLine}>
             <Text style={styles.workerRole} numberOfLines={1}>
-              {item.role || "No role specified"}
+              {item.role || t("workers.noRole")}
             </Text>
 
             <Text style={styles.workerPhone} numberOfLines={1}>
-              {item.phone || "No phone"}
+              {item.phone || t("workers.noPhone")}
             </Text>
           </View>
         </View>
@@ -216,8 +199,8 @@ export default function WorkersScreen({ navigation }: any) {
           color="#94A3B8"
         />
       </TouchableOpacity>
-    )
-  }
+    );
+  };
 
   const renderOption = (
     label: string,
@@ -239,10 +222,14 @@ export default function WorkersScreen({ navigation }: any) {
       </Text>
 
       {selected && (
-        <Ionicons name="checkmark-circle" size={20} color="#2563EB" />
+        <Ionicons
+          name="checkmark-circle"
+          size={20}
+          color="#2563EB"
+        />
       )}
     </Pressable>
-  )
+  );
 
   return (
     <View style={styles.container}>
@@ -253,17 +240,23 @@ export default function WorkersScreen({ navigation }: any) {
             style={styles.backButton}
             onPress={() => navigation.goBack()}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={t("common.back")}
           >
-            <Feather name="arrow-left" size={20} color="#111827" />
+            <Feather
+              name="arrow-left"
+              size={20}
+              color="#111827"
+            />
           </TouchableOpacity>
 
           <View style={styles.headerTextGroup}>
             <Text style={styles.headerTitle} numberOfLines={1}>
-              {t("workers.title") || "Worker Management"}
+              {t("workers.title")}
             </Text>
+
             <Text style={styles.headerSubtitle}>
-              {filteredWorkers.length}{" "}
-              {filteredWorkers.length === 1 ? "Worker" : "Workers"}
+              {filteredWorkers.length} {t("workers.count")}
             </Text>
           </View>
         </View>
@@ -273,79 +266,109 @@ export default function WorkersScreen({ navigation }: any) {
           activeOpacity={0.8}
           onPress={() => navigation.navigate("AddWorker")}
         >
-          <MaterialIcons name="add" size={19} color="#FFFFFF" />
+          <MaterialIcons
+            name="add"
+            size={19}
+            color="#FFFFFF"
+          />
           <Text style={styles.addBtnText}>
-            {t("workers.addWorker") || "Add Worker"}
+            {t("workers.addWorker")}
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Search */}
-      <View style={styles.searchBox}>
-        <Feather name="search" size={17} color="#94A3B8" />
-        <TextInput
-          style={styles.searchInput}
-          value={search}
-          onChangeText={(value) => {
-            setSearch(value)
-            setVisibleCount(PAGE_SIZE)
-          }}
-          placeholder="Search workers, roles, phone..."
-          placeholderTextColor="#94A3B8"
-          returnKeyType="search"
-          autoCapitalize="none"
-          clearButtonMode="while-editing"
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch("")}>
-            <Ionicons name="close-circle" size={18} color="#94A3B8" />
-          </TouchableOpacity>
-        )}
-      </View>
+      {/* Search + Filter + Sort in one row */}
+      <View style={styles.searchControlsRow}>
+        <View style={styles.searchBox}>
+          <Feather
+            name="search"
+            size={17}
+            color="#94A3B8"
+          />
 
-      {/* Filter and sort controls */}
-      <View style={styles.controlsRow}>
+          <TextInput
+            style={styles.searchInput}
+            value={search}
+            onChangeText={(value) => {
+              setSearch(value);
+              setVisibleCount(PAGE_SIZE);
+            }}
+            placeholder={t("workers.searchPlaceholder")}
+            placeholderTextColor="#94A3B8"
+            returnKeyType="search"
+            autoCapitalize="none"
+          />
+
+          {search.length > 0 && (
+            <TouchableOpacity
+              onPress={() => {
+                setSearch("");
+                setVisibleCount(PAGE_SIZE);
+              }}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={t("common.clearSearch")}
+            >
+              <Ionicons
+                name="close-circle"
+                size={18}
+                color="#94A3B8"
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Filter icon */}
         <TouchableOpacity
           style={[
-            styles.controlButton,
+            styles.compactControlButton,
             filter !== "all" && styles.activeControlButton,
           ]}
           onPress={() => setFilterModalVisible(true)}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={
+            `${t("common.filter")}: ${
+              filter === "all"
+                ? t("workers.allWorkers")
+                : filter === "active"
+                  ? t("common.active")
+                  : t("common.inactive")
+            }`
+          }
         >
           <Feather
             name="filter"
-            size={15}
+            size={17}
             color={filter !== "all" ? "#2563EB" : "#475569"}
           />
-          <Text
-            style={[
-              styles.controlButtonText,
-              filter !== "all" && styles.activeControlButtonText,
-            ]}
-          >
-            {filter === "all" ? "Filter" : getFilterLabel()}
-          </Text>
-          <MaterialIcons name="keyboard-arrow-down" size={17} color="#64748B" />
+
+          {filter !== "all" && (
+            <View style={styles.activeFilterDot} />
+          )}
         </TouchableOpacity>
 
+        {/* Sort icon */}
         <TouchableOpacity
-          style={styles.controlButton}
+          style={[
+            styles.compactControlButton,
+            sort !== "newest" && styles.activeControlButton,
+          ]}
           onPress={() => setSortModalVisible(true)}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={t("common.sort")}
         >
-          <MaterialIcons name="sort" size={17} color="#475569" />
-          <Text style={styles.controlButtonText}>
-            {sort === "newest" ? "Sort" : getSortLabel()}
-          </Text>
-          <MaterialIcons name="keyboard-arrow-down" size={17} color="#64748B" />
-        </TouchableOpacity>
+          <MaterialIcons
+            name="sort"
+            size={19}
+            color={sort !== "newest" ? "#2563EB" : "#475569"}
+          />
 
-        <View style={styles.resultsCount}>
-          <Text style={styles.resultsCountText}>
-            {filteredWorkers.length} total
-          </Text>
-        </View>
+          {sort !== "newest" && (
+            <View style={styles.activeFilterDot} />
+          )}
+        </TouchableOpacity>
       </View>
 
       {/* Worker list */}
@@ -353,19 +376,23 @@ export default function WorkersScreen({ navigation }: any) {
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#2563EB" />
           <Text style={styles.loadingText}>
-            {t("workers.loading") || "Loading workers..."}
+            {t("workers.loading")}
           </Text>
         </View>
       ) : (
         <FlatList
           data={visibleWorkers}
           keyExtractor={(item, index) =>
-            item.workerId || (item as any)._id || (item as any).id || index.toString()
+            item.workerId ||
+            (item as any)._id ||
+            (item as any).id ||
+            index.toString()
           }
           renderItem={renderWorkerCard}
           contentContainerStyle={[
             styles.listContent,
-            visibleWorkers.length === 0 && styles.emptyListContent,
+            visibleWorkers.length === 0 &&
+              styles.emptyListContent,
           ]}
           refreshing={refreshing}
           onRefresh={handleRefresh}
@@ -374,8 +401,11 @@ export default function WorkersScreen({ navigation }: any) {
           onEndReached={() => {
             if (visibleCount < filteredWorkers.length) {
               setVisibleCount((count) =>
-                Math.min(count + PAGE_SIZE, filteredWorkers.length)
-              )
+                Math.min(
+                  count + PAGE_SIZE,
+                  filteredWorkers.length
+                )
+              );
             }
           }}
           onEndReachedThreshold={0.3}
@@ -385,11 +415,16 @@ export default function WorkersScreen({ navigation }: any) {
                 style={styles.loadMoreButton}
                 onPress={() =>
                   setVisibleCount((count) =>
-                    Math.min(count + PAGE_SIZE, filteredWorkers.length)
+                    Math.min(
+                      count + PAGE_SIZE,
+                      filteredWorkers.length
+                    )
                   )
                 }
               >
-                <Text style={styles.loadMoreText}>Load More</Text>
+                <Text style={styles.loadMoreText}>
+                  {t("common.loadMore")}
+                </Text>
               </TouchableOpacity>
             ) : null
           }
@@ -400,22 +435,24 @@ export default function WorkersScreen({ navigation }: any) {
                 size={48}
                 color="#9CA3AF"
               />
+
               <Text style={styles.emptyText}>
-                {search || filter !== "all"
-                  ? "No workers match your search or filter"
-                  : t("workers.noWorkers") || "No workers found"}
+                {search.trim() || filter !== "all"
+                  ? t("workers.noMatchingWorkers")
+                  : t("workers.noWorkers")}
               </Text>
-              {(search || filter !== "all") && (
+
+              {(search.trim() || filter !== "all") && (
                 <TouchableOpacity
                   style={styles.clearFiltersButton}
                   onPress={() => {
-                    setSearch("")
-                    setFilter("all")
-                    setVisibleCount(PAGE_SIZE)
+                    setSearch("");
+                    setFilter("all");
+                    setVisibleCount(PAGE_SIZE);
                   }}
                 >
                   <Text style={styles.clearFiltersText}>
-                    Clear search and filters
+                    {t("workers.clearSearchFilters")}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -435,33 +472,53 @@ export default function WorkersScreen({ navigation }: any) {
           style={styles.modalOverlay}
           onPress={() => setFilterModalVisible(false)}
         >
-          <Pressable style={styles.bottomSheet} onPress={() => {}}>
+          <Pressable
+            style={styles.bottomSheet}
+            onPress={() => {}}
+          >
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Filter Workers</Text>
 
-            {renderOption("All Workers", filter === "all", () => {
-              setFilter("all")
-              setVisibleCount(PAGE_SIZE)
-              setFilterModalVisible(false)
-            })}
+            <Text style={styles.sheetTitle}>
+              {t("workers.filterWorkers")}
+            </Text>
 
-            {renderOption("Active", filter === "active", () => {
-              setFilter("active")
-              setVisibleCount(PAGE_SIZE)
-              setFilterModalVisible(false)
-            })}
+            {renderOption(
+              t("workers.allWorkers"),
+              filter === "all",
+              () => {
+                setFilter("all");
+                setVisibleCount(PAGE_SIZE);
+                setFilterModalVisible(false);
+              }
+            )}
 
-            {renderOption("Inactive", filter === "inactive", () => {
-              setFilter("inactive")
-              setVisibleCount(PAGE_SIZE)
-              setFilterModalVisible(false)
-            })}
+            {renderOption(
+              t("common.active"),
+              filter === "active",
+              () => {
+                setFilter("active");
+                setVisibleCount(PAGE_SIZE);
+                setFilterModalVisible(false);
+              }
+            )}
+
+            {renderOption(
+              t("common.inactive"),
+              filter === "inactive",
+              () => {
+                setFilter("inactive");
+                setVisibleCount(PAGE_SIZE);
+                setFilterModalVisible(false);
+              }
+            )}
 
             <TouchableOpacity
               style={styles.sheetCloseButton}
               onPress={() => setFilterModalVisible(false)}
             >
-              <Text style={styles.sheetCloseText}>Close</Text>
+              <Text style={styles.sheetCloseText}>
+                {t("common.close")}
+              </Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -478,45 +535,69 @@ export default function WorkersScreen({ navigation }: any) {
           style={styles.modalOverlay}
           onPress={() => setSortModalVisible(false)}
         >
-          <Pressable style={styles.bottomSheet} onPress={() => {}}>
+          <Pressable
+            style={styles.bottomSheet}
+            onPress={() => {}}
+          >
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Sort Workers</Text>
 
-            {renderOption("Recently Added", sort === "newest", () => {
-              setSort("newest")
-              setVisibleCount(PAGE_SIZE)
-              setSortModalVisible(false)
-            })}
+            <Text style={styles.sheetTitle}>
+              {t("workers.sortWorkers")}
+            </Text>
 
-            {renderOption("Oldest First", sort === "oldest", () => {
-              setSort("oldest")
-              setVisibleCount(PAGE_SIZE)
-              setSortModalVisible(false)
-            })}
+            {renderOption(
+              t("common.recentlyAdded"),
+              sort === "newest",
+              () => {
+                setSort("newest");
+                setVisibleCount(PAGE_SIZE);
+                setSortModalVisible(false);
+              }
+            )}
 
-            {renderOption("Name A–Z", sort === "name", () => {
-              setSort("name")
-              setVisibleCount(PAGE_SIZE)
-              setSortModalVisible(false)
-            })}
+            {renderOption(
+              t("common.oldestFirst"),
+              sort === "oldest",
+              () => {
+                setSort("oldest");
+                setVisibleCount(PAGE_SIZE);
+                setSortModalVisible(false);
+              }
+            )}
 
-            {renderOption("Role A–Z", sort === "role", () => {
-              setSort("role")
-              setVisibleCount(PAGE_SIZE)
-              setSortModalVisible(false)
-            })}
+            {renderOption(
+              t("common.nameAZ"),
+              sort === "name",
+              () => {
+                setSort("name");
+                setVisibleCount(PAGE_SIZE);
+                setSortModalVisible(false);
+              }
+            )}
+
+            {renderOption(
+              t("workers.roleAZ"),
+              sort === "role",
+              () => {
+                setSort("role");
+                setVisibleCount(PAGE_SIZE);
+                setSortModalVisible(false);
+              }
+            )}
 
             <TouchableOpacity
               style={styles.sheetCloseButton}
               onPress={() => setSortModalVisible(false)}
             >
-              <Text style={styles.sheetCloseText}>Close</Text>
+              <Text style={styles.sheetCloseText}>
+                {t("common.close")}
+              </Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>
       </Modal>
     </View>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
@@ -527,6 +608,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
 
+  /* Header */
   headerContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -581,8 +663,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
 
+  /* Compact search + Filter + Sort row */
+  searchControlsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginBottom: 12,
+  },
   searchBox: {
-    height: 42,
+    flex: 1,
+    minWidth: 0,
+    height: 40,
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
@@ -591,7 +682,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginBottom: 9,
   },
   searchInput: {
     flex: 1,
@@ -600,46 +690,32 @@ const styles = StyleSheet.create({
     color: "#0F172A",
     paddingVertical: 0,
   },
-
-  controlsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 10,
-  },
-  controlButton: {
-    minHeight: 33,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    paddingHorizontal: 9,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 8,
+  compactControlButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
   },
   activeControlButton: {
     borderColor: "#BFDBFE",
     backgroundColor: "#EFF6FF",
   },
-  controlButtonText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#475569",
-  },
-  activeControlButtonText: {
-    color: "#2563EB",
-  },
-  resultsCount: {
-    flex: 1,
-    alignItems: "flex-end",
-  },
-  resultsCountText: {
-    fontSize: 10,
-    color: "#64748B",
+  activeFilterDot: {
+    position: "absolute",
+    top: 7,
+    right: 7,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#2563EB",
   },
 
+  /* Worker cards */
   listContent: {
     paddingBottom: 24,
   },
@@ -728,6 +804,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
 
+  /* Loading and empty states */
   centerContainer: {
     flex: 1,
     justifyContent: "center",
@@ -778,6 +855,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
+  /* Bottom sheets */
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(15, 23, 42, 0.35)",
@@ -835,4 +913,4 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
   },
-})
+});
