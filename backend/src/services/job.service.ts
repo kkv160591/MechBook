@@ -79,9 +79,8 @@ const getPartUnitPrice = (part: any) => {
   return Number(
     part?.actualUnitPrice ??
       part?.unitPrice ??
-      part?.estimatedUnitPrice ??
-      part?.sellingPrice ??
       part?.price ??
+      part?.estimatedUnitPrice ??
       0
   )
 }
@@ -95,48 +94,48 @@ const getPartUnitPrice = (part: any) => {
  * - Duplicate inventory parts are combined.
  */
 const normalizeParts = (parts: any[]) => {
-  const map = new Map<string, any>()
+  const inventoryMap = new Map<string, any>()
+  const manualParts: any[] = []
 
   for (const part of Array.isArray(parts) ? parts : []) {
     const inventoryId = getInventoryId(part)
+    const quantity = Math.max(1, Number(part?.quantity) || 1)
+    const unitPrice = getPartUnitPrice(part)
 
+    const normalizedPart = {
+      inventoryId: inventoryId || null,
+      partId: inventoryId || null,
+      name: String(part?.name || part?.partName || "").trim(),
+      quantity,
+      estimatedUnitPrice: Number(
+        part?.estimatedUnitPrice ?? part?.unitPrice ?? unitPrice
+      ),
+      actualUnitPrice: unitPrice,
+      unitPrice,
+      totalPrice: quantity * unitPrice,
+    }
+
+    // A custom part is saved to the job, but isn't linked to inventory.
     if (!inventoryId) {
+      if (normalizedPart.name) {
+        manualParts.push(normalizedPart)
+      }
       continue
     }
 
-    const quantity = Math.max(
-      1,
-      Number(part.quantity) || 1
-    )
-
-    const unitPrice = getPartUnitPrice(part)
-
-    const existing = map.get(String(inventoryId))
+    const key = String(inventoryId)
+    const existing = inventoryMap.get(key)
 
     if (existing) {
       existing.quantity += quantity
-
       existing.totalPrice =
         existing.quantity * existing.actualUnitPrice
     } else {
-      map.set(String(inventoryId), {
-        inventoryId,
-        partId: inventoryId,
-        name: part.name || "",
-        quantity,
-        estimatedUnitPrice: Number(
-          part.estimatedUnitPrice ??
-            part.unitPrice ??
-            unitPrice
-        ),
-        actualUnitPrice: unitPrice,
-        unitPrice,
-        totalPrice: quantity * unitPrice,
-      })
+      inventoryMap.set(key, normalizedPart)
     }
   }
 
-  return Array.from(map.values())
+  return [...inventoryMap.values(), ...manualParts]
 }
 
 const normalizePhone = (phone: any) => {
@@ -264,6 +263,10 @@ export const createJob = async (
 
   // Validate inventory before transaction
   for (const part of normalizedParts) {
+    // Custom parts have no inventory record to validate.
+    if (!part.partId) {
+      continue
+    }
     const inventoryResult = await db.send(
       new GetItemCommand({
         TableName: INVENTORY_TABLE,
@@ -520,6 +523,9 @@ export const createJob = async (
     // --------------------------------------------------------
 
     for (const part of normalizedParts) {
+      if (!part.partId) {
+        continue
+      }
       transactItems.push({
         Update: {
           TableName: INVENTORY_TABLE,
@@ -866,6 +872,7 @@ export const updateJob = async (
     new Map<string, any>()
 
   for (const part of normalizedOldParts) {
+    if (!part.partId) continue
     oldPartsMap.set(
       String(part.partId),
       part
@@ -876,6 +883,7 @@ export const updateJob = async (
     new Map<string, any>()
 
   for (const part of normalizedNewParts) {
+    if (!part.partId) continue
     newPartsMap.set(
       String(part.partId),
       part
@@ -1750,6 +1758,9 @@ export const deleteJob = async (
   // ----------------------------------------------------------
 
   for (const part of oldParts) {
+    if (!part.partId) {
+      continue
+    }
     transactItems.push({
       Update: {
         TableName:

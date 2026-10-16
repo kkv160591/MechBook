@@ -510,17 +510,20 @@ export default function AddJobScreen({ navigation }: any) {
       // or direct array response.
       // ==============================
 
-      const inventoryParts =
-        inventoryRes?.parts ||
-        inventoryRes?.inventory ||
-        inventoryRes ||
-        []
+      const inventoryPayload =
+        inventoryRes?.data ?? inventoryRes
 
-      setInventoryList(
-        Array.isArray(inventoryParts)
-          ? inventoryParts
-          : []
-      )
+      const inventoryParts = Array.isArray(inventoryPayload)
+        ? inventoryPayload
+        : Array.isArray(inventoryPayload?.parts)
+          ? inventoryPayload.parts
+          : Array.isArray(inventoryPayload?.inventory)
+            ? inventoryPayload.inventory
+            : Array.isArray(inventoryPayload?.items)
+              ? inventoryPayload.items
+              : []
+
+      setInventoryList(inventoryParts)
 
       const fetchedCustomers =
         customersRes?.customers || customersRes?.data || customersRes || []
@@ -698,123 +701,182 @@ export default function AddJobScreen({ navigation }: any) {
     setShowPartSuggestions(false)
   }
 
+  
   const addCurrentPart = () => {
-    if (!partName.trim()) {
+    const trimmedPartName = partName.trim()
+
+    if (!trimmedPartName) {
       Alert.alert(
         t("jobs.alertErrorTitle"),
         t("jobs.valErrPartName") ||
           "Part name is required"
       )
-
       return
     }
 
-    const requestedQty =
-      Math.max(
-        1,
-        parseInt(partQty, 10) || 1
+    const requestedQty = Math.max(
+      1,
+      parseInt(partQty, 10) || 1
+    )
+
+    const unitPrice = Math.max(
+      0,
+      parseFloat(partPrice) || 0
+    )
+
+    // =====================================
+    // DETERMINE WHETHER THIS IS AN INVENTORY
+    // PART OR A CUSTOM PART
+    // =====================================
+
+    const inventoryId = selectedPartItem
+      ? String(
+          selectedPartItem.partId ||
+            selectedPartItem.inventoryId ||
+            selectedPartItem.id ||
+            selectedPartItem._id ||
+            ""
+        ) || null
+      : null
+
+    // If an inventory item is selected, use its
+    // actual inventory name and validate stock.
+    if (selectedPartItem && !inventoryId) {
+      Alert.alert(
+        t("jobs.alertErrorTitle"),
+        "Unable to identify this inventory item. Please select it again."
+      )
+      return
+    }
+
+    if (selectedPartItem && inventoryId) {
+      const availableStock = Number(
+        selectedPartItem.stock ??
+          selectedPartItem.currentStock ??
+          selectedPartItem.quantity ??
+          0
       )
 
-    const unitPrice =
-      Math.max(
-        0,
-        parseFloat(partPrice) || 0
-      )
-
-    // ==============================
-    // INVENTORY STOCK VALIDATION
-    // ==============================
-
-    if (selectedPartItem) {
-      const availableStock =
-        Number(
-          selectedPartItem.stock ??
-            selectedPartItem.currentStock ??
-            selectedPartItem.quantity ??
-            0
+      const alreadyAddedQty = selectedParts
+        .filter(
+          (part) =>
+            String(
+              part.inventoryId ||
+                part.partId ||
+                ""
+            ) === inventoryId
         )
-
-      // IMPORTANT:
-      // Your API uses partId.
-      //
-      // Keep fallbacks for older responses.
-
-      const partId =
-        selectedPartItem.partId ||
-        selectedPartItem.inventoryId ||
-        selectedPartItem.id ||
-        selectedPartItem._id
-
-      const alreadyAddedQty =
-        selectedParts
-          .filter(
-            (part) =>
-              String(
-                part.inventoryId
-              ) ===
-              String(partId)
-          )
-          .reduce(
-            (sum, part) =>
-              sum +
-              Number(
-                part.quantity || 0
-              ),
-            0
-          )
+        .reduce(
+          (sum, part) =>
+            sum + Number(part.quantity || 0),
+          0
+        )
 
       if (
         availableStock <= 0 ||
-        alreadyAddedQty +
-          requestedQty >
-          availableStock
+        alreadyAddedQty + requestedQty > availableStock
       ) {
         Alert.alert(
-          t("jobs.outOfStock") ||
-            "Out of Stock",
+          t("jobs.outOfStock") || "Out of Stock",
           t("jobs.insufficientStock") ||
             "Requested quantity exceeds available stock"
         )
-
         return
       }
     }
 
-    // ==============================
-    // ADD PART
-    // ==============================
+    // =====================================
+    // ADD INVENTORY OR CUSTOM PART
+    // =====================================
 
-    const inventoryId =
-      selectedPartItem
-        ? selectedPartItem.partId ||
-          selectedPartItem.inventoryId ||
-          selectedPartItem.id ||
-          selectedPartItem._id
-        : null
+    const finalPartName = selectedPartItem
+      ? String(
+          selectedPartItem.name ||
+            selectedPartItem.partName ||
+            trimmedPartName
+        ).trim()
+      : trimmedPartName
 
-    setSelectedParts((prev) => [
-      ...prev,
-      {
-        inventoryId,
+    const finalUnitPrice = selectedPartItem
+      ? Math.max(
+          0,
+          Number(
+            selectedPartItem.actualUnitPrice ??
+              selectedPartItem.unitPrice ??
+              selectedPartItem.price ??
+              unitPrice
+          ) || 0
+        )
+      : unitPrice
 
-        // Keep partId too because the backend
-        // may eventually prefer this naming.
-        partId:
+    setSelectedParts((prev) => {
+      // Merge repeated selections of the same
+      // inventory item. Custom parts remain separate.
+      if (inventoryId) {
+        const existingPart = prev.find(
+          (part) =>
+            String(
+              part.inventoryId ||
+                part.partId ||
+                ""
+            ) === inventoryId
+        )
+
+        if (existingPart) {
+          return prev.map((part) => {
+            const currentId = String(
+              part.inventoryId ||
+                part.partId ||
+                ""
+            )
+
+            if (currentId !== inventoryId) {
+              return part
+            }
+
+            const updatedQuantity =
+              Number(part.quantity || 0) +
+              requestedQty
+
+            const price = Number(
+              part.actualUnitPrice ??
+                part.unitPrice ??
+                finalUnitPrice
+            )
+
+            return {
+              ...part,
+              quantity: updatedQuantity,
+              totalPrice: updatedQuantity * price,
+            }
+          })
+        }
+      }
+
+      return [
+        ...prev,
+        {
+          // Inventory-linked parts have an ID.
+          // Custom parts intentionally have null IDs.
           inventoryId,
+          partId: inventoryId,
 
-        name:
-          partName.trim(),
+          name: finalPartName,
+          quantity: requestedQty,
 
-        quantity:
-          requestedQty,
+          unitPrice: finalUnitPrice,
+          estimatedUnitPrice: finalUnitPrice,
+          actualUnitPrice: finalUnitPrice,
 
-        unitPrice,
+          totalPrice:
+            requestedQty * finalUnitPrice,
+        },
+      ]
+    })
 
-        totalPrice:
-          requestedQty *
-          unitPrice,
-      },
-    ])
+    // =====================================
+    // RESET INPUTS
+    // =====================================
 
     setSelectedPartItem(null)
     setPartName("")
@@ -823,6 +885,7 @@ export default function AddJobScreen({ navigation }: any) {
 
     closeDropdowns()
   }
+
 
   const removePart = (
     index: number
