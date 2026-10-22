@@ -592,3 +592,38 @@ export const updateNotifications = async (
   }
 
 }
+
+export const getAllSettings = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const user = (req as any).user
+    const garageId = user?.garageId
+    const userId = user?.userId
+
+    if (!garageId || !userId) {
+      return res.status(401).json({
+        success: false,
+        message: "User or garage identity missing"
+      })
+    }
+
+    const data = await settingsService.getAllSettings(
+      garageId,
+      userId
+    )
+
+    return res.json(data)
+  } catch (error) {
+    console.error(
+      "Get all settings error:",
+      error
+    )
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get app settings"
+    })
+  }
+}

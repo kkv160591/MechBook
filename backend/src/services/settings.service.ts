@@ -528,3 +528,28 @@ export const saveNotificationSettings =
     return setting
 
   }
+
+/**
+ * Get all primary garage settings in a single operation.
+ */
+export const getAllSettings = async (
+  garageId: string,
+  userId: string
+) => {
+  // You can fetch them in parallel using BatchGetItem or individual GetItem calls
+  const [gst, invoice, language, backup, notifications] = await Promise.all([
+    getSetting(garageId, "GST"),
+    getSetting(garageId, "INVOICE"),
+    getUserLanguageSetting(garageId, userId),
+    getSetting(garageId, "BACKUP"),
+    getNotificationSettings(garageId),
+  ])
+
+  return {
+    gst: gst || null,
+    invoice: invoice || null,
+    language: language || null,
+    backup: backup || null,
+    notifications: notifications || null,
+  }
+}

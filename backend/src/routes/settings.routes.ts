@@ -12,6 +12,7 @@ import { verifyToken } from "../middleware/auth.middleware"
 
 const router = Router()
 
+router.get("/", verifyToken, settingsController.getAllSettings)
 // GST Settings
 router.get("/gst", verifyToken, settingsController.getGST)
 router.put("/gst", verifyToken, validateGSTMiddleware, settingsController.updateGST)

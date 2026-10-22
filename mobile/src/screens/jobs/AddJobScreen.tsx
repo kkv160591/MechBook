@@ -151,6 +151,36 @@ export default function AddJobScreen({ navigation }: any) {
     useState(false)
 
   // ==============================
+  // VEHICLE CONFIG & TYPES MAPPING
+  // ==============================
+
+  const VEHICLE_CONFIGS: Record<string, { label: string; icon: string }> = {
+    "2-Wheeler": { label: "2-Wheeler (Bike/Scooter)", icon: "🏍" },
+    "3-Wheeler": { label: "3-Wheeler (Auto/Rickshaw)", icon: "🛺" },
+    "Car & SUV": { label: "Car & SUV", icon: "🚗" },
+    "Light Commercial": { label: "Light Commercial (Pickup/Van)", icon: "🚐" },
+    "Heavy Commercial": { label: "Heavy Commercial (Truck/Bus)", icon: "🚚" },
+    "Electric Vehicles (EV)": { label: "Electric Vehicles (EV)", icon: "⚡" },
+  }
+
+  // Get registered vehicle types from garage profile (user object or settings)
+  const registeredVehicleTypes = useMemo(() => {
+    const types = user?.vehicleTypes
+    if (Array.isArray(types) && types.length > 0) {
+      return types;
+    }
+    // Fallback if not specified in profile yet
+    return ["2-Wheeler", "Car & SUV"];
+  }, [user, settings]);
+
+  // Ensure default vehicleType is valid for this garage
+  useEffect(() => {
+    if (registeredVehicleTypes.length > 0 && !registeredVehicleTypes.includes(vehicleType)) {
+      setVehicleType(registeredVehicleTypes[0]);
+    }
+  }, [registeredVehicleTypes]);
+
+  // ==============================
   // WORKER AUTO-FILL FOR WORKER LOGIN
   // ==============================
 
@@ -700,7 +730,6 @@ export default function AddJobScreen({ navigation }: any) {
 
     setShowPartSuggestions(false)
   }
-
   
   const addCurrentPart = () => {
     const trimmedPartName = partName.trim()
@@ -1637,82 +1666,26 @@ export default function AddJobScreen({ navigation }: any) {
                 }
               />
 
-              <RequiredLabel
-                text={t(
-                  "jobs.vehicleType"
-                )}
-              />
+              <RequiredLabel text={t("jobs.vehicleType") || "Vehicle Type"} />
 
-              <View
-                style={styles.typeRow}
-              >
-                <TouchableOpacity
-                  style={[
-                    styles.typeButton,
-                    vehicleType ===
-                      t(
-                        "jobs.twoWheeler"
-                      ) &&
-                      styles.selectedType,
-                  ]}
-                  onPress={() =>
-                    setVehicleType(
-                      t(
-                        "jobs.twoWheeler"
-                      )
-                    )
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.typeButtonText,
-                      vehicleType ===
-                        t(
-                          "jobs.twoWheeler"
-                        ) &&
-                        styles.selectedTypeButtonText,
-                    ]}
-                  >
-                    🏍{" "}
-                    {t(
-                      "jobs.twoWheeler"
-                    )}
-                  </Text>
-                </TouchableOpacity>
+              <View style={styles.chipContainer}>
+                {registeredVehicleTypes.map((typeKey: string) => {
+                  const config = VEHICLE_CONFIGS[typeKey] || { label: typeKey, icon: "🚗" };
+                  const isSelected = vehicleType === typeKey;
 
-                <TouchableOpacity
-                  style={[
-                    styles.typeButton,
-                    vehicleType ===
-                      t(
-                        "jobs.fourWheeler"
-                      ) &&
-                      styles.selectedType,
-                  ]}
-                  onPress={() =>
-                    setVehicleType(
-                      t(
-                        "jobs.fourWheeler"
-                      )
-                    )
-                  }
-                >
-                  <Text
-                    style={[
-                      styles.typeButtonText,
-                      vehicleType ===
-                        t(
-                          "jobs.fourWheeler"
-                        ) &&
-                        styles.selectedTypeButtonText,
-                    ]}
-                  >
-                    🚗{" "}
-                    {t(
-                      "jobs.fourWheeler"
-                    )}
-                  </Text>
-                </TouchableOpacity>
+                  return (
+                    <TouchableOpacity
+                      key={typeKey}
+                      style={[styles.chipButton, isSelected && styles.selectedChip]}
+                      onPress={() => setVehicleType(typeKey)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.chipText, isSelected && styles.selectedChipText]}>
+                        {config.icon} {config.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
           </>
@@ -3102,18 +3075,22 @@ const styles = StyleSheet.create({
 
   typeRow: {
     flexDirection: "row",
-    gap: 10,
+    flexWrap: "wrap",
+    gap: 8,
     marginBottom: 12,
   },
 
   typeButton: {
-    flex: 1,
-    padding: 12,
+    width: "48%",
+    paddingVertical: 8,
+    paddingHorizontal: 6,
     borderWidth: 1,
     borderColor: "#D1D5DB",
     borderRadius: 8,
     alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "#FFF",
+    minHeight: 40,
   },
 
   selectedType: {
@@ -3122,13 +3099,16 @@ const styles = StyleSheet.create({
   },
 
   typeButtonText: {
+    fontSize: 11,
     fontWeight: "500",
     color: "#374151",
+    textAlign: "center",
   },
 
   selectedTypeButtonText: {
     color: "#2563EB",
     fontWeight: "700",
+    fontSize: 11,
   },
 
   priorityRow: {
@@ -3500,5 +3480,34 @@ const styles = StyleSheet.create({
     color: "#065F46",
     fontWeight: "600",
     marginLeft: 6,
-  }
+  },
+  chipContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 12,
+  },
+  chipButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 20, // Rounded pill style
+    backgroundColor: "#FFFFFF",
+  },
+  selectedChip: {
+    backgroundColor: "#EFF6FF",
+    borderColor: "#2563EB",
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#374151",
+  },
+  selectedChipText: {
+    color: "#2563EB",
+    fontWeight: "600",
+  },
 })

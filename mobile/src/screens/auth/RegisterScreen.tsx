@@ -201,15 +201,21 @@ export default function RegisterScreen() {
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <Feather name="arrow-left" size={24} color="#111827" />
+          <Feather name="arrow-left" size={22} color="#111827" />
         </TouchableOpacity>
+
         <View style={styles.headerTextContainer}>
-          <Text style={styles.heading}>{t("register.title") || "Register Your Garage"}</Text>
-          <Text style={styles.subHeading}>
-            {t("register.subtitle") || "Setup your garage and start managing jobs digitally."}
+          <Text style={styles.heading} numberOfLines={1} adjustsFontSizeToFit>
+            {t("register.title") || "Register Garage"}
+          </Text>
+          <Text style={styles.subHeading} numberOfLines={1}>
+            {t("register.subtitle") || "Create your account"}
           </Text>
         </View>
-        <LanguageSelector />
+
+        <View style={styles.languageSelectorWrapper}>
+          <LanguageSelector />
+        </View>
       </View>
 
       {/* SECTION 1: OWNER PROFILE */}
@@ -581,28 +587,33 @@ const styles = StyleSheet.create({
     elevation: 5
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     borderRadius: 12,
     backgroundColor: "#FFFFFF",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
+    marginRight: 10,
     borderWidth: 1,
     borderColor: "#E5E7EB"
   },
   headerTextContainer: {
-    flex: 1
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8
   },
   heading: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "bold",
     color: "#111827"
   },
   subHeading: {
     color: "#6B7280",
-    fontSize: 12,
+    fontSize: 11,
     marginTop: 2
+  },
+  languageSelectorWrapper: {
+    flexShrink: 0
   },
   cardContainer: {
     backgroundColor: "#FFFFFF",

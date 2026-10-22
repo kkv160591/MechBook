@@ -537,8 +537,8 @@ export const translations = {
 
     // Register Screen - English
     register: {
-      title: "Register Your Garage",
-      subtitle: "Setup your garage and start managing jobs digitally.",
+      title: "Register Garage",
+      subtitle: "Create your account",
       ownerProfile: "Garage Owner Profile",
       garageDetails: "Garage Details",
       address: "Address",
@@ -1417,8 +1417,8 @@ export const translations = {
 
     // Register Screen - Hindi
     register: {
-      title: "अपना गैराज रजिस्टर करें",
-      subtitle: "अपना गैराज सेटअप करें और डिजिटल रूप से जॉब्स मैनेज करना शुरू करें।",
+      title: "गैरेज रजिस्टर करें",
+      subtitle: "अपना अकाउंट बनाएं",
       ownerProfile: "गैराज मालिक की प्रोफाइल",
       garageDetails: "गैराज का विवरण",
       address: "पता",

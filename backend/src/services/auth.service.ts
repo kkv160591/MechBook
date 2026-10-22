@@ -38,7 +38,8 @@ export const registerGarage =
       state,
       country,
       address,
-      logo
+      logo,
+      vehicleTypes
     } = data
 
     const existingGarage =
@@ -108,6 +109,9 @@ export const registerGarage =
       logo:
         logo || "",
 
+      vehicleTypes: 
+        Array.isArray(vehicleTypes) ? vehicleTypes : ["2-Wheeler", "Car & SUV"],
+
       isActive:
         true,
 
@@ -141,7 +145,10 @@ export const registerGarage =
         garage.ownerName,
 
       phone:
-        garage.phone
+        garage.phone,
+
+      vehicleTypes:
+        garage.vehicleTypes
     }
   }
 
@@ -244,7 +251,10 @@ export const loginUser =
             owner.garageName,
 
           phone:
-            owner.phone
+            owner.phone,
+
+          vehicleTypes:
+            owner.vehicleTypes || ["2-Wheeler", "Car & SUV"]
         }
       }
     }

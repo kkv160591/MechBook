@@ -13,8 +13,7 @@ import { Country, State, City } from "country-state-city"
 import { useNavigation } from "@react-navigation/native"
 import { Feather, Ionicons } from "@expo/vector-icons"
 import { useTranslation } from "../../context/LanguageContext"
-// Import your garage service API calls here
-// import { getGarageProfile, updateGarageProfile } from "../../services/garageService"
+import { getGarageProfile, updateGarageProfile } from "../../services/garageService"
 
 const VEHICLE_SPECIALIZATIONS = [
   { id: "2-Wheeler", label: "2-Wheeler (Bike/Scooter)" },
@@ -72,53 +71,57 @@ export default function GarageProfileScreen() {
     try {
       setFetching(true)
       
-      // Fetch backend data (Replace with real API call: const response = await getGarageProfile())
-      // Example payload structure matching your API response:
-      const data = {
-        country: "India",
-        address: "Kasarsai",
-        role: "owner",
-        city: "Pune",
-        garageName: "Amit Garage",
-        garageId: "919926f5-150e-44c1-82bd-88e04a13cbe0",
-        isActive: true,
-        userId: "919926f5-150e-44c1-82bd-88e04a13cbe0",
-        createdAt: "2026-09-13T07:41:29.764Z",
-        ownerName: "Amit Sinha",
-        phone: "7972482572",
-        logo: "",
-        state: "Maharashtra",
-        userType: "owner"
-      }
+      const response = await getGarageProfile()
+      const data = response?.garage || response?.data || response
 
-      // Populate text state values directly
-      setGarageName(data.garageName || "")
-      setOwnerName(data.ownerName || "")
-      setPhone(data.phone || "")
-      setAddress1(data.address || "")
-      setCity(data.city || "")
-      setState(data.state || "")
-      setCountry(data.country || "India")
-
-      // Match Country ISO Code
-      const matchedCountry = Country.getAllCountries().find(
-        (c) => c.name.toLowerCase() === (data.country || "india").toLowerCase()
-      )
-
-      if (matchedCountry) {
-        setSelectedCountryIso(matchedCountry.isoCode)
+      if (data) {
+        setGarageName(data.garageName || "")
+        setOwnerName(data.ownerName || "")
+        setPhone(data.phone || "")
+        setGstNumber(data.gstNumber || "")
+        setEmail(data.email || "")
+        setPincode(data.pincode || "")
         
-        // Match State ISO Code using matched country ISO
-        if (data.state) {
-          const matchedState = State.getStatesOfCountry(matchedCountry.isoCode).find(
-            (s) => s.name.toLowerCase() === data.state.toLowerCase()
-          )
-          if (matchedState) {
-            setSelectedStateIso(matchedState.isoCode)
+        // Handle address parsing if split or stored as a single string
+        if (data.address) {
+          const addressParts = data.address.split(",")
+          setAddress1(addressParts[0]?.trim() || "")
+          setAddress2(addressParts.slice(1).join(",").trim() || "")
+        } else {
+          setAddress1("")
+          setAddress2("")
+        }
+
+        setCity(data.city || "")
+        setState(data.state || "")
+        setCountry(data.country || "India")
+
+        // Set vehicle specializations if returned from backend
+        if (Array.isArray(data.vehicleTypes) && data.vehicleTypes.length > 0) {
+          setSelectedVehicles(data.vehicleTypes)
+        }
+
+        // Match Country ISO Code
+        const matchedCountry = Country.getAllCountries().find(
+          (c) => c.name.toLowerCase() === (data.country || "india").toLowerCase()
+        )
+
+        if (matchedCountry) {
+          setSelectedCountryIso(matchedCountry.isoCode)
+          
+          // Match State ISO Code using matched country ISO
+          if (data.state) {
+            const matchedState = State.getStatesOfCountry(matchedCountry.isoCode).find(
+              (s) => s.name.toLowerCase() === data.state.toLowerCase()
+            )
+            if (matchedState) {
+              setSelectedStateIso(matchedState.isoCode)
+            }
           }
         }
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.log("Load profile error:", error?.response?.data || error?.message)
       Alert.alert("Error", "Failed to load garage profile.")
     } finally {
       setFetching(false)
@@ -206,10 +209,9 @@ export default function GarageProfileScreen() {
         email
       }
 
-      // const response = await updateGarageProfile(payload)
-      const response = { success: true }
+      const response = await updateGarageProfile(payload)
 
-      if (response?.success) {
+      if (response?.success !== false) {
         Alert.alert(
           t("common.successTitle") || "Success",
           "Garage profile updated successfully!"
@@ -258,9 +260,9 @@ export default function GarageProfileScreen() {
           <Feather name="arrow-left" size={24} color="#111827" />
         </TouchableOpacity>
         <View style={styles.headerTextContainer}>
-          <Text style={styles.heading}>{t("garageProfile.title")}</Text>
+          <Text style={styles.heading}>{t("garageProfile.title") || "Garage Profile"}</Text>
           <Text style={styles.subHeading}>
-            {t("garageProfile.subtitle")}
+            {t("garageProfile.subtitle") || "Manage your garage details"}
           </Text>
         </View>
       </View>
@@ -571,7 +573,7 @@ export default function GarageProfileScreen() {
         {loading ? (
           <ActivityIndicator color="white" />
         ) : (
-          <Text style={styles.buttonText}>{t("garageProfile.saveBtn")}</Text>
+          <Text style={styles.buttonText}>{t("garageProfile.saveBtn") || "Save Changes"}</Text>
         )}
       </TouchableOpacity>
 
@@ -710,7 +712,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#F9FAFB"
+    borderBottomColor: "#F1F5F9"
   },
   dropdownItemText: {
     fontSize: 13,
