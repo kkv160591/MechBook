@@ -35,7 +35,8 @@ const formatDate = (value: any) => {
 
 const buildJobSheetHtml = (
   job: any,
-  assignedWorker?: any
+  assignedWorker?: any,
+  t: (key: string) => string = (k) => k // Fallback translation function
 ) => {
   const services = Array.isArray(job.services)
     ? job.services
@@ -193,7 +194,7 @@ const buildJobSheetHtml = (
       ? `
         <tr>
           <td colspan="5" class="empty">
-            No services added
+            ${escapeHtml(t("jobs.noServicesAdded") || "No services added")}
           </td>
         </tr>
       `
@@ -257,7 +258,7 @@ const buildJobSheetHtml = (
       ? `
         <tr>
           <td colspan="5" class="empty">
-            No parts added
+            ${escapeHtml(t("jobs.noPartsAdded") || "No parts added")}
           </td>
         </tr>
       `
@@ -325,10 +326,6 @@ const buildJobSheetHtml = (
 
   /*
    * GARAGE INFORMATION
-   *
-   * Supports several possible field names so
-   * the document can use whatever your backend
-   * currently returns.
    */
 
   const garageName =
@@ -433,7 +430,7 @@ const buildJobSheetHtml = (
 <meta charset="UTF-8" />
 
 <title>
-  Job Sheet - ${escapeHtml(
+  ${escapeHtml(t("jobs.jobSheetTitle") || "JOB SHEET")} - ${escapeHtml(
     vehicleNumber
   )}
 </title>
@@ -599,18 +596,14 @@ body {
 */
 
 .notes-box {
-  border:
-    1px solid #D1D5DB;
-
-  border-radius: 5px;
-
-  padding: 10px;
-
-  margin-top: 8px;
-
-  min-height: 35px;
-
+  background: #F9FAFB;
+  border-left: 3px solid #D1D5DB;
+  padding: 8px 12px;
+  margin-top: 4px;
+  color: #1F2937;
+  font-size: 11px;
   white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /*
@@ -834,7 +827,7 @@ td {
         garageOwner
           ? `
             <div class="garage-info">
-              Owner:
+              ${escapeHtml(t("jobs.owner") || "Owner")}:
               ${escapeHtml(garageOwner)}
             </div>
           `
@@ -857,7 +850,7 @@ td {
         garagePhone
           ? `
             <div class="garage-info">
-              Phone:
+              ${escapeHtml(t("jobs.phone") || "Phone")}:
               ${escapeHtml(
                 garagePhone
               )}
@@ -871,18 +864,18 @@ td {
     <div>
 
       <div class="document-title">
-        JOB SHEET
+        ${escapeHtml(t("jobs.jobSheetTitle") || "JOB SHEET")}
       </div>
 
       <div class="document-number">
-        Job ID:
+        ${escapeHtml(t("jobs.jobIdLabel") || "Job ID")}:
         ${escapeHtml(
           job.jobId || "-"
         )}
       </div>
 
       <div class="document-number">
-        Created:
+        ${escapeHtml(t("jobs.createdLabel") || "Created")}:
         ${formatDate(
           job.createdAt
         )}
@@ -900,14 +893,14 @@ td {
 <div class="section">
 
   <div class="section-title">
-    Customer Information
+    ${escapeHtml(t("jobs.customerInfo") || "Customer Information")}
   </div>
 
   <div class="info-grid">
 
     <div class="info-item">
       <div class="info-label">
-        Customer Name
+        ${escapeHtml(t("jobs.customerName") || "Customer Name")}
       </div>
 
       <div class="info-value">
@@ -917,7 +910,7 @@ td {
 
     <div class="info-item">
       <div class="info-label">
-        Phone
+        ${escapeHtml(t("jobs.phone") || "Phone")}
       </div>
 
       <div class="info-value">
@@ -927,7 +920,7 @@ td {
 
     <div class="info-item">
       <div class="info-label">
-        Address
+        ${escapeHtml(t("jobs.customerAddress") || "Address")}
       </div>
 
       <div class="info-value">
@@ -937,7 +930,7 @@ td {
 
     <div class="info-item">
       <div class="info-label">
-        Job Status
+        ${escapeHtml(t("jobs.jobStatus") || "Job Status")}
       </div>
 
       <div class="info-value">
@@ -957,14 +950,14 @@ td {
 <div class="section">
 
   <div class="section-title">
-    Vehicle Information
+    ${escapeHtml(t("jobs.vehicleDetails") || "Vehicle Information")}
   </div>
 
   <div class="info-grid">
 
     <div class="info-item">
       <div class="info-label">
-        Registration Number
+        ${escapeHtml(t("jobs.vehicleNumber") || "Registration Number")}
       </div>
 
       <div class="info-value">
@@ -976,7 +969,7 @@ td {
 
     <div class="info-item">
       <div class="info-label">
-        Vehicle
+        ${escapeHtml(t("jobs.vehicle") || "Vehicle")}
       </div>
 
       <div class="info-value">
@@ -988,7 +981,7 @@ td {
 
     <div class="info-item">
       <div class="info-label">
-        Vehicle Type
+        ${escapeHtml(t("jobs.vehicleType") || "Vehicle Type")}
       </div>
 
       <div class="info-value">
@@ -1000,7 +993,7 @@ td {
 
     <div class="info-item">
       <div class="info-label">
-        Odometer
+        ${escapeHtml(t("jobs.odometer") || "Odometer")}
       </div>
 
       <div class="info-value">
@@ -1024,14 +1017,14 @@ td {
 <div class="section">
 
   <div class="section-title">
-    Job Information
+    ${escapeHtml(t("jobs.jobInformation") || "Job Information")}
   </div>
 
   <div class="info-grid">
 
     <div class="info-item">
       <div class="info-label">
-        Assigned Worker
+        ${escapeHtml(t("jobs.assignedWorker") || "Assigned Worker")}
       </div>
 
       <div class="info-value">
@@ -1043,7 +1036,7 @@ td {
 
     <div class="info-item">
       <div class="info-label">
-        Priority
+        ${escapeHtml(t("jobs.priority") || "Priority")}
       </div>
 
       <div class="info-value">
@@ -1055,7 +1048,7 @@ td {
 
     <div class="info-item">
       <div class="info-label">
-        Expected Delivery
+        ${escapeHtml(t("jobs.delivery") || "Expected Delivery")}
       </div>
 
       <div class="info-value">
@@ -1067,7 +1060,7 @@ td {
 
     <div class="info-item">
       <div class="info-label">
-        Job Created
+        ${escapeHtml(t("jobs.createdLabel") || "Job Created")}
       </div>
 
       <div class="info-value">
@@ -1083,7 +1076,7 @@ td {
     class="info-label"
     style="margin-top:10px;"
   >
-    Customer Complaint
+    ${escapeHtml(t("jobs.complaint") || "Customer Complaint")}
   </div>
 
   <div class="notes-box">
@@ -1096,7 +1089,7 @@ td {
     class="info-label"
     style="margin-top:10px;"
   >
-    Inspection Notes
+    ${escapeHtml(t("jobs.inspection") || "Inspection Notes")}
   </div>
 
   <div class="notes-box">
@@ -1113,7 +1106,7 @@ td {
 <div class="section">
 
   <div class="section-title">
-    Services
+    ${escapeHtml(t("jobs.services") || "Services")}
   </div>
 
   <table>
@@ -1123,23 +1116,23 @@ td {
       <tr>
 
         <th>
-          Service
+          ${escapeHtml(t("jobs.service") || "Service")}
         </th>
 
         <th class="center">
-          Qty
+          ${escapeHtml(t("jobs.qty") || "Qty")}
         </th>
 
         <th class="right">
-          Estimated Unit
+          ${escapeHtml(t("jobs.estimatedPrice") || "Estimated Unit")}
         </th>
 
         <th class="right">
-          Actual Unit
+          ${escapeHtml(t("jobs.actualPrice") || "Actual Unit")}
         </th>
 
         <th class="right">
-          Actual Total
+          ${escapeHtml(t("jobs.actualTotal") || "Actual Total")}
         </th>
 
       </tr>
@@ -1160,7 +1153,7 @@ td {
 <div class="section">
 
   <div class="section-title">
-    Spare Parts / Inventory
+    ${escapeHtml(t("jobs.sparePartsAndInventory") || "Spare Parts / Inventory")}
   </div>
 
   <table>
@@ -1170,23 +1163,23 @@ td {
       <tr>
 
         <th>
-          Part
+          ${escapeHtml(t("jobs.part") || "Part")}
         </th>
 
         <th class="center">
-          Qty
+          ${escapeHtml(t("jobs.qty") || "Qty")}
         </th>
 
         <th class="right">
-          Estimated Unit
+          ${escapeHtml(t("jobs.estimatedPrice") || "Estimated Unit")}
         </th>
 
         <th class="right">
-          Actual Unit
+          ${escapeHtml(t("jobs.actualPrice") || "Actual Unit")}
         </th>
 
         <th class="right">
-          Actual Total
+          ${escapeHtml(t("jobs.actualTotal") || "Actual Total")}
         </th>
 
       </tr>
@@ -1207,7 +1200,7 @@ td {
 <div class="section">
 
   <div class="section-title">
-    Cost Summary
+    ${escapeHtml(t("jobs.billingSummary") || "Cost Summary")}
   </div>
 
   <div class="summary-wrapper">
@@ -1217,7 +1210,7 @@ td {
       <div class="summary-row">
 
         <span class="summary-label">
-          Services
+          ${escapeHtml(t("jobs.servicesSubtotal") || "Services")}
         </span>
 
         <span class="summary-value">
@@ -1231,7 +1224,7 @@ td {
       <div class="summary-row">
 
         <span class="summary-label">
-          Parts
+          ${escapeHtml(t("jobs.partsSubtotal") || "Parts")}
         </span>
 
         <span class="summary-value">
@@ -1245,7 +1238,7 @@ td {
       <div class="summary-row">
 
         <span class="summary-label">
-          Labor
+          ${escapeHtml(t("jobs.laborFee") || "Labor")}
         </span>
 
         <span class="summary-value">
@@ -1262,7 +1255,7 @@ td {
             <div class="summary-row">
 
               <span class="summary-label">
-                Discount
+                ${escapeHtml(t("jobs.discountLabel") || "Discount")}
                 (${discountPercent}%)
               </span>
 
@@ -1283,7 +1276,7 @@ td {
       >
 
         <span>
-          Estimated Total
+          ${escapeHtml(t("jobs.estimatedBill") || "Estimated Total")}
         </span>
 
         <span>
@@ -1299,7 +1292,7 @@ td {
       >
 
         <span>
-          Current Total
+          ${escapeHtml(t("jobs.currentActualTotal") || "Current Total")}
         </span>
 
         <span>
@@ -1322,27 +1315,26 @@ td {
 <div class="section">
 
   <div class="section-title">
-    Customer Approval
+    ${escapeHtml(t("jobs.customerApproval") || "Customer Approval")}
   </div>
 
   <div class="approval-box">
 
-    I confirm that the above vehicle details,
-    requested work, services and parts have
-    been reviewed. I understand that the
-    current total may change if additional
-    work or parts are required and approved.
+    ${escapeHtml(
+      t("jobs.approvalText") ||
+        "I confirm that the above vehicle details, requested work, services and parts have been reviewed. I understand that the current total may change if additional work or parts are required and approved."
+    )}
 
   </div>
 
   <div class="signature-container">
 
     <div class="signature">
-      Customer Signature
+      ${escapeHtml(t("jobs.customerSignature") || "Customer Signature")}
     </div>
 
     <div class="signature">
-      Garage Representative
+      ${escapeHtml(t("jobs.garageRepresentative") || "Garage Representative")}
     </div>
 
   </div>
@@ -1352,8 +1344,7 @@ td {
 
 <div class="footer">
 
-  Job Sheet &nbsp;•&nbsp;
-  This document is not a tax invoice.
+  ${escapeHtml(t("jobs.notInvoice") || "Job Sheet • This document is not a tax invoice.")}
 
 </div>
 
@@ -1365,10 +1356,6 @@ td {
 
 /*
  * WEB PRINT
- *
- * Creates a completely separate browser
- * document. Therefore your React Native
- * buttons cannot appear in the printout.
  */
 
 const printWebJobSheet = async (
@@ -1434,19 +1421,18 @@ const printWebJobSheet = async (
 
 export const printJobSheet = async (
   job: any,
-  assignedWorker?: any
+  assignedWorker?: any,
+  t?: (key: string) => string
 ) => {
   const html =
     buildJobSheetHtml(
       job,
-      assignedWorker
+      assignedWorker,
+      t
     )
 
   /*
    * WEB
-   *
-   * Never print the React Native
-   * application screen.
    */
 
   if (Platform.OS === "web") {
@@ -1465,12 +1451,14 @@ export const printJobSheet = async (
 
 export const shareJobSheet = async (
   job: any,
-  assignedWorker?: any
+  assignedWorker?: any,
+  t?: (key: string) => string
 ) => {
   const html =
     buildJobSheetHtml(
       job,
-      assignedWorker
+      assignedWorker,
+      t
     )
 
   /*

@@ -48,12 +48,20 @@ export default function GSTConfigScreen({ navigation }: any) {
   const loadSettings = async () => {
     try {
       const data = await getGSTSettings()
+
       if (data) {
         setEnabled(data.enabled ?? false)
         setGstNumber(data.gstNumber ?? "")
         setDefaultRate(data.defaultRate ?? 18)
         setApplyMode(data.applyMode ?? "invoice")
       }
+    } catch (error) {
+      console.error("Failed to load GST settings:", error)
+
+      Alert.alert(
+        t("common.errorTitle"),
+        t("gstConfig.errorMsg")
+      )
     } finally {
       setLoading(false)
     }

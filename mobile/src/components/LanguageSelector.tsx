@@ -10,10 +10,16 @@ import { useTranslation, LanguageKey } from "../context/LanguageContext"
 
 const AVAILABLE_LANGUAGES: { key: LanguageKey; label: string }[] = [
   { key: "en", label: "English" },
-  { key: "hi", label: "हिंदी" },
-  // Add future languages here:
-  // { key: "mr", label: "मराठी" },
-]
+  { key: "hi", label: "हिन्दी" },
+  { key: "bn", label: "বাংলা" },
+  { key: "mr", label: "मराठी" },
+  { key: "te", label: "తెలుగు" },
+  { key: "ta", label: "தமிழ்" },
+  { key: "gu", label: "ગુજરાતી" },
+  { key: "ur", label: "اردو" },
+  { key: "kn", label: "ಕನ್ನಡ" },
+  { key: "or", label: "ଓଡ଼ିଆ" },
+];
 
 export default function LanguageSelector() {
   const { language, changeLanguage } = useTranslation()

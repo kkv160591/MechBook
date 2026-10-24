@@ -125,16 +125,16 @@ export default function JobDetailScreen({ route, navigation }: any) {
 
   const handlePrintJobSheet = async () => {
     try {
-      await printJobSheet(job, assignedWorker)
+      await printJobSheet(job, assignedWorker, t)
     } catch (err) {
       console.log("PRINT JOB SHEET ERROR:", err)
 
       if (Platform.OS === "web") {
-        window.alert("Unable to print job sheet.")
+        window.alert(t("jobs.unableToPrintJobSheet") || "Unable to print job sheet.")
       } else {
         Alert.alert(
           t("jobs.errorTitle"),
-          "Unable to print job sheet."
+          t("jobs.unableToPrintJobSheet") || "Unable to print job sheet."
         )
       }
     }
@@ -142,18 +142,19 @@ export default function JobDetailScreen({ route, navigation }: any) {
 
   const handleShareJobSheet = async () => {
     try {
-      await shareJobSheet(job, assignedWorker)
+      await shareJobSheet(job, assignedWorker, t)
     } catch (err) {
       console.log("SHARE JOB SHEET ERROR:", err)
 
       if (Platform.OS === "web") {
         window.alert(
-          "Job sheet sharing is not available on this browser."
+          t("jobs.shareNotAvailableWeb") ||
+            "Job sheet sharing is not available on this browser."
         )
       } else {
         Alert.alert(
           t("jobs.errorTitle"),
-          "Unable to share job sheet."
+          t("jobs.unableToShareJobSheet") || "Unable to share job sheet."
         )
       }
     }
@@ -517,7 +518,7 @@ export default function JobDetailScreen({ route, navigation }: any) {
           />
 
           <Text style={styles.jobSheetButtonText}>
-            Print Job Sheet
+            {t("jobs.printJobSheet") || "Print Job Sheet"}
           </Text>
         </TouchableOpacity>
 
@@ -533,7 +534,7 @@ export default function JobDetailScreen({ route, navigation }: any) {
           />
 
           <Text style={styles.jobSheetButtonText}>
-            Share Job Sheet
+            {t("jobs.shareJobSheet") || "Share Job Sheet"}
           </Text>
         </TouchableOpacity>
 

@@ -1359,8 +1359,6 @@ export default function AddJobScreen({ navigation }: any) {
                       customerName.trim().length > 0
                     )
                   }}
-                  placeholder="Enter customer name"
-                  placeholderTextColor="#9CA3AF"
                 />
 
                 {showCustomerSuggestions &&
@@ -1457,8 +1455,6 @@ export default function AddJobScreen({ navigation }: any) {
                       phone.length > 0
                     )
                   }}
-                  placeholder="Enter 10 digit phone number"
-                  placeholderTextColor="#9CA3AF"
                 />
 
                 {showCustomerSuggestions &&
@@ -1523,8 +1519,6 @@ export default function AddJobScreen({ navigation }: any) {
                 onFocus={closeDropdowns}
                 onChangeText={setCustomerAddress}
                 multiline
-                placeholder="Customer address"
-                placeholderTextColor="#9CA3AF"
               />
             </View>
 

@@ -7,6 +7,11 @@ export const getAllSettings = async () => {
   return response.data
 }
 
+export const getGSTSettings = async () => {
+  const response = await api.get("/api/settings/gst")
+  return response.data
+}
+
 export const updateGSTSettings = async (data: any) => {
   const response = await api.put("/api/settings/gst", data)
   return response.data
