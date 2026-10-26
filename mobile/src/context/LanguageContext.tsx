@@ -7,7 +7,7 @@ import React, {
 } from "react"
 
 import AsyncStorage from "@react-native-async-storage/async-storage"
-import { translations } from "../i18n/translations"
+import { translations } from "../i18n";
 import { updateLanguageSettings } from "../services/settingsService"
 
 export type LanguageKey = keyof typeof translations
@@ -79,22 +79,22 @@ export const LanguageProvider = ({
   }
 
   const t = (keyPath: string): string => {
-    const keys = keyPath.split(".")
-    let current: any = translations[language] || translations["en"]
+    const keys = keyPath.split(".");
+    let current: any = translations[language] || translations["en"];
 
     for (const key of keys) {
       if (current && current[key] !== undefined) {
-        current = current[key]
+        current = current[key];
       } else {
-        let fallback: any = translations["en"]
+        let fallback: any = translations["en"];
         for (const k of keys) {
-          fallback = fallback?.[k]
+          fallback = fallback?.[k];
         }
-        return fallback || keyPath
+        return fallback || keyPath;
       }
     }
-    return current
-  }
+    return current;
+  };
 
   return (
     <LanguageContext.Provider
