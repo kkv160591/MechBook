@@ -294,14 +294,10 @@ async (
 
 
     return res.json({
-
       success: true,
-
-      message:
-        "Payment verified successfully",
-
+      message: "Payment verified successfully",
+      paymentStatus: "CAPTURED",
       subscription
-
     })
 
   } catch (error) {
@@ -472,14 +468,10 @@ async (
 
 
     return res.json({
-
       success: true,
-
-      message:
-        "Booster payment verified successfully",
-
+      message: "Booster payment verified successfully",
+      paymentStatus: "CAPTURED",
       subscription
-
     })
 
   } catch (error) {
@@ -615,10 +607,16 @@ async (
     }
 
 
-    const eventId =
-      req.headers[
-        "x-razorpay-event-id"
-      ] as string
+    const eventId = req.headers[
+      "x-razorpay-event-id"
+    ] as string
+
+    if (!eventId) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing Razorpay event ID"
+      })
+    }
 
 
     console.log(
@@ -631,6 +629,19 @@ async (
 
       }
     )
+
+    const claimed = await subscriptionService.claimWebhookEvent(
+      eventId,
+      event.event
+    );
+
+    if (!claimed) {
+      return res.status(200).json({
+        success: true,
+        message: "Webhook event already processed or currently being processed",
+        eventId,
+      });
+    }
 
 
     /*
@@ -664,77 +675,34 @@ async (
 
       }
 
-
-      const orderId =
-        payment.order_id
-
-
-      const paymentId =
-        payment.id
-
-
-      const amount =
-        Number(
-          payment.amount
-        )
-
-
-      /*
-       * IMPORTANT:
-       *
-       * Do not rely only on payment.notes.
-       *
-       * Your payment belongs to the Razorpay order.
-       * Your application already stored the pending order.
-       *
-       * We use the order metadata when available,
-       * but payment processing still validates the
-       * pending order/amount server-side.
-       */
-
-      const garageId =
-        payment?.notes?.garageId
-
+      const orderId = payment.order_id
+      const paymentId = payment.id
+      const amount = Number(payment.amount)
+      const currency = payment.currency
 
       if (
-        !garageId ||
-        typeof garageId !== "string"
+        !orderId ||
+        !paymentId ||
+        !Number.isInteger(amount) ||
+        !currency
       ) {
-
-        console.error(
-          "Webhook payment missing garageId",
-          {
-            orderId,
-            paymentId
-          }
-        )
-
-
-        return res.status(200).json({
-
-          success: true,
-
-          message:
-            "Webhook acknowledged"
-
+        return res.status(400).json({
+          success: false,
+          message: "Invalid captured payment details"
         })
-
       }
 
+      await subscriptionService.processRazorpayPaymentCaptured(
+        orderId,
+        paymentId,
+        amount,
+        currency
+      )
 
-      await subscriptionService
-        .processRazorpayPaymentCaptured(
-
-          garageId,
-
-          orderId,
-
-          paymentId,
-
-          amount
-
-        )
-
+      await subscriptionService.markWebhookEventProcessed(
+        eventId,
+        event.event
+      )
 
       return res.status(200).json({
 
@@ -769,34 +737,30 @@ async (
 
 
       if (!payment) {
+        return res.status(400).json({
+          success: false,
+          message: "Payment entity missing from payment.failed event",
+        });
+      }
 
-        return res.status(200).json({
-          success: true
+      const orderId = payment.order_id
+
+      if (!orderId || !payment.id) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid failed payment payload"
         })
-
       }
 
+      await subscriptionService.processRazorpayPaymentFailed(
+        orderId,
+        payment
+      )
 
-      const garageId =
-        payment?.notes?.garageId
-
-
-      if (
-        garageId &&
-        typeof garageId === "string"
-      ) {
-
-        await subscriptionService
-          .processRazorpayPaymentFailed(
-
-            garageId,
-
-            payment
-
-          )
-
-      }
-
+      await subscriptionService.markWebhookEventProcessed(
+        eventId,
+        event.event
+      )
 
       return res.status(200).json({
 
@@ -810,6 +774,11 @@ async (
       })
 
     }
+
+    await subscriptionService.markWebhookEventProcessed(
+      eventId,
+      event.event
+    )
 
 
     return res.status(200).json({

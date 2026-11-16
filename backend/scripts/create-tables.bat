@@ -82,3 +82,20 @@ aws dynamodb create-table ^
 --billing-mode PAY_PER_REQUEST ^
 --endpoint-url http://localhost:8000 ^
 --region ap-south-1
+
+aws dynamodb create-table ^
+  --table-name PaymentOrders ^
+  --attribute-definitions ^
+    AttributeName=orderId,AttributeType=S ^
+  --key-schema ^
+    AttributeName=orderId,KeyType=HASH ^
+  --billing-mode PAY_PER_REQUEST ^
+  --endpoint-url http://localhost:8000 ^
+  --region ap-south-1
+
+aws dynamodb create-table ^
+  --table-name WebhookEvents ^
+  --attribute-definitions AttributeName=eventId,AttributeType=S ^
+  --key-schema AttributeName=eventId,KeyType=HASH ^
+  --billing-mode PAY_PER_REQUEST ^
+  --endpoint-url http://localhost:8000

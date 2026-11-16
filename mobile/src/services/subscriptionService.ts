@@ -418,7 +418,7 @@ export type VerifyPaymentRequest = {
 }
 
 export type VerifyPaymentResponse = {
-  success?: boolean
+  success: boolean
   message?: string
   paymentStatus?: string
   planCode?: string
@@ -430,129 +430,98 @@ export type VerifyPaymentResponse = {
   subscription?: SubscriptionRecord
 }
 
-export const verifySubscriptionPayment =
-async (
+export const verifySubscriptionPayment = async (
   payload: VerifyPaymentRequest
 ): Promise<VerifyPaymentResponse> => {
   try {
-    const response =
-      await api.post<VerifyPaymentResponse>(
-        "/api/subscription/payment/verify",
-        {
-          razorpay_payment_id:
-            payload.razorpayPaymentId,
-          razorpay_order_id:
-            payload.razorpayOrderId,
-          razorpay_signature:
-            payload.razorpaySignature
-        }
-      )
+    const response = await api.post<VerifyPaymentResponse>(
+      "/api/subscription/payment/verify",
+      {
+        razorpay_payment_id: payload.razorpayPaymentId,
+        razorpay_order_id: payload.razorpayOrderId,
+        razorpay_signature: payload.razorpaySignature
+      }
+    );
 
-    const data = response.data
+    const data = response.data;
 
-    // Some backend versions return the updated subscription nested under
-    // `subscription`. Keep the verification result convenient for the UI.
-    if (data?.subscription) {
+    if (
+      data?.success !== true ||
+      data?.paymentStatus?.toUpperCase() !== "CAPTURED"
+    ) {
+      throw {
+        message:
+          data?.message ||
+          "Payment verification is not yet confirmed."
+      } satisfies SubscriptionServiceError;
+    }
+
+    if (data.subscription) {
       currentGarageId =
-        data.subscription.garageId ??
-        currentGarageId
+        data.subscription.garageId ?? currentGarageId;
     }
 
     return {
       ...data,
       garageId:
-        data?.garageId ??
-        data?.subscription?.garageId,
+        data.garageId ?? data.subscription?.garageId,
       planCode:
-        data?.planCode ??
-        data?.subscription?.planCode,
+        data.planCode ?? data.subscription?.planCode,
       planName:
-        data?.planName ??
-        data?.subscription?.planName,
+        data.planName ?? data.subscription?.planName,
       billingCycle:
-        data?.billingCycle ??
-        data?.subscription?.billingCycle,
+        data.billingCycle ?? data.subscription?.billingCycle,
       paymentStatus:
-        data?.paymentStatus ??
-        data?.subscription?.paymentStatus
-    }
-  }
-  catch (error) {
-    console.log(
-      "verifySubscriptionPayment failed:",
-      error
-    )
-
-    throw normalizeError(error)
+        data.paymentStatus ?? data.subscription?.paymentStatus
+    };
+  } catch (error) {
+    console.log("verifySubscriptionPayment failed:", error);
+    throw normalizeError(error);
   }
 }
 
-export const verifyBoosterPayment =
-async (
+export const verifyBoosterPayment = async (
   payload: VerifyPaymentRequest
 ): Promise<VerifyPaymentResponse> => {
-
   try {
+    const response = await api.post<VerifyPaymentResponse>(
+      "/api/subscription/booster/verify",
+      {
+        razorpay_payment_id: payload.razorpayPaymentId,
+        razorpay_order_id: payload.razorpayOrderId,
+        razorpay_signature: payload.razorpaySignature
+      }
+    );
 
-    const response =
-      await api.post<VerifyPaymentResponse>(
-        "/api/subscription/booster/verify",
-        {
-          razorpay_payment_id:
-            payload.razorpayPaymentId,
-
-          razorpay_order_id:
-            payload.razorpayOrderId,
-
-          razorpay_signature:
-            payload.razorpaySignature
-        }
-      )
-
-    const data =
-      response.data
+    const data = response.data;
 
     if (
-      data?.subscription
+      data?.success !== true ||
+      data?.paymentStatus?.toUpperCase() !== "CAPTURED"
     ) {
+      throw {
+        message:
+          data?.message ||
+          "Booster payment verification is not yet confirmed."
+      } satisfies SubscriptionServiceError;
+    }
 
+    if (data.subscription) {
       currentGarageId =
-        data.subscription.garageId ??
-        currentGarageId
-
+        data.subscription.garageId ?? currentGarageId;
     }
 
     return {
-
       ...data,
-
       garageId:
-        data?.garageId ??
-        data?.subscription?.garageId,
-
+        data.garageId ?? data.subscription?.garageId,
       paymentStatus:
-        data?.paymentStatus ??
-        data?.subscription?.paymentStatus,
-
-      boosterCode:
-        data?.boosterCode,
-
-      jobsAdded:
-        data?.jobsAdded
-
-    }
-
+        data.paymentStatus ?? data.subscription?.paymentStatus,
+      boosterCode: data.boosterCode,
+      jobsAdded: data.jobsAdded
+    };
+  } catch (error) {
+    console.log("verifyBoosterPayment failed:", error);
+    throw normalizeError(error);
   }
-
-  catch (error) {
-
-    console.log(
-      "verifyBoosterPayment failed:",
-      error
-    )
-
-    throw normalizeError(error)
-
-  }
-
 }

@@ -409,20 +409,38 @@ export default function PlanUsageScreen() {
           throw new Error("Razorpay returned incomplete payment information.")
         }
 
-        const verification = await verifySubscriptionPayment({
-          razorpayPaymentId: paymentResult.razorpay_payment_id,
-          razorpayOrderId: paymentResult.razorpay_order_id,
-          razorpaySignature: paymentResult.razorpay_signature
-        })
+        let verification
 
-        const paymentVerified =
-          verification?.success !== false &&
-          (verification?.paymentStatus === undefined ||
-            verification?.paymentStatus === "PAID" ||
-            verification?.paymentStatus === "CAPTURED")
+        try {
+          verification = await verifySubscriptionPayment({
+            razorpayOrderId: paymentResult.razorpay_order_id,
+            razorpayPaymentId: paymentResult.razorpay_payment_id,
+            razorpaySignature: paymentResult.razorpay_signature,
+          })
 
-        if (!paymentVerified) {
-          throw new Error(verification?.message || "Payment verification failed.")
+          const paymentVerified =
+            verification.success === true &&
+            verification.paymentStatus?.toUpperCase() === "CAPTURED"
+
+          if (!paymentVerified) {
+            throw new Error(
+              verification.message || "Payment verification is not yet confirmed."
+            )
+          }
+        } catch (verificationError) {
+          console.error(
+            "Plan payment verification pending:",
+            verificationError
+          )
+
+          await loadPlan(true)
+
+          Alert.alert(
+            "Payment verification pending",
+            "We couldn't confirm your payment right now. Your payment may still be processed. Please refresh your plan status shortly."
+          )
+
+          return
         }
 
         await loadPlan()
@@ -500,20 +518,38 @@ export default function PlanUsageScreen() {
           throw new Error("Razorpay returned incomplete payment information.")
         }
 
-        const verification = await verifyBoosterPayment({
-          razorpayPaymentId: paymentResult.razorpay_payment_id,
-          razorpayOrderId: paymentResult.razorpay_order_id,
-          razorpaySignature: paymentResult.razorpay_signature
-        })
+        let verification
 
-        const paymentVerified =
-          verification?.success !== false &&
-          (verification?.paymentStatus === undefined ||
-            verification?.paymentStatus === "PAID" ||
-            verification?.paymentStatus === "CAPTURED")
+        try {
+          verification = await verifyBoosterPayment({
+            razorpayOrderId: paymentResult.razorpay_order_id,
+            razorpayPaymentId: paymentResult.razorpay_payment_id,
+            razorpaySignature: paymentResult.razorpay_signature,
+          })
 
-        if (!paymentVerified) {
-          throw new Error(verification?.message || "Booster payment verification failed.")
+          const paymentVerified =
+            verification.success === true &&
+            verification.paymentStatus?.toUpperCase() === "CAPTURED"
+
+          if (!paymentVerified) {
+            throw new Error(
+              verification.message || "Payment verification is not yet confirmed."
+            )
+          }
+        } catch (verificationError) {
+          console.error(
+            "Booster payment verification pending:",
+            verificationError
+          )
+
+          await loadPlan(true)
+
+          Alert.alert(
+            "Payment verification pending",
+            "We couldn't confirm your payment right now. Your payment may still be processed. Please refresh your plan status shortly."
+          )
+
+          return
         }
 
         await loadPlan()

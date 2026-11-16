@@ -146,6 +146,51 @@ export const verifyPaymentSignature =
 }
 
 
+type VerifyCapturedPaymentParams = {
+  orderId: string
+  paymentId: string
+  expectedAmount: number
+  expectedCurrency: string
+}
+
+export const verifyCapturedPayment = async ({
+  orderId,
+  paymentId,
+  expectedAmount,
+  expectedCurrency
+}: VerifyCapturedPaymentParams) => {
+  if (!orderId || !paymentId) {
+    throw new Error("Missing Razorpay payment details")
+  }
+
+  if (
+    !Number.isInteger(expectedAmount) ||
+    expectedAmount <= 0
+  ) {
+    throw new Error("Invalid expected payment amount")
+  }
+
+  const payment = await razorpay.payments.fetch(paymentId)
+
+  if (payment.order_id !== orderId) {
+    throw new Error("Payment does not belong to this order")
+  }
+
+  if (payment.status !== "captured") {
+    throw new Error("Payment has not been captured")
+  }
+
+  if (Number(payment.amount) !== expectedAmount) {
+    throw new Error("Payment amount does not match the order")
+  }
+
+  if (payment.currency !== expectedCurrency) {
+    throw new Error("Payment currency does not match the order")
+  }
+
+  return payment
+}
+
 /*
 |--------------------------------------------------------------------------
 | VERIFY RAZORPAY WEBHOOK

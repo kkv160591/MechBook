@@ -5,6 +5,8 @@ import {
   TransactWriteItemsCommand
 } from "@aws-sdk/client-dynamodb"
 
+import crypto from "crypto"
+
 import {
   unmarshall
 } from "@aws-sdk/util-dynamodb"
@@ -15,13 +17,187 @@ import {
 
 import {
   createRazorpayOrder,
-  verifyPaymentSignature
+  verifyPaymentSignature,
+  verifyCapturedPayment
 } from "./razorpay.service"
-
 
 const TABLE =
   process.env.SUBSCRIPTIONS_TABLE_NAME || "Subscriptions"
 
+const WEBHOOK_EVENTS_TABLE =
+  process.env.WEBHOOK_EVENTS_TABLE_NAME || "WebhookEvents"
+
+const PAYMENT_ORDERS_TABLE =
+  process.env.PAYMENT_ORDERS_TABLE_NAME ||
+  "PaymentOrders"
+
+
+export const isWebhookEventProcessed = async (
+  eventId: string
+): Promise<boolean> => {
+  if (!eventId) {
+    throw new Error("Webhook event ID is required")
+  }
+
+  const response = await db.send(
+    new GetItemCommand({
+      TableName: WEBHOOK_EVENTS_TABLE,
+      Key: {
+        eventId: { S: eventId }
+      },
+      ConsistentRead: true
+    })
+  )
+
+  return Boolean(response.Item)
+}
+
+export const markWebhookEventProcessed = async (
+  eventId: string,
+  eventType: string
+) => {
+  if (!eventId || !eventType) {
+    throw new Error("Webhook event ID and type are required");
+  }
+
+  const now = new Date().toISOString();
+
+  await db.send(
+    new UpdateItemCommand({
+      TableName: WEBHOOK_EVENTS_TABLE,
+      Key: {
+        eventId: { S: eventId },
+      },
+      UpdateExpression:
+        "SET #status = :processed, eventType = :eventType, processedAt = :processedAt REMOVE leaseUntil",
+      ConditionExpression: "#status = :processing",
+      ExpressionAttributeNames: {
+        "#status": "status",
+      },
+      ExpressionAttributeValues: {
+        ":processed": { S: "PROCESSED" },
+        ":processing": { S: "PROCESSING" },
+        ":eventType": { S: eventType },
+        ":processedAt": { S: now },
+      },
+    })
+  );
+};
+
+export const claimWebhookEvent = async (
+  eventId: string,
+  eventType: string
+): Promise<boolean> => {
+  if (!eventId || !eventType) {
+    throw new Error("Webhook event ID and type are required");
+  }
+
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const leaseUntil = new Date(
+    now.getTime() + 5 * 60 * 1000
+  ).toISOString();
+
+  try {
+    await db.send(
+      new PutItemCommand({
+        TableName: WEBHOOK_EVENTS_TABLE,
+        Item: {
+          eventId: { S: eventId },
+          eventType: { S: eventType },
+          status: { S: "PROCESSING" },
+          leaseUntil: { S: leaseUntil },
+          createdAt: { S: nowIso },
+        },
+        ConditionExpression: "attribute_not_exists(eventId)",
+      })
+    );
+
+    return true;
+  } catch (error: any) {
+    if (error?.name !== "ConditionalCheckFailedException") {
+      throw error;
+    }
+  }
+
+  const existing = await db.send(
+    new GetItemCommand({
+      TableName: WEBHOOK_EVENTS_TABLE,
+      Key: {
+        eventId: { S: eventId },
+      },
+      ConsistentRead: true,
+    })
+  );
+
+  if (!existing.Item) {
+    return false;
+  }
+
+  if (existing.Item.status?.S === "PROCESSED") {
+    return false;
+  }
+
+  const existingLease = existing.Item.leaseUntil?.S;
+
+  if (!existingLease || existingLease > nowIso) {
+    return false;
+  }
+
+  try {
+    await db.send(
+      new UpdateItemCommand({
+        TableName: WEBHOOK_EVENTS_TABLE,
+        Key: {
+          eventId: { S: eventId },
+        },
+        UpdateExpression:
+          "SET #status = :processing, leaseUntil = :leaseUntil, eventType = :eventType",
+        ConditionExpression:
+          "#status = :processing AND leaseUntil <= :now",
+        ExpressionAttributeNames: {
+          "#status": "status",
+        },
+        ExpressionAttributeValues: {
+          ":processing": { S: "PROCESSING" },
+          ":leaseUntil": { S: leaseUntil },
+          ":eventType": { S: eventType },
+          ":now": { S: nowIso },
+        },
+      })
+    );
+
+    return true;
+  } catch (error: any) {
+    if (error?.name === "ConditionalCheckFailedException") {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+const getPaymentOrder = async (orderId: string) => {
+  if (!orderId) {
+    throw new Error("Razorpay order ID is required")
+  }
+
+  const response = await db.send(
+    new GetItemCommand({
+      TableName: PAYMENT_ORDERS_TABLE,
+      Key: {
+        orderId: { S: orderId }
+      },
+      ConsistentRead: true
+    })
+  )
+
+  if (!response.Item) {
+    throw new Error("Payment order not found")
+  }
+
+  return unmarshall(response.Item)
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -29,10 +205,53 @@ const TABLE =
 |--------------------------------------------------------------------------
 */
 
+type PaymentType = "PLAN" | "BOOSTER"
+
+type PaymentOrderStatus =
+  | "CREATED"
+  | "AUTHORIZED"
+  | "CAPTURED"
+  | "FAILED"
+  | "CANCELLED"
+
+type PaymentOrderRecord = {
+  orderId: string
+  garageId: string
+  paymentType: PaymentType
+  amount: number
+  currency: string
+  status: PaymentOrderStatus
+  createdAt: string
+  updatedAt: string
+
+  planCode?: string
+  billingCycle?: BillingCycle
+
+  boosterCode?: string
+  boosterJobs?: number
+
+  paymentId?: string
+  activatedAt?: string
+}
+
 type BillingCycle =
   | "MONTHLY"
   | "ANNUAL"
 
+type CreatePaymentOrderRecord = {
+  orderId: string
+  garageId: string
+  paymentType: PaymentType
+  amount: number // Razorpay amount in paise
+  currency: string
+  status: "CREATED"
+  createdAt: string
+  updatedAt: string
+  planCode?: string
+  billingCycle?: BillingCycle
+  boosterCode?: string
+  boosterJobs?: number
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -585,258 +804,103 @@ async (
 |--------------------------------------------------------------------------
 */
 
-export const createPlanPaymentOrder =
-async (
+export const createPlanPaymentOrder = async (
   garageId: string,
   planCode: string,
   billingCycle: BillingCycle
 ) => {
+  const normalizedPlanCode = String(planCode || "")
+    .trim()
+    .toUpperCase()
 
-  const normalizedPlanCode =
-    String(
-      planCode || ""
-    )
-      .trim()
-      .toUpperCase()
+  const normalizedBillingCycle = String(billingCycle || "")
+    .trim()
+    .toUpperCase() as BillingCycle
 
-
-  const normalizedBillingCycle =
-    String(
-      billingCycle || ""
-    )
-      .trim()
-      .toUpperCase() as BillingCycle
-
+  if (!garageId) {
+    throw new Error("Garage ID is required")
+  }
 
   if (
     normalizedBillingCycle !== "MONTHLY" &&
     normalizedBillingCycle !== "ANNUAL"
   ) {
-
-    throw new Error(
-      "Invalid billing cycle"
-    )
-
+    throw new Error("Invalid billing cycle")
   }
 
+  const plan = Object.values(PLANS).find(
+    item => item.code === normalizedPlanCode
+  )
 
-  const plan =
-    Object.values(PLANS)
-      .find(
-        item =>
-          item.code ===
-          normalizedPlanCode
-      )
-
-
-  if (!plan) {
-
-    throw new Error(
-      "Invalid plan"
-    )
-
+  if (!plan || plan.code === "FREE") {
+    throw new Error("Invalid paid plan")
   }
-
-
-  if (
-    plan.code === "FREE"
-  ) {
-
-    throw new Error(
-      "Free plan does not require payment"
-    )
-
-  }
-
 
   const amount =
     normalizedBillingCycle === "MONTHLY"
       ? plan.monthlyPrice
       : plan.annualPricePerMonth * 12
 
-
-  if (
-    !Number.isFinite(amount) ||
-    amount <= 0
-  ) {
-
-    throw new Error(
-      "Invalid payment amount"
-    )
-
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Invalid payment amount")
   }
 
+  await getOrCreateSubscription(garageId)
 
-  const subscription =
-    await getOrCreateSubscription(
-      garageId
-    )
+  const keyId = process.env.RAZORPAY_KEY_ID
 
+  if (!keyId) {
+    throw new Error("Razorpay key ID is not configured")
+  }
 
-  /*
-   * Do not allow another payment order while
-   * a previous order is still pending.
-   */
+  const receipt = `plan_${crypto.randomUUID()}`
 
-  if (
-    subscription.pendingOrderId &&
-    subscription.paymentStatus ===
-      "CREATED"
-  ) {
-
-    return {
-
-      paymentRequired: true,
-
-      payment: {
-
-        orderId:
-          subscription.pendingOrderId,
-
-        amount:
-          Math.round(
-            Number(
-              subscription.pendingAmount
-            ) * 100
-          ),
-
-        currency:
-          "INR",
-
-        keyId:
-          process.env.RAZORPAY_KEY_ID,
-
-        planCode:
-          subscription.pendingPlanCode,
-
-        billingCycle:
-          subscription.pendingBillingCycle
-
-      }
-
+  const order = await createRazorpayOrder(
+    amount,
+    receipt,
+    {
+      garageId,
+      paymentType: "PLAN",
+      planCode: plan.code,
+      billingCycle: normalizedBillingCycle
     }
-
-  }
-
-
-  const receipt =
-    `plan_${garageId}_${Date.now()}`
-
-
-  const order =
-    await createRazorpayOrder(
-
-      amount,
-
-      receipt,
-
-      {
-
-        garageId,
-
-        paymentType:
-          "PLAN",
-
-        planCode:
-          plan.code,
-
-        billingCycle:
-          normalizedBillingCycle
-
-      }
-
-    )
-
-
-  const now =
-    new Date()
-
-
-  await db.send(
-    new UpdateItemCommand({
-
-      TableName: TABLE,
-
-      Key: {
-        garageId: {
-          S: garageId
-        }
-      },
-
-      UpdateExpression:
-        `
-        SET
-          pendingOrderId = :orderId,
-          pendingPlanCode = :planCode,
-          pendingBillingCycle = :billingCycle,
-          pendingAmount = :amount,
-          paymentStatus = :paymentStatus,
-          updatedAt = :updatedAt
-        `,
-
-      ExpressionAttributeValues: {
-
-        ":orderId": {
-          S: order.id
-        },
-
-        ":planCode": {
-          S: plan.code
-        },
-
-        ":billingCycle": {
-          S:
-            normalizedBillingCycle
-        },
-
-        ":amount": {
-          N:
-            amount.toString()
-        },
-
-        ":paymentStatus": {
-          S: "CREATED"
-        },
-
-        ":updatedAt": {
-          S:
-            now.toISOString()
-        }
-
-      }
-
-    })
   )
 
-
-  return {
-
-    paymentRequired: true,
-
-    payment: {
-
-      orderId:
-        order.id,
-
-      amount:
-        order.amount,
-
-      currency:
-        order.currency,
-
-      keyId:
-        process.env.RAZORPAY_KEY_ID,
-
-      planCode:
-        plan.code,
-
-      billingCycle:
-        normalizedBillingCycle
-
-    }
-
+  if (
+    !order?.id ||
+    !Number.isInteger(Number(order.amount)) ||
+    Number(order.amount) !== Math.round(amount * 100) ||
+    order.currency !== "INR"
+  ) {
+    throw new Error("Razorpay returned invalid order details")
   }
 
+  const now = new Date().toISOString()
+
+  await savePaymentOrder({
+    orderId: order.id,
+    garageId,
+    paymentType: "PLAN",
+    planCode: plan.code,
+    billingCycle: normalizedBillingCycle,
+    amount: Number(order.amount),
+    currency: order.currency,
+    status: "CREATED",
+    createdAt: now,
+    updatedAt: now
+  })
+
+  return {
+    paymentRequired: true,
+    payment: {
+      orderId: order.id,
+      amount: Number(order.amount),
+      currency: order.currency,
+      keyId,
+      planCode: plan.code,
+      billingCycle: normalizedBillingCycle
+    }
+  }
 }
 
 
@@ -846,225 +910,137 @@ async (
 |--------------------------------------------------------------------------
 */
 
-const activatePlan =
-async (
+const activatePlan = async (
   garageId: string,
   orderId: string,
   paymentId: string
 ) => {
+  const order = await getPaymentOrder(orderId)
 
-  const subscription =
-    await getOrCreateSubscription(
-      garageId
-    )
+  // A retry after successful activation must not apply the plan twice.
+  if (order.status === "ACTIVATED") {
+    if (
+      order.garageId === garageId &&
+      order.paymentId === paymentId
+    ) {
+      return getSubscription(garageId)
+    }
 
-
-  if (
-    subscription.razorpayPaymentId ===
-    paymentId
-  ) {
-
-    return subscription
-
+    throw new Error("Payment order has already been activated")
   }
 
-
-  if (
-    subscription.pendingOrderId !==
-    orderId
-  ) {
-
-    throw new Error(
-      "Payment order does not match pending subscription order"
-    )
-
+  if (order.garageId !== garageId) {
+    throw new Error("Payment order does not belong to this garage")
   }
 
+  if (order.paymentType !== "PLAN") {
+    throw new Error("This is not a plan payment order")
+  }
 
-  const planCode =
-    subscription.pendingPlanCode
+  if (order.status !== "CREATED") {
+    throw new Error("Payment order is not awaiting activation")
+  }
 
-
-  const billingCycle =
-    subscription.pendingBillingCycle
-
+  const planCode = order.planCode
+  const billingCycle = order.billingCycle
 
   if (
     !planCode ||
-    !billingCycle
+    !["MONTHLY", "ANNUAL"].includes(billingCycle)
   ) {
-
-    throw new Error(
-      "Pending subscription information missing"
-    )
-
+    throw new Error("Plan information is missing or invalid")
   }
 
-
-  const plan =
-    Object.values(PLANS)
-      .find(
-        item =>
-          item.code ===
-          planCode
-      )
-
+  const plan = Object.values(PLANS).find(
+    item => item.code === planCode
+  )
 
   if (!plan) {
-
-    throw new Error(
-      "Invalid pending plan"
-    )
-
+    throw new Error("Invalid plan")
   }
 
+  await getOrCreateSubscription(garageId)
 
-  const now =
-    new Date()
+  const now = new Date()
+  const renewalDate = new Date(now)
 
-
-  const renewalDate =
-    new Date(now)
-
-
-  if (
-    billingCycle ===
-    "ANNUAL"
-  ) {
-
-    renewalDate.setFullYear(
-      renewalDate.getFullYear() + 1
-    )
-
+  if (billingCycle === "ANNUAL") {
+    renewalDate.setFullYear(renewalDate.getFullYear() + 1)
   } else {
-
-    renewalDate.setMonth(
-      renewalDate.getMonth() + 1
-    )
-
+    renewalDate.setMonth(renewalDate.getMonth() + 1)
   }
-
-
-  /*
-   * IMPORTANT:
-   *
-   * Do NOT reset boosterJobs.
-   *
-   * A plan upgrade must preserve purchased booster
-   * jobs that are still available.
-   */
-
-  const currentBoosterJobs =
-    Number(
-      subscription.boosterJobs || 0
-    )
-
 
   await db.send(
-    new UpdateItemCommand({
-
-      TableName: TABLE,
-
-      Key: {
-        garageId: {
-          S: garageId
+    new TransactWriteItemsCommand({
+      TransactItems: [
+        {
+          Update: {
+            TableName: TABLE,
+            Key: {
+              garageId: { S: garageId }
+            },
+            UpdateExpression: `
+              SET
+                planCode = :planCode,
+                planName = :planName,
+                billingCycle = :billingCycle,
+                #status = :active,
+                jobLimit = :jobLimit,
+                renewalDate = :renewalDate,
+                paymentStatus = :captured,
+                razorpayOrderId = :orderId,
+                razorpayPaymentId = :paymentId,
+                updatedAt = :updatedAt
+            `,
+            ExpressionAttributeNames: {
+              "#status": "status"
+            },
+            ExpressionAttributeValues: {
+              ":planCode": { S: plan.code },
+              ":planName": { S: plan.name },
+              ":billingCycle": { S: billingCycle },
+              ":active": { S: "ACTIVE" },
+              ":jobLimit": { N: String(plan.jobsPerMonth) },
+              ":renewalDate": { S: renewalDate.toISOString() },
+              ":captured": { S: "CAPTURED" },
+              ":orderId": { S: orderId },
+              ":paymentId": { S: paymentId },
+              ":updatedAt": { S: now.toISOString() }
+            }
+          }
+        },
+        {
+          Update: {
+            TableName: PAYMENT_ORDERS_TABLE,
+            Key: {
+              orderId: { S: orderId }
+            },
+            UpdateExpression: `
+              SET
+                #status = :activated,
+                paymentId = :paymentId,
+                activatedAt = :activatedAt
+            `,
+            ConditionExpression: `
+              #status = :created AND garageId = :garageId
+            `,
+            ExpressionAttributeNames: {
+              "#status": "status"
+            },
+            ExpressionAttributeValues: {
+              ":activated": { S: "ACTIVATED" },
+              ":created": { S: "CREATED" },
+              ":garageId": { S: garageId },
+              ":paymentId": { S: paymentId },
+              ":activatedAt": { S: now.toISOString() }
+            }
+          }
         }
-      },
-
-      UpdateExpression:
-        `
-        SET
-          planCode = :planCode,
-          planName = :planName,
-          billingCycle = :billingCycle,
-          #status = :status,
-          jobsUsed = :jobsUsed,
-          jobLimit = :jobLimit,
-          boosterJobs = :boosterJobs,
-          renewalDate = :renewalDate,
-          paymentStatus = :paymentStatus,
-          razorpayOrderId = :razorpayOrderId,
-          razorpayPaymentId = :razorpayPaymentId,
-          updatedAt = :updatedAt
-        REMOVE
-          pendingOrderId,
-          pendingPlanCode,
-          pendingBillingCycle,
-          pendingAmount
-        `,
-
-      ExpressionAttributeNames: {
-        "#status": "status"
-      },
-
-      ExpressionAttributeValues: {
-
-        ":planCode": {
-          S: plan.code
-        },
-
-        ":planName": {
-          S: plan.name
-        },
-
-        ":billingCycle": {
-          S: billingCycle
-        },
-
-        ":status": {
-          S: "ACTIVE"
-        },
-
-        ":jobsUsed": {
-          N: String(
-            Number(
-              subscription.jobsUsed || 0
-            )
-          )
-        },
-
-        ":jobLimit": {
-          N:
-            plan.jobsPerMonth.toString()
-        },
-
-        ":boosterJobs": {
-          N:
-            currentBoosterJobs.toString()
-        },
-
-        ":renewalDate": {
-          S:
-            renewalDate.toISOString()
-        },
-
-        ":paymentStatus": {
-          S: "CAPTURED"
-        },
-
-        ":razorpayOrderId": {
-          S: orderId
-        },
-
-        ":razorpayPaymentId": {
-          S: paymentId
-        },
-
-        ":updatedAt": {
-          S:
-            now.toISOString()
-        }
-
-      }
-
+      ]
     })
   )
 
-
-  return getSubscription(
-    garageId
-  )
-
+  return getSubscription(garageId)
 }
 
 
@@ -1074,55 +1050,53 @@ async (
 |--------------------------------------------------------------------------
 */
 
-export const verifyPlanPayment =
-async (
+export const verifyPlanPayment = async (
   garageId: string,
   razorpayOrderId: string,
   razorpayPaymentId: string,
   razorpaySignature: string
 ) => {
-
-  const subscription =
-    await getOrCreateSubscription(
-      garageId
-    )
-
-
-  if (
-    subscription.pendingOrderId !==
-    razorpayOrderId
-  ) {
-
-    throw new Error(
-      "Invalid Razorpay order"
-    )
-
+  if (!garageId || !razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
+    throw new Error("Missing payment verification details")
   }
 
+  const order = await getPaymentOrder(razorpayOrderId)
 
-  const valid =
-    verifyPaymentSignature(
-      razorpayOrderId,
-      razorpayPaymentId,
-      razorpaySignature
-    )
+  if (order.garageId !== garageId) {
+    throw new Error("Payment order does not belong to this garage")
+  }
 
+  if (order.paymentType !== "PLAN") {
+    throw new Error("This is not a plan payment order")
+  }
+
+  if (order.status !== "CREATED") {
+    throw new Error("Payment order is not awaiting verification")
+  }
+
+  const valid = verifyPaymentSignature(
+    razorpayOrderId,
+    razorpayPaymentId,
+    razorpaySignature
+  )
 
   if (!valid) {
-
-    throw new Error(
-      "Invalid payment signature"
-    )
-
+    throw new Error("Invalid payment signature")
   }
 
+  await verifyCapturedPayment({
+    orderId: razorpayOrderId,
+    paymentId: razorpayPaymentId,
+    expectedAmount: Number(order.amount),
+    expectedCurrency: order.currency
+  })
 
+  // Activation will be migrated to PaymentOrders in the next step.
   return activatePlan(
     garageId,
     razorpayOrderId,
     razorpayPaymentId
   )
-
 }
 
 
@@ -1132,159 +1106,81 @@ async (
 |--------------------------------------------------------------------------
 */
 
-export const createBoosterPaymentOrder =
-async (
+export const createBoosterPaymentOrder = async (
   garageId: string,
   boosterCode: string
 ) => {
+  const normalizedCode = String(boosterCode || "")
+    .trim()
+    .toUpperCase()
 
-  const normalizedCode =
-    String(
-      boosterCode || ""
-    )
-      .trim()
-      .toUpperCase()
-
-
-  const booster =
-    Object.values(BOOSTERS)
-      .find(
-        item =>
-          item.code ===
-          normalizedCode
-      )
-
-
-  if (!booster) {
-
-    throw new Error(
-      "Invalid booster"
-    )
-
+  if (!garageId) {
+    throw new Error("Garage ID is required")
   }
 
-
-  const receipt =
-    `booster_${boosterCode}_${Date.now()}`
-
-
-  console.log("receipt =>", receipt);
-  const order =
-    await createRazorpayOrder(
-
-      booster.price,
-
-      receipt,
-
-      {
-
-        garageId,
-
-        paymentType:
-          "BOOSTER",
-
-        boosterCode:
-          booster.code
-
-      }
-
-    )
-
-
-  const now =
-    new Date()
-
-
-  const subscription =
-    await getOrCreateSubscription(
-      garageId
-    )
-
-
-  await db.send(
-    new UpdateItemCommand({
-
-      TableName: TABLE,
-
-      Key: {
-        garageId: {
-          S: garageId
-        }
-      },
-
-      UpdateExpression:
-        `
-        SET
-          pendingOrderId = :orderId,
-          pendingPaymentType = :paymentType,
-          pendingBoosterCode = :boosterCode,
-          pendingAmount = :amount,
-          paymentStatus = :paymentStatus,
-          updatedAt = :updatedAt
-        `,
-
-      ExpressionAttributeValues: {
-
-        ":orderId": {
-          S: order.id
-        },
-
-        ":paymentType": {
-          S: "BOOSTER"
-        },
-
-        ":boosterCode": {
-          S: booster.code
-        },
-
-        ":amount": {
-          N:
-            booster.price.toString()
-        },
-
-        ":paymentStatus": {
-          S: "CREATED"
-        },
-
-        ":updatedAt": {
-          S:
-            now.toISOString()
-        }
-
-      }
-
-    })
+  const booster = Object.values(BOOSTERS).find(
+    item => item.code === normalizedCode
   )
 
-
-  return {
-
-    paymentRequired: true,
-
-    payment: {
-
-      orderId:
-        order.id,
-
-      amount:
-        order.amount,
-
-      currency:
-        order.currency,
-
-      keyId:
-        process.env.RAZORPAY_KEY_ID,
-
-      boosterCode:
-        booster.code,
-
-      jobs:
-        booster.jobs
-
-    }
-
+  if (!booster) {
+    throw new Error("Invalid booster")
   }
 
+  await getOrCreateSubscription(garageId)
+
+  const keyId = process.env.RAZORPAY_KEY_ID
+
+  if (!keyId) {
+    throw new Error("Razorpay key ID is not configured")
+  }
+
+  const receipt = `booster_${crypto.randomUUID()}`
+
+  const order = await createRazorpayOrder(
+    booster.price,
+    receipt,
+    {
+      garageId,
+      paymentType: "BOOSTER",
+      boosterCode: booster.code
+    }
+  )
+
+  if (
+    !order?.id ||
+    !Number.isInteger(Number(order.amount)) ||
+    Number(order.amount) !== Math.round(booster.price * 100) ||
+    order.currency !== "INR"
+  ) {
+    throw new Error("Razorpay returned invalid order details")
+  }
+
+  const now = new Date().toISOString()
+
+  await savePaymentOrder({
+    orderId: order.id,
+    garageId,
+    paymentType: "BOOSTER",
+    boosterCode: booster.code,
+    boosterJobs: booster.jobs,
+    amount: Number(order.amount),
+    currency: order.currency,
+    status: "CREATED",
+    createdAt: now,
+    updatedAt: now
+  })
+
+  return {
+    paymentRequired: true,
+    payment: {
+      orderId: order.id,
+      amount: Number(order.amount),
+      currency: order.currency,
+      keyId,
+      boosterCode: booster.code,
+      jobs: booster.jobs
+    }
+  }
 }
 
 
@@ -1294,69 +1190,47 @@ async (
 |--------------------------------------------------------------------------
 */
 
-export const verifyBoosterPayment =
-async (
+export const verifyBoosterPayment = async (
   garageId: string,
   razorpayOrderId: string,
   razorpayPaymentId: string,
   razorpaySignature: string
 ) => {
-
-  const subscription =
-    await getOrCreateSubscription(
-      garageId
-    )
-
-
-  if (
-    subscription.pendingOrderId !==
-    razorpayOrderId
-  ) {
-
-    throw new Error(
-      "Invalid Razorpay order"
-    )
-
+  if (!garageId || !razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
+    throw new Error("Missing payment verification details")
   }
 
+  const order = await getPaymentOrder(razorpayOrderId)
 
-  if (
-    subscription.pendingPaymentType !==
-    "BOOSTER"
-  ) {
-
-    throw new Error(
-      "Pending payment is not a booster payment"
-    )
-
+  if (order.garageId !== garageId) {
+    throw new Error("Payment order does not belong to this garage")
   }
 
+  if (order.paymentType !== "BOOSTER") {
+    throw new Error("This is not a booster payment order")
+  }
 
-  const valid =
-    verifyPaymentSignature(
-      razorpayOrderId,
-      razorpayPaymentId,
-      razorpaySignature
-    )
+  if (order.status !== "CREATED") {
+    throw new Error("Payment order is not awaiting verification")
+  }
 
+  const valid = verifyPaymentSignature(
+    razorpayOrderId,
+    razorpayPaymentId,
+    razorpaySignature
+  )
 
   if (!valid) {
-
-    throw new Error(
-      "Invalid payment signature"
-    )
-
+    throw new Error("Invalid payment signature")
   }
 
-
+  // Activation will be migrated to PaymentOrders in the next step.
   return activateBooster(
     garageId,
     razorpayOrderId,
     razorpayPaymentId
   )
-
 }
-
 
 /*
 |--------------------------------------------------------------------------
@@ -1364,171 +1238,119 @@ async (
 |--------------------------------------------------------------------------
 */
 
-const activateBooster =
-async (
+const activateBooster = async (
   garageId: string,
   orderId: string,
   paymentId: string
 ) => {
+  const order = await getPaymentOrder(orderId)
 
-  const subscription =
-    await getOrCreateSubscription(
-      garageId
-    )
+  // A retry after successful activation must not add the jobs again.
+  if (order.status === "ACTIVATED") {
+    if (
+      order.garageId === garageId &&
+      order.paymentId === paymentId
+    ) {
+      return getSubscription(garageId)
+    }
 
-
-  if (
-    subscription.lastBoosterPaymentId ===
-    paymentId
-  ) {
-
-    return subscription
-
+    throw new Error("Payment order has already been activated")
   }
 
-
-  if (
-    subscription.pendingOrderId !==
-    orderId
-  ) {
-
-    throw new Error(
-      "Booster order does not match pending order"
-    )
-
+  if (order.garageId !== garageId) {
+    throw new Error("Payment order does not belong to this garage")
   }
 
-
-  if (
-    subscription.pendingPaymentType !==
-    "BOOSTER"
-  ) {
-
-    throw new Error(
-      "Pending order is not a booster"
-    )
-
+  if (order.paymentType !== "BOOSTER") {
+    throw new Error("This is not a booster payment order")
   }
 
+  if (order.status !== "CREATED") {
+    throw new Error("Payment order is not awaiting activation")
+  }
 
-  const boosterCode =
-    subscription.pendingBoosterCode
-
-
-  const booster =
-    Object.values(BOOSTERS)
-      .find(
-        item =>
-          item.code ===
-          boosterCode
-      )
-
+  const booster = Object.values(BOOSTERS).find(
+    item => item.code === order.boosterCode
+  )
 
   if (!booster) {
-
-    throw new Error(
-      "Invalid pending booster"
-    )
-
+    throw new Error("Invalid booster in payment order")
   }
 
+  if (
+    Number(order.boosterJobs) !== booster.jobs
+  ) {
+    throw new Error("Booster job quantity does not match")
+  }
 
-  const currentBoosterJobs =
-    Number(
-      subscription.boosterJobs || 0
-    )
+  await getOrCreateSubscription(garageId)
 
-
-  const newBoosterJobs =
-    currentBoosterJobs +
-    booster.jobs
-
-
-  const now =
-    new Date()
-
+  const now = new Date()
 
   await db.send(
-    new UpdateItemCommand({
-
-      TableName: TABLE,
-
-      Key: {
-        garageId: {
-          S: garageId
+    new TransactWriteItemsCommand({
+      TransactItems: [
+        {
+          Update: {
+            TableName: TABLE,
+            Key: {
+              garageId: { S: garageId }
+            },
+            UpdateExpression: `
+              ADD boosterJobs :boosterJobs
+              SET
+                lastBoosterCode = :boosterCode,
+                lastBoosterPaymentId = :paymentId,
+                lastBoosterOrderId = :orderId,
+                lastBoosterJobs = :jobs,
+                lastBoosterPurchasedAt = :purchasedAt,
+                paymentStatus = :captured,
+                updatedAt = :updatedAt
+            `,
+            ExpressionAttributeValues: {
+              ":boosterJobs": { N: String(booster.jobs) },
+              ":boosterCode": { S: booster.code },
+              ":paymentId": { S: paymentId },
+              ":orderId": { S: orderId },
+              ":jobs": { N: String(booster.jobs) },
+              ":purchasedAt": { S: now.toISOString() },
+              ":captured": { S: "CAPTURED" },
+              ":updatedAt": { S: now.toISOString() }
+            }
+          }
+        },
+        {
+          Update: {
+            TableName: PAYMENT_ORDERS_TABLE,
+            Key: {
+              orderId: { S: orderId }
+            },
+            UpdateExpression: `
+              SET
+                #status = :activated,
+                paymentId = :paymentId,
+                activatedAt = :activatedAt
+            `,
+            ConditionExpression: `
+              #status = :created AND garageId = :garageId
+            `,
+            ExpressionAttributeNames: {
+              "#status": "status"
+            },
+            ExpressionAttributeValues: {
+              ":activated": { S: "ACTIVATED" },
+              ":created": { S: "CREATED" },
+              ":garageId": { S: garageId },
+              ":paymentId": { S: paymentId },
+              ":activatedAt": { S: now.toISOString() }
+            }
+          }
         }
-      },
-
-      UpdateExpression:
-        `
-        SET
-          boosterJobs = :boosterJobs,
-          lastBoosterCode = :boosterCode,
-          lastBoosterPaymentId = :paymentId,
-          lastBoosterOrderId = :orderId,
-          lastBoosterJobs = :jobs,
-          lastBoosterPurchasedAt = :purchasedAt,
-          paymentStatus = :paymentStatus,
-          updatedAt = :updatedAt
-        REMOVE
-          pendingOrderId,
-          pendingPaymentType,
-          pendingBoosterCode,
-          pendingAmount
-        `,
-
-      ExpressionAttributeValues: {
-
-        ":boosterJobs": {
-          N:
-            newBoosterJobs.toString()
-        },
-
-        ":boosterCode": {
-          S:
-            booster.code
-        },
-
-        ":paymentId": {
-          S:
-            paymentId
-        },
-
-        ":orderId": {
-          S:
-            orderId
-        },
-
-        ":jobs": {
-          N:
-            booster.jobs.toString()
-        },
-
-        ":purchasedAt": {
-          S:
-            now.toISOString()
-        },
-
-        ":paymentStatus": {
-          S:
-            "CAPTURED"
-        },
-
-        ":updatedAt": {
-          S:
-            now.toISOString()
-        }
-
-      }
-
+      ]
     })
   )
 
-
-  return getSubscription(
-    garageId
-  )
-
+  return getSubscription(garageId)
 }
 
 
@@ -1670,94 +1492,59 @@ async (
 |--------------------------------------------------------------------------
 */
 
-export const processRazorpayPaymentCaptured =
-async (
-  garageId: string,
+export const processRazorpayPaymentCaptured = async (
   orderId: string,
   paymentId: string,
-  amountInPaise: number
+  amountInPaise: number,
+  currency: string
 ) => {
-
-  const subscription =
-    await getOrCreateSubscription(
-      garageId
-    )
-
-
-  /*
-   * Already processed.
-   */
-
-  if (
-    subscription.razorpayPaymentId ===
-    paymentId ||
-    subscription.lastBoosterPaymentId ===
-    paymentId
-  ) {
-
-    return subscription
-
+  if (!orderId || !paymentId) {
+    throw new Error("Missing webhook payment details")
   }
 
+  // PaymentOrders is the authoritative source of ownership and purchase data.
+  const order = await getPaymentOrder(orderId)
 
-  if (
-    subscription.pendingOrderId !==
-    orderId
-  ) {
-
-    throw new Error(
-      "Webhook order does not match pending payment"
-    )
-
+  if (!order.garageId) {
+    throw new Error("Payment order has no associated garage")
   }
 
-
-  const expectedAmountInPaise =
-    Math.round(
-      Number(
-        subscription.pendingAmount
-      ) * 100
-    )
-
-
-  if (
-    expectedAmountInPaise !==
-    amountInPaise
-  ) {
-
-    throw new Error(
-      "Webhook payment amount does not match pending order"
-    )
-
+  if (!["PLAN", "BOOSTER"].includes(order.paymentType)) {
+    throw new Error("Invalid payment order type")
   }
 
+  if (Number(order.amount) !== amountInPaise) {
+    throw new Error("Webhook amount does not match stored order")
+  }
 
-  if (
-    subscription.pendingPaymentType ===
-    "BOOSTER"
-  ) {
+  if (order.currency !== currency) {
+    throw new Error("Webhook currency does not match stored order")
+  }
 
+  // Independently confirm the payment with Razorpay.
+  await verifyCapturedPayment({
+    orderId,
+    paymentId,
+    expectedAmount: Number(order.amount),
+    expectedCurrency: order.currency
+  })
+
+  // These functions use conditional DynamoDB transactions.
+  // Repeated activation of the same payment is idempotent.
+  if (order.paymentType === "BOOSTER") {
     return activateBooster(
-      garageId,
+      order.garageId,
       orderId,
       paymentId
     )
-
   }
 
-
-  /*
-   * Default is PLAN.
-   */
-
   return activatePlan(
-    garageId,
+    order.garageId,
     orderId,
     paymentId
   )
-
 }
-
 
 /*
 |--------------------------------------------------------------------------
@@ -1773,98 +1560,166 @@ type RazorpayPaymentEntity = {
 }
 
 
-export const processRazorpayPaymentFailed =
-async (
-  garageId: string,
+export const processRazorpayPaymentFailed = async (
+  orderId: string,
   payment: RazorpayPaymentEntity
 ) => {
+  if (!orderId || !payment?.id) {
+    throw new Error("Missing failed payment details")
+  }
 
-  const subscription =
-    await getOrCreateSubscription(
-      garageId
-    )
+  if (payment.order_id !== orderId) {
+    throw new Error("Failed payment order ID mismatch")
+  }
 
+  const order = await getPaymentOrder(orderId)
 
-  const now =
-    new Date()
+  if (!order.garageId) {
+    throw new Error("Payment order has no associated garage")
+  }
 
+  // Never let a delayed failure event overwrite a successful payment.
+  if (order.status === "ACTIVATED") {
+    return getSubscription(order.garageId)
+  }
 
-  const paymentId =
-    payment.id ||
-    "unknown"
+  // Do not modify an order already marked failed or otherwise closed.
+  if (order.status !== "CREATED") {
+    return getSubscription(order.garageId)
+  }
 
-
-  const orderId =
-    payment.order_id ||
-    "unknown"
-
+  const now = new Date()
 
   const errorCode =
-    payment.error_code ||
-    "UNKNOWN"
-
+    payment.error_code || "UNKNOWN"
 
   const errorDescription =
-    payment.error_description ||
-    "Payment failed"
-
+    payment.error_description || "Payment failed"
 
   await db.send(
     new UpdateItemCommand({
-
-      TableName: TABLE,
-
+      TableName: PAYMENT_ORDERS_TABLE,
       Key: {
-        garageId: {
-          S: garageId
-        }
+        orderId: { S: orderId }
       },
-
-      UpdateExpression:
-        `
+      UpdateExpression: `
         SET
-          lastPaymentId = :paymentId,
-          lastPaymentOrderId = :orderId,
-          lastPaymentStatus = :status,
-          lastPaymentErrorCode = :errorCode,
-          lastPaymentErrorDescription = :errorDescription,
-          updatedAt = :updatedAt
-        `,
-
+          #status = :failed,
+          paymentId = :paymentId,
+          failureCode = :errorCode,
+          failureDescription = :errorDescription,
+          failedAt = :failedAt
+      `,
+      ConditionExpression: `
+        #status = :created
+        AND garageId = :garageId
+      `,
+      ExpressionAttributeNames: {
+        "#status": "status"
+      },
       ExpressionAttributeValues: {
-
-        ":paymentId": {
-          S: paymentId
-        },
-
-        ":orderId": {
-          S: orderId
-        },
-
-        ":status": {
-          S: "FAILED"
-        },
-
-        ":errorCode": {
-          S: errorCode
-        },
-
-        ":errorDescription": {
-          S: errorDescription
-        },
-
-        ":updatedAt": {
-          S: now.toISOString()
-        }
-
+        ":failed": { S: "FAILED" },
+        ":created": { S: "CREATED" },
+        ":garageId": { S: order.garageId },
+        ":paymentId": { S: payment.id },
+        ":errorCode": { S: errorCode },
+        ":errorDescription": { S: errorDescription },
+        ":failedAt": { S: now.toISOString() }
       }
-
     })
   )
 
-
-  return getSubscription(
-    garageId
+  // Record diagnostic information without changing subscription entitlements.
+  await db.send(
+    new UpdateItemCommand({
+      TableName: TABLE,
+      Key: {
+        garageId: { S: order.garageId }
+      },
+      UpdateExpression: `
+        SET
+          lastPaymentId = :paymentId,
+          lastPaymentOrderId = :orderId,
+          lastPaymentStatus = :failed,
+          lastPaymentErrorCode = :errorCode,
+          lastPaymentErrorDescription = :errorDescription,
+          updatedAt = :updatedAt
+      `,
+      ExpressionAttributeValues: {
+        ":paymentId": { S: payment.id },
+        ":orderId": { S: orderId },
+        ":failed": { S: "FAILED" },
+        ":errorCode": { S: errorCode },
+        ":errorDescription": { S: errorDescription },
+        ":updatedAt": { S: now.toISOString() }
+      }
+    })
   )
 
+  return getSubscription(order.garageId)
+}
+
+const savePaymentOrder = async (
+  record: CreatePaymentOrderRecord
+): Promise<void> => {
+  if (
+    !record.orderId ||
+    !record.garageId ||
+    !Number.isInteger(record.amount) ||
+    record.amount <= 0 ||
+    record.currency !== "INR" ||
+    record.status !== "CREATED"
+  ) {
+    throw new Error("Invalid payment order record")
+  }
+
+  if (
+    record.paymentType === "PLAN" &&
+    (!record.planCode || !record.billingCycle)
+  ) {
+    throw new Error("Plan payment order details are incomplete")
+  }
+
+  if (
+    record.paymentType === "BOOSTER" &&
+    (
+      !record.boosterCode ||
+      !Number.isInteger(record.boosterJobs) ||
+      record.boosterJobs! <= 0
+    )
+  ) {
+    throw new Error("Booster payment order details are incomplete")
+  }
+  await db.send(
+    new PutItemCommand({
+      TableName: PAYMENT_ORDERS_TABLE,
+      Item: {
+        orderId: { S: record.orderId },
+        garageId: { S: record.garageId },
+        paymentType: { S: record.paymentType },
+        amount: { N: String(record.amount) },
+        currency: { S: record.currency },
+        status: { S: record.status },
+        createdAt: { S: record.createdAt },
+        updatedAt: { S: record.updatedAt },
+
+        ...(record.planCode
+          ? { planCode: { S: record.planCode } }
+          : {}),
+
+        ...(record.billingCycle
+          ? { billingCycle: { S: record.billingCycle } }
+          : {}),
+
+        ...(record.boosterCode
+          ? { boosterCode: { S: record.boosterCode } }
+          : {}),
+
+        ...(record.boosterJobs !== undefined
+          ? { boosterJobs: { N: String(record.boosterJobs) } }
+          : {})
+      },
+      ConditionExpression: "attribute_not_exists(orderId)"
+    })
+  )
 }
