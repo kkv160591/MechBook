@@ -15,7 +15,7 @@ import { unmarshall, marshall } from "@aws-sdk/util-dynamodb"
 import { v4 as uuid } from "uuid"
 
 import { db } from "../config/dynamodb"
-import { getOrCreateSubscription } from "./subscription.service"
+import { getPlanInformation  } from "./subscription.service"
 
 const JOBS_TABLE = process.env.JOBS_TABLE_NAME!
 const CUSTOMERS_TABLE =
@@ -319,8 +319,11 @@ export const createJob = async (
   // SUBSCRIPTION / JOB LIMIT
   // ----------------------------------------------------------
 
-  const subscription =
-    await getOrCreateSubscription(garageId)
+  const planInformation =
+    await getPlanInformation(garageId)
+
+  let subscription =
+    planInformation.subscription
 
   for (let attempt = 0; attempt < 3; attempt++) {
     const jobsUsed = Number(
@@ -556,15 +559,24 @@ export const createJob = async (
     // SUBSCRIPTION
     // --------------------------------------------------------
 
-    const subscriptionKey: any = {
+    const subscriptionKey = {
       garageId,
     }
 
-    if (
-      subscription.subscriptionId
-    ) {
-      subscriptionKey.subscriptionId =
-        subscription.subscriptionId
+    const subscriptionCondition = unlimited
+      ? "jobsUsed = :jobsUsed AND jobLimit = :jobLimit AND boosterJobs = :boosterJobs"
+      : "jobsUsed = :jobsUsed AND jobLimit = :jobLimit AND boosterJobs = :boosterJobs AND jobsUsed < :totalAvailable"
+
+    const subscriptionValues: Record<string, number> = {
+      ":one": 1,
+      ":jobsUsed": jobsUsed,
+      ":jobLimit": jobLimit,
+      ":boosterJobs": boosterJobs,
+    }
+
+    if (!unlimited) {
+      subscriptionValues[":totalAvailable"] =
+        totalAvailable
     }
 
     transactItems.push({
@@ -577,14 +589,10 @@ export const createJob = async (
           "SET jobsUsed = jobsUsed + :one",
 
         ConditionExpression:
-          "jobsUsed = :jobsUsed AND (jobLimit = :jobLimit OR attribute_not_exists(jobLimit))",
+          subscriptionCondition,
 
         ExpressionAttributeValues:
-          marshall({
-            ":one": 1,
-            ":jobsUsed": jobsUsed,
-            ":jobLimit": jobLimit,
-          }),
+          marshall(subscriptionValues),
       },
     })
 
@@ -601,31 +609,29 @@ export const createJob = async (
         error?.name ===
         "TransactionCanceledException"
       ) {
-        const latestSubscription =
-          await getOrCreateSubscription(
-            garageId
-          )
+        subscription = (
+          await getPlanInformation(garageId)
+        ).subscription
 
         const latestUsed = Number(
-          latestSubscription.jobsUsed || 0
+          subscription.jobsUsed || 0
         )
 
         const latestLimit = Number(
-          latestSubscription.jobLimit || 0
+          subscription.jobLimit || 0
         )
 
         const latestBooster = Number(
-          latestSubscription.boosterJobs || 0
+          subscription.boosterJobs || 0
         )
 
         const latestUnlimited =
-          latestSubscription.unlimited === true ||
+          subscription.unlimited === true ||
           latestLimit === -1
 
         if (
           !latestUnlimited &&
-          latestUsed >=
-            latestLimit + latestBooster
+          latestUsed >= latestLimit + latestBooster
         ) {
           throw new JobLimitReachedError()
         }

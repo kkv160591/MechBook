@@ -213,6 +213,7 @@ type PaymentOrderStatus =
   | "CAPTURED"
   | "FAILED"
   | "CANCELLED"
+  | "ACTIVATED"
 
 type PaymentOrderRecord = {
   orderId: string
@@ -420,11 +421,10 @@ async (
   const now =
     new Date()
 
-  const renewalDate =
-    new Date(now)
+  const quotaResetDate = new Date(now)
 
-  renewalDate.setMonth(
-    renewalDate.getMonth() + 1
+  quotaResetDate.setMonth(
+    quotaResetDate.getMonth() + 1
   )
 
   const plan =
@@ -464,8 +464,8 @@ async (
       N: "0"
     },
 
-    renewalDate: {
-      S: renewalDate.toISOString()
+    quotaResetDate: {
+      S: quotaResetDate.toISOString()
     },
 
     createdAt: {
@@ -569,31 +569,50 @@ async (
 
 
   /*
-   * ---------------------------------------------------------------
-   * AUTOMATIC RENEWAL / MONTH RESET
-   * ---------------------------------------------------------------
-   *
-   * When the renewal date has passed:
-   *
-   * - reset monthly usage
-   * - remove consumed/old booster jobs
-   * - keep the current plan
-   * - create the next renewal date
-   *
-   */
+  * ---------------------------------------------------------------
+  * SUBSCRIPTION EXPIRY / MONTHLY QUOTA RESET
+  * ---------------------------------------------------------------
+  *
+  * Paid subscriptions:
+  * - Downgrade to FREE when renewalDate has passed.
+  * - Do not automatically renew.
+  *
+  * All subscriptions:
+  * - Reset monthly job usage.
+  * - Expire unused booster jobs.
+  * - Maintain an independent monthly quota reset date.
+  */
+
+  const now = Date.now()
+
+  const renewalDate = subscription.renewalDate
+    ? new Date(subscription.renewalDate).getTime()
+    : 0
+
+  const isExpired =
+    subscription.planCode !== PLANS.FREE.code &&
+    renewalDate > 0 &&
+    renewalDate <= now
+
+  if (isExpired) {
+    subscription = await expireSubscription(
+      garageId,
+      subscription
+    )
+  }
+
+  const quotaResetTime = subscription.quotaResetDate
+    ? new Date(subscription.quotaResetDate).getTime()
+    : 0
 
   if (
-    subscription.renewalDate &&
-    new Date(subscription.renewalDate).getTime()
-      <= Date.now()
+    !quotaResetTime ||
+    quotaResetTime <= now
   ) {
-
-    subscription =
-      await renewSubscription(
-        garageId,
-        subscription
-      )
-
+    subscription = await resetMonthlyQuota(
+      garageId,
+      subscription
+    )
   }
 
 
@@ -691,110 +710,166 @@ async (
 |--------------------------------------------------------------------------
 */
 
-const renewSubscription =
-async (
+
+const expireSubscription = async (
   garageId: string,
   subscription: any
 ) => {
+  const now = new Date()
+  const nowIso = now.toISOString()
 
-  const currentRenewal =
-    subscription.renewalDate
-      ? new Date(
-          subscription.renewalDate
-        )
-      : new Date()
+  const freePlan = PLANS.FREE
 
+  const quotaResetDate = new Date(now)
+  quotaResetDate.setMonth(
+    quotaResetDate.getMonth() + 1
+  )
 
-  const billingCycle =
-    subscription.billingCycle ===
-    "ANNUAL"
-      ? "ANNUAL"
-      : "MONTHLY"
+  try {
+    await db.send(
+      new UpdateItemCommand({
+        TableName: TABLE,
 
+        Key: {
+          garageId: {
+            S: garageId
+          }
+        },
 
-  const nextRenewal =
-    new Date(
-      currentRenewal
-    )
-
-
-  if (
-    billingCycle ===
-    "ANNUAL"
-  ) {
-
-    nextRenewal.setFullYear(
-      nextRenewal.getFullYear() + 1
-    )
-
-  } else {
-
-    nextRenewal.setMonth(
-      nextRenewal.getMonth() + 1
-    )
-
-  }
-
-
-  /*
-   * Important:
-   *
-   * Booster jobs are monthly/period usage additions
-   * in this implementation.
-   *
-   * They reset with the monthly period.
-   */
-
-  await db.send(
-    new UpdateItemCommand({
-
-      TableName: TABLE,
-
-      Key: {
-        garageId: {
-          S: garageId
-        }
-      },
-
-      UpdateExpression:
-        `
-        SET
-          jobsUsed = :jobsUsed,
-          boosterJobs = :boosterJobs,
-          renewalDate = :renewalDate,
-          updatedAt = :updatedAt
+        UpdateExpression: `
+          SET
+            planCode = :freeCode,
+            planName = :freeName,
+            billingCycle = :monthly,
+            #status = :active,
+            jobLimit = :jobLimit,
+            jobsUsed = :jobsUsed,
+            boosterJobs = :boosterJobs,
+            quotaResetDate = :quotaResetDate,
+            updatedAt = :updatedAt
+          REMOVE renewalDate
         `,
 
-      ExpressionAttributeValues: {
+        ConditionExpression: `
+          planCode = :currentPlanCode
+          AND renewalDate = :expectedRenewalDate
+          AND renewalDate <= :now
+        `,
 
-        ":jobsUsed": {
-          N: "0"
+        ExpressionAttributeNames: {
+          "#status": "status"
         },
 
-        ":boosterJobs": {
-          N: "0"
-        },
-
-        ":renewalDate": {
-          S:
-            nextRenewal.toISOString()
-        },
-
-        ":updatedAt": {
-          S:
-            new Date().toISOString()
+        ExpressionAttributeValues: {
+          ":freeCode": { S: freePlan.code },
+          ":freeName": { S: freePlan.name },
+          ":monthly": { S: "MONTHLY" },
+          ":active": { S: "ACTIVE" },
+          ":jobLimit": {
+            N: String(freePlan.jobsPerMonth)
+          },
+          ":jobsUsed": { N: "0" },
+          ":boosterJobs": { N: "0" },
+          ":quotaResetDate": {
+            S: quotaResetDate.toISOString()
+          },
+          ":updatedAt": { S: nowIso },
+          ":currentPlanCode": {
+            S: subscription.planCode
+          },
+          ":expectedRenewalDate": {
+            S: subscription.renewalDate
+          },
+          ":now": { S: nowIso }
         }
+      })
+    )
+  } catch (error: any) {
+    if (error?.name !== "ConditionalCheckFailedException") {
+      throw error
+    }
 
-      }
+    // Another request may already have handled the expiry.
+  }
 
-    })
+  return getSubscription(garageId)
+}
+
+
+const resetMonthlyQuota = async (
+  garageId: string,
+  subscription: any
+) => {
+  const now = new Date()
+  const nowIso = now.toISOString()
+
+  const nextQuotaReset = new Date(now)
+  nextQuotaReset.setMonth(
+    nextQuotaReset.getMonth() + 1
   )
 
+  const previousResetDate = subscription.quotaResetDate
 
-  return getSubscription(
-    garageId
-  )
+  const conditionExpression = previousResetDate
+    ? "quotaResetDate = :previousResetDate AND quotaResetDate <= :now"
+    : "attribute_not_exists(quotaResetDate)"
 
+  const expressionAttributeValues: Record<string, any> = {
+  ":jobsUsed": { N: "0" },
+  ":boosterJobs": { N: "0" },
+    ":quotaResetDate": {
+      S: nextQuotaReset.toISOString(),
+    },
+    ":updatedAt": { S: nowIso },
+  }
+
+  if (previousResetDate) {
+    expressionAttributeValues[":previousResetDate"] = {
+      S: previousResetDate,
+    }
+
+    expressionAttributeValues[":now"] = {
+      S: nowIso,
+    }
+  }
+
+  if (previousResetDate) {
+    expressionAttributeValues[":previousResetDate"] = {
+      S: previousResetDate
+    }
+  }
+
+  try {
+    await db.send(
+      new UpdateItemCommand({
+        TableName: TABLE,
+
+        Key: {
+          garageId: { S: garageId }
+        },
+
+        UpdateExpression: `
+          SET
+            jobsUsed = :jobsUsed,
+            boosterJobs = :boosterJobs,
+            quotaResetDate = :quotaResetDate,
+            updatedAt = :updatedAt
+        `,
+
+        ConditionExpression: conditionExpression,
+
+        ExpressionAttributeValues: expressionAttributeValues
+      })
+    )
+  } catch (error: any) {
+    if (error?.name !== "ConditionalCheckFailedException") {
+      throw error
+    }
+
+    // Another request already reset the quota.
+  }
+
+  return getSubscription(garageId)
 }
 
 
@@ -970,6 +1045,12 @@ const activatePlan = async (
     renewalDate.setMonth(renewalDate.getMonth() + 1)
   }
 
+  const quotaResetDate = new Date(now)
+
+  quotaResetDate.setMonth(
+    quotaResetDate.getMonth() + 1
+  )
+
   await db.send(
     new TransactWriteItemsCommand({
       TransactItems: [
@@ -986,7 +1067,10 @@ const activatePlan = async (
                 billingCycle = :billingCycle,
                 #status = :active,
                 jobLimit = :jobLimit,
+                jobsUsed = :jobsUsed,
+                boosterJobs = :boosterJobs,
                 renewalDate = :renewalDate,
+                quotaResetDate = :quotaResetDate,
                 paymentStatus = :captured,
                 razorpayOrderId = :orderId,
                 razorpayPaymentId = :paymentId,
@@ -1002,6 +1086,11 @@ const activatePlan = async (
               ":active": { S: "ACTIVE" },
               ":jobLimit": { N: String(plan.jobsPerMonth) },
               ":renewalDate": { S: renewalDate.toISOString() },
+              ":jobsUsed": { N: "0" },
+              ":boosterJobs": { N: "0" },
+              ":quotaResetDate": {
+                S: quotaResetDate.toISOString()
+              },
               ":captured": { S: "CAPTURED" },
               ":orderId": { S: orderId },
               ":paymentId": { S: paymentId },
@@ -1070,7 +1159,10 @@ export const verifyPlanPayment = async (
     throw new Error("This is not a plan payment order")
   }
 
-  if (order.status !== "CREATED") {
+  if (
+    order.status !== "CREATED" &&
+    order.status !== "ACTIVATED"
+  ) {
     throw new Error("Payment order is not awaiting verification")
   }
 
@@ -1210,7 +1302,10 @@ export const verifyBoosterPayment = async (
     throw new Error("This is not a booster payment order")
   }
 
-  if (order.status !== "CREATED") {
+  if (
+    order.status !== "CREATED" &&
+    order.status !== "ACTIVATED"
+  ) {
     throw new Error("Payment order is not awaiting verification")
   }
 
@@ -1223,6 +1318,13 @@ export const verifyBoosterPayment = async (
   if (!valid) {
     throw new Error("Invalid payment signature")
   }
+
+  await verifyCapturedPayment({
+    orderId: razorpayOrderId,
+    paymentId: razorpayPaymentId,
+    expectedAmount: Number(order.amount),
+    expectedCurrency: order.currency
+  })
 
   // Activation will be migrated to PaymentOrders in the next step.
   return activateBooster(
@@ -1283,7 +1385,21 @@ const activateBooster = async (
     throw new Error("Booster job quantity does not match")
   }
 
-  await getOrCreateSubscription(garageId)
+  const currentSubscription =
+    await getPlanInformation(garageId)
+
+  if (
+    currentSubscription.subscription.planCode !==
+    PLANS.FREE.code &&
+    currentSubscription.subscription.renewalDate &&
+    new Date(
+      currentSubscription.subscription.renewalDate
+    ).getTime() <= Date.now()
+  ) {
+    throw new Error(
+      "Subscription expiry could not be processed. Please retry."
+    )
+  }
 
   const now = new Date()
 
