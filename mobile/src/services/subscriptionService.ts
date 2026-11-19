@@ -318,13 +318,10 @@ async (
   billingCycle: BillingCycle
 ): Promise<RazorpayOrderPayload> => {
   try {
-    const garageId = requireGarageId()
-
     const response =
       await api.post<RazorpayOrderPayload>(
         "/api/subscription/payment/order",
         {
-          garageId,
           planCode: planCode.toUpperCase(),
           billingCycle:
             toApiBillingCycle(billingCycle)
@@ -349,13 +346,10 @@ async (
   billingCycle: BillingCycle
 ): Promise<ChangePlanResponse> => {
   try {
-    const garageId = requireGarageId()
-
     const response =
       await api.post<ChangePlanResponse>(
         "/api/subscription/payment/order",
         {
-          garageId,
           planCode: planCode.toUpperCase(),
           billingCycle:
             toApiBillingCycle(billingCycle)
@@ -381,14 +375,10 @@ async (
 
   try {
 
-    const garageId =
-      requireGarageId()
-
     const response =
       await api.post<BoosterResponse>(
         "/api/subscription/booster/order",
         {
-          garageId,
           boosterCode:
             boosterCode.toUpperCase()
         }

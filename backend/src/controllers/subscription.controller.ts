@@ -630,18 +630,24 @@ async (
       }
     )
 
-    const claimed = await subscriptionService.claimWebhookEvent(
+    const claim = await subscriptionService.claimWebhookEvent(
       eventId,
       event.event
-    );
+    )
 
-    if (!claimed) {
+    if (claim.status === "PROCESSED") {
       return res.status(200).json({
-        success: true,
-        message: "Webhook event already processed or currently being processed",
-        eventId,
-      });
+        message: "Webhook event already processed",
+      })
     }
+
+    if (claim.status === "PROCESSING") {
+      return res.status(503).json({
+        message: "Webhook event is currently being processed",
+      })
+    }
+
+    const leaseToken = claim.leaseToken
 
 
     /*
@@ -701,7 +707,8 @@ async (
 
       await subscriptionService.markWebhookEventProcessed(
         eventId,
-        event.event
+        event.event,
+        leaseToken
       )
 
       return res.status(200).json({
@@ -759,7 +766,8 @@ async (
 
       await subscriptionService.markWebhookEventProcessed(
         eventId,
-        event.event
+        event.event,
+        leaseToken
       )
 
       return res.status(200).json({
@@ -777,7 +785,8 @@ async (
 
     await subscriptionService.markWebhookEventProcessed(
       eventId,
-      event.event
+      event.event,
+      leaseToken
     )
 
 

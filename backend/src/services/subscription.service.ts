@@ -18,7 +18,8 @@ import {
 import {
   createRazorpayOrder,
   verifyPaymentSignature,
-  verifyCapturedPayment
+  verifyCapturedPayment,
+  fetchRazorpayPayment
 } from "./razorpay.service"
 
 const TABLE =
@@ -54,49 +55,68 @@ export const isWebhookEventProcessed = async (
 
 export const markWebhookEventProcessed = async (
   eventId: string,
-  eventType: string
+  eventType: string,
+  leaseToken: string
 ) => {
-  if (!eventId || !eventType) {
-    throw new Error("Webhook event ID and type are required");
+  if (!eventId || !eventType || !leaseToken) {
+    throw new Error(
+      "Webhook event ID, type and lease token are required"
+    )
   }
 
-  const now = new Date().toISOString();
+  const now = new Date().toISOString()
 
   await db.send(
     new UpdateItemCommand({
       TableName: WEBHOOK_EVENTS_TABLE,
+
       Key: {
         eventId: { S: eventId },
       },
+
       UpdateExpression:
-        "SET #status = :processed, eventType = :eventType, processedAt = :processedAt REMOVE leaseUntil",
-      ConditionExpression: "#status = :processing",
+        "SET #status = :processed, eventType = :eventType, processedAt = :processedAt REMOVE leaseUntil, leaseToken",
+
+      ConditionExpression:
+        "#status = :processing AND leaseToken = :leaseToken",
+
       ExpressionAttributeNames: {
         "#status": "status",
       },
+
       ExpressionAttributeValues: {
         ":processed": { S: "PROCESSED" },
         ":processing": { S: "PROCESSING" },
         ":eventType": { S: eventType },
         ":processedAt": { S: now },
+        ":leaseToken": { S: leaseToken },
       },
     })
-  );
-};
+  )
+}
+
+type WebhookClaimResult =
+  | { status: "CLAIMED"; leaseToken: string }
+  | { status: "PROCESSED" }
+  | { status: "PROCESSING" }
 
 export const claimWebhookEvent = async (
   eventId: string,
   eventType: string
-): Promise<boolean> => {
+): Promise<WebhookClaimResult> => {
   if (!eventId || !eventType) {
-    throw new Error("Webhook event ID and type are required");
+    throw new Error(
+      "Webhook event ID and type are required"
+    )
   }
 
-  const now = new Date();
-  const nowIso = now.toISOString();
+  const now = new Date()
+  const leaseToken = crypto.randomUUID()
+  const nowIso = now.toISOString()
+
   const leaseUntil = new Date(
     now.getTime() + 5 * 60 * 1000
-  ).toISOString();
+  ).toISOString()
 
   try {
     await db.send(
@@ -108,15 +128,20 @@ export const claimWebhookEvent = async (
           status: { S: "PROCESSING" },
           leaseUntil: { S: leaseUntil },
           createdAt: { S: nowIso },
+          leaseToken: { S: leaseToken },
         },
-        ConditionExpression: "attribute_not_exists(eventId)",
+        ConditionExpression:
+          "attribute_not_exists(eventId)",
       })
-    );
+    )
 
-    return true;
+    return { status: "CLAIMED", leaseToken }
   } catch (error: any) {
-    if (error?.name !== "ConditionalCheckFailedException") {
-      throw error;
+    if (
+      error?.name !==
+      "ConditionalCheckFailedException"
+    ) {
+      throw error
     }
   }
 
@@ -128,20 +153,21 @@ export const claimWebhookEvent = async (
       },
       ConsistentRead: true,
     })
-  );
+  )
+
+  if (existing.Item?.status?.S === "PROCESSED") {
+    return { status: "PROCESSED" }
+  }
 
   if (!existing.Item) {
-    return false;
+    return { status: "PROCESSING" }
   }
 
-  if (existing.Item.status?.S === "PROCESSED") {
-    return false;
-  }
-
-  const existingLease = existing.Item.leaseUntil?.S;
+  const existingLease =
+    existing.Item.leaseUntil?.S
 
   if (!existingLease || existingLease > nowIso) {
-    return false;
+    return { status: "PROCESSING" }
   }
 
   try {
@@ -152,7 +178,7 @@ export const claimWebhookEvent = async (
           eventId: { S: eventId },
         },
         UpdateExpression:
-          "SET #status = :processing, leaseUntil = :leaseUntil, eventType = :eventType",
+          "SET #status = :processing, leaseUntil = :leaseUntil, leaseToken = :leaseToken, eventType = :eventType",
         ConditionExpression:
           "#status = :processing AND leaseUntil <= :now",
         ExpressionAttributeNames: {
@@ -161,19 +187,23 @@ export const claimWebhookEvent = async (
         ExpressionAttributeValues: {
           ":processing": { S: "PROCESSING" },
           ":leaseUntil": { S: leaseUntil },
+          ":leaseToken": { S: leaseToken },
           ":eventType": { S: eventType },
           ":now": { S: nowIso },
         },
       })
-    );
+    )
 
-    return true;
+    return { status: "CLAIMED", leaseToken }
   } catch (error: any) {
-    if (error?.name === "ConditionalCheckFailedException") {
-      return false;
+    if (
+      error?.name ===
+      "ConditionalCheckFailedException"
+    ) {
+      return { status: "PROCESSING" }
     }
 
-    throw error;
+    throw error
   }
 }
 
@@ -803,12 +833,16 @@ const resetMonthlyQuota = async (
   const now = new Date()
   const nowIso = now.toISOString()
 
-  const nextQuotaReset = new Date(now)
-  nextQuotaReset.setMonth(
-    nextQuotaReset.getMonth() + 1
-  )
-
   const previousResetDate = subscription.quotaResetDate
+
+  let nextQuotaReset = previousResetDate
+    ? addCalendarMonths(new Date(previousResetDate), 1)
+    : addCalendarMonths(now, 1)
+
+  // If execution was delayed, advance to the next future reset date.
+  while (nextQuotaReset <= now) {
+    nextQuotaReset = addCalendarMonths(nextQuotaReset, 1)
+  }
 
   const conditionExpression = previousResetDate
     ? "quotaResetDate = :previousResetDate AND quotaResetDate <= :now"
@@ -830,12 +864,6 @@ const resetMonthlyQuota = async (
 
     expressionAttributeValues[":now"] = {
       S: nowIso,
-    }
-  }
-
-  if (previousResetDate) {
-    expressionAttributeValues[":previousResetDate"] = {
-      S: previousResetDate
     }
   }
 
@@ -985,6 +1013,24 @@ export const createPlanPaymentOrder = async (
 |--------------------------------------------------------------------------
 */
 
+const addCalendarMonths = (date: Date, months: number): Date => {
+  const result = new Date(date)
+  const originalDay = result.getDate()
+
+  result.setDate(1)
+  result.setMonth(result.getMonth() + months)
+
+  const lastDayOfMonth = new Date(
+    result.getFullYear(),
+    result.getMonth() + 1,
+    0
+  ).getDate()
+
+  result.setDate(Math.min(originalDay, lastDayOfMonth))
+
+  return result
+}
+
 const activatePlan = async (
   garageId: string,
   orderId: string,
@@ -1037,19 +1083,13 @@ const activatePlan = async (
   await getOrCreateSubscription(garageId)
 
   const now = new Date()
-  const renewalDate = new Date(now)
 
-  if (billingCycle === "ANNUAL") {
-    renewalDate.setFullYear(renewalDate.getFullYear() + 1)
-  } else {
-    renewalDate.setMonth(renewalDate.getMonth() + 1)
-  }
-
-  const quotaResetDate = new Date(now)
-
-  quotaResetDate.setMonth(
-    quotaResetDate.getMonth() + 1
+  const renewalDate = addCalendarMonths(
+    now,
+    billingCycle === "ANNUAL" ? 12 : 1
   )
+
+  const quotaResetDate = addCalendarMonths(now, 1)
 
   await db.send(
     new TransactWriteItemsCommand({
@@ -1326,7 +1366,7 @@ export const verifyBoosterPayment = async (
     expectedCurrency: order.currency
   })
 
-  // Activation will be migrated to PaymentOrders in the next step.
+  // Activate the plan using the authoritative PaymentOrders record.
   return activateBooster(
     garageId,
     razorpayOrderId,
@@ -1686,6 +1726,35 @@ export const processRazorpayPaymentFailed = async (
 
   if (payment.order_id !== orderId) {
     throw new Error("Failed payment order ID mismatch")
+  }
+
+  // Confirm the latest payment status directly with Razorpay.
+  const latestPayment =
+    await fetchRazorpayPayment(payment.id)
+
+  if (latestPayment.order_id !== orderId) {
+    throw new Error("Razorpay payment order ID mismatch")
+  }
+
+  // A captured payment must never be marked FAILED.
+  if (latestPayment.status === "captured") {
+    await processRazorpayPaymentCaptured(
+      orderId,
+      payment.id,
+      Number(latestPayment.amount),
+      latestPayment.currency
+    )
+
+    return getSubscription(
+      (await getPaymentOrder(orderId)).garageId
+    )
+  }
+
+  // Only mark genuinely failed payments.
+  if (latestPayment.status !== "failed") {
+    return getSubscription(
+      (await getPaymentOrder(orderId)).garageId
+    )
   }
 
   const order = await getPaymentOrder(orderId)

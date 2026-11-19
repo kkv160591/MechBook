@@ -500,22 +500,24 @@ export const createJob = async (
           UpdateExpression:
             "SET totalJobs = :totalJobs, totalSpent = :totalSpent, pendingAmount = :pendingAmount, updatedAt = :updatedAt",
 
-          ConditionExpression:
-            "attribute_exists(customerId) AND garageId = :garageId",
+          ConditionExpression: `
+            attribute_exists(customerId)
+            AND garageId = :garageId
+            AND totalJobs = :oldTotalJobs
+            AND totalSpent = :oldTotalSpent
+            AND pendingAmount = :oldPendingAmount
+          `,
 
           ExpressionAttributeValues: marshall({
-            ":totalJobs":
-              oldTotalJobs + 1,
-
-            ":totalSpent":
-              oldTotalSpent + totalAmount,
-
-            ":pendingAmount":
-              oldPendingAmount + totalAmount,
-
+            ":totalJobs": oldTotalJobs + 1,
+            ":totalSpent": oldTotalSpent + totalAmount,
+            ":pendingAmount": oldPendingAmount + totalAmount,
             ":updatedAt": now,
-
             ":garageId": garageId,
+
+            ":oldTotalJobs": oldTotalJobs,
+            ":oldTotalSpent": oldTotalSpent,
+            ":oldPendingAmount": oldPendingAmount,
           }),
         },
       })
@@ -563,15 +565,40 @@ export const createJob = async (
       garageId,
     }
 
-    const subscriptionCondition = unlimited
-      ? "jobsUsed = :jobsUsed AND jobLimit = :jobLimit AND boosterJobs = :boosterJobs"
-      : "jobsUsed = :jobsUsed AND jobLimit = :jobLimit AND boosterJobs = :boosterJobs AND jobsUsed < :totalAvailable"
+    const isFreePlan =
+      subscription.planCode === "FREE"
 
-    const subscriptionValues: Record<string, number> = {
+    const subscriptionCheckTime =
+      new Date().toISOString()
+
+    const expiryCondition = isFreePlan
+      ? "attribute_not_exists(renewalDate)"
+      : "renewalDate > :subscriptionCheckTime"
+
+    const subscriptionCondition = unlimited
+      ? `jobsUsed = :jobsUsed
+        AND jobLimit = :jobLimit
+        AND boosterJobs = :boosterJobs
+        AND planCode = :planCode
+        AND ${expiryCondition}`
+      : `jobsUsed = :jobsUsed
+        AND jobLimit = :jobLimit
+        AND boosterJobs = :boosterJobs
+        AND planCode = :planCode
+        AND ${expiryCondition}
+        AND jobsUsed < :totalAvailable`
+
+    const subscriptionValues: Record<string, any> = {
       ":one": 1,
       ":jobsUsed": jobsUsed,
       ":jobLimit": jobLimit,
       ":boosterJobs": boosterJobs,
+      ":planCode": subscription.planCode,
+    }
+
+    if (!isFreePlan) {
+      subscriptionValues[":subscriptionCheckTime"] =
+        subscriptionCheckTime
     }
 
     if (!unlimited) {
@@ -1080,13 +1107,16 @@ export const updateJob = async (
         removeUndefinedValues: true,
       }),
 
-      ConditionExpression:
-        "attribute_exists(jobId) AND garageId = :garageId",
+      ConditionExpression: `
+        attribute_exists(jobId)
+        AND garageId = :garageId
+        AND updatedAt = :oldUpdatedAt
+      `,
 
-      ExpressionAttributeValues:
-        marshall({
-          ":garageId": garageId,
-        }),
+      ExpressionAttributeValues: marshall({
+        ":garageId": garageId,
+        ":oldUpdatedAt": existing.updatedAt,
+      }),
     },
   })
 
@@ -1860,7 +1890,7 @@ export const deleteJob = async (
             "SET totalJobs = :totalJobs, totalSpent = :totalSpent, pendingAmount = :pendingAmount, updatedAt = :updatedAt",
 
           ConditionExpression:
-            "attribute_exists(customerId) AND garageId = :garageId",
+            "attribute_exists(customerId) AND garageId = :garageId AND totalJobs = :oldTotalJobs AND totalSpent = :oldTotalSpent AND pendingAmount = :oldPendingAmount",
 
           ExpressionAttributeValues:
             marshall({
@@ -1889,6 +1919,12 @@ export const deleteJob = async (
 
               ":garageId":
                 garageId,
+
+              ":oldTotalJobs": totalJobs,
+                            
+              ":oldTotalSpent": totalSpent,
+
+              ":oldPendingAmount": pendingAmount,
             }),
         },
       })

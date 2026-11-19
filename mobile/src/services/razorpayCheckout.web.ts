@@ -124,13 +124,25 @@ async (
           response: any
         ) => {
 
+          if (
+            !response?.razorpay_payment_id ||
+            !response?.razorpay_order_id ||
+            !response?.razorpay_signature
+          ) {
+            reject(
+              new Error(
+                "Razorpay returned incomplete payment details."
+              )
+            )
+            return
+          }
+
           resolve({
             razorpay_payment_id:
               response.razorpay_payment_id,
 
             razorpay_order_id:
-              response.razorpay_order_id ||
-              payment.orderId,
+              response.razorpay_order_id,
 
             razorpay_signature:
               response.razorpay_signature

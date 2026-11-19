@@ -61,7 +61,18 @@ async (
     }
   )
 
-  return RazorpayCheckout.open(
-    options
-  )
+  const response =
+    await RazorpayCheckout.open(options)
+
+  if (
+    !response?.razorpay_payment_id ||
+    !response?.razorpay_order_id ||
+    !response?.razorpay_signature
+  ) {
+    throw new Error(
+      "Razorpay returned incomplete payment details."
+    )
+  }
+
+  return response
 }

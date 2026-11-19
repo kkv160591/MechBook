@@ -263,3 +263,13 @@ export const verifyWebhookSignature =
   )
 
 }
+
+export const fetchRazorpayPayment = async (
+  paymentId: string
+) => {
+  if (!paymentId) {
+    throw new Error("Payment ID is required")
+  }
+
+  return razorpay.payments.fetch(paymentId)
+}
